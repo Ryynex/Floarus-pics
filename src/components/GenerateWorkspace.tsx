@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabaseClient";
 export function GenerateWorkspace() {
   // Input fields
   const [prompt, setPrompt] = useState("");
-  const resolution = "1K";
+  const [resolution, setResolution] = useState<"1K" | "2K">("1K");
   
   // Upload states
   const [sareeFile, setSareeFile] = useState<File | null>(null);
@@ -40,7 +40,7 @@ export function GenerateWorkspace() {
   const faceInputRef = useRef<HTMLInputElement>(null);
 
   // Costs
-  const costEstimation = 1.00;
+  const costEstimation = resolution === "2K" ? 10.00 : 6.00;
 
   // Handle saree flat-lay upload to Supabase bucket
   const handleSareeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +127,7 @@ export function GenerateWorkspace() {
     }
 
     setLoading(true);
-    setLoadingStage("AI Studio: Fabricating Runway Asset (1K)...");
+    setLoadingStage(`AI Studio: Fabricating Runway Asset (${resolution})...`);
     setErrorMsg(null);
     setOutputUrl(null);
     setSuccessData(null);
@@ -328,8 +328,50 @@ export function GenerateWorkspace() {
               />
             </div>
 
-
-            {/* Errors display */}
+            {/* Input 4: Choose Resolution Step Slider */}
+            <div className="flex flex-col gap-2 font-sans">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-mono uppercase tracking-wider text-foreground-muted">
+                  Choose Output Resolution
+                </label>
+                <span className="text-xs font-semibold font-mono text-fuchsia-accent bg-fuchsia-accent/10 px-2 py-0.5 rounded-full border border-fuchsia-accent/30">
+                  {resolution} (₹{costEstimation.toFixed(2)})
+                </span>
+              </div>
+              
+              <div className="relative w-full bg-void/50 border border-muted-purple/40 rounded-xl p-3.5 flex flex-col gap-3">
+                {/* Dynamic Range Slider Input */}
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="1"
+                  value={resolution === "2K" ? "1" : "0"}
+                  onChange={(e) => setResolution(e.target.value === "1" ? "2K" : "1K")}
+                  className="w-full h-1.5 bg-surface rounded-lg appearance-none cursor-pointer accent-fuchsia-accent focus:outline-none"
+                />
+                
+                {/* Slider Tick Indicators */}
+                <div className="flex justify-between text-[10px] font-mono text-zinc-500 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setResolution("1K")}
+                    className={`flex flex-col gap-0.5 cursor-pointer text-left ${resolution === "1K" ? "text-fuchsia-accent font-bold" : "hover:text-white"}`}
+                  >
+                    <span>1K Resolution</span>
+                    <span className="text-[9px] opacity-75">Standard (₹6.00)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResolution("2K")}
+                    className={`flex flex-col gap-0.5 cursor-pointer text-right ${resolution === "2K" ? "text-fuchsia-accent font-bold" : "hover:text-white"}`}
+                  >
+                    <span>2K Resolution</span>
+                    <span className="text-[9px] opacity-75">HD Render (₹10.00)</span>
+                  </button>
+                </div>
+              </div>
+            </div>            {/* Errors display */}
             {errorMsg && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 flex gap-2 items-start">
                 <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
@@ -413,7 +455,7 @@ export function GenerateWorkspace() {
                 </button>
                 <a
                   href={outputUrl || undefined}
-                  download="floarus-lookbook-1k.png"
+                  download={resolution === "2K" ? "floarus-lookbook-2k.png" : "floarus-lookbook-1k.png"}
                   className="flex-1 py-2.5 rounded-lg bg-fuchsia-accent hover:bg-fuchsia-accent/90 text-xs font-semibold text-white flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
                   <Download className="h-4 w-4" /> Download Asset
@@ -473,7 +515,7 @@ export function GenerateWorkspace() {
               <span className="text-zinc-500">Press download to save uncompressed source</span>
               <a 
                 href={outputUrl} 
-                download="floarus-lookbook-1k.png"
+                download={resolution === "2K" ? "floarus-lookbook-2k.png" : "floarus-lookbook-1k.png"}
                 className="px-4 py-2 bg-gradient-to-r from-fuchsia-accent to-purple-accent text-white font-bold rounded-lg flex items-center gap-2 cursor-pointer text-[10px] uppercase tracking-wider"
               >
                 <Download className="h-4 w-4" /> Save High-Res PNG

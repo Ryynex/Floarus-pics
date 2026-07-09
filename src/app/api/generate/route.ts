@@ -46,14 +46,15 @@ export async function POST(req: NextRequest) {
 
     // 2. Parse input request payload
     const body = await req.json();
-    const { sareeUrl, faceUrl, prompt, currentBalance } = body;
+    const { sareeUrl, faceUrl, resolution, prompt, currentBalance } = body;
 
     if (!sareeUrl) {
       return NextResponse.json({ error: "Product Saree Flat-lay image URL is required" }, { status: 400 });
     }
 
-    // Flat cost for native 1K generation
-    const cost = 1.00;
+    // Dynamic cost: 1K resolution is ₹6.00, 2K resolution is ₹10.00
+    const selectedResolution = resolution === "2K" ? "2K" : "1K";
+    const cost = selectedResolution === "2K" ? 10.00 : 6.00;
 
     // Use current balance from request body in mock mode if available, for dynamic sandbox simulation
     const activeBalance = (isMock && typeof currentBalance === "number") ? currentBalance : balance;
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
       await new Promise((resolve) => setTimeout(resolve, 3000));
       
       // Sandbox fallback image path
-      const simulatedUrl = "/images/model-fuchsia.png";
+      const simulatedUrl = selectedResolution === "2K" ? "/images/model-purple.png" : "/images/model-fuchsia.png";
       const newBalance = activeBalance - cost;
       
       if (user) {
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           model: "google/gemini-3.1-flash-image",
           prompt: masterPrompt,
-          size: "1K",
+          size: selectedResolution, // Pass selected resolution directly (1K or 2K)
           input_references: input_references.length > 0 ? input_references : undefined,
           response_format: "b64_json",
           providers: ["google_ai_studio"],
@@ -188,7 +189,7 @@ export async function POST(req: NextRequest) {
     const baseImageBuffer = Buffer.from(base64Image, "base64");
     
     // Save base layout natively to Supabase Storage and retrieve public URL
-    const fileName = `${user.id}/${Date.now()}-1k.png`;
+    const fileName = `${user.id}/${Date.now()}-${selectedResolution.toLowerCase()}.png`;
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const { error: uploadError } = await supabase.storage
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
       });
 
     if (uploadError) {
-      throw new Error(`Supabase Storage upload of base image failed: ${uploadError.message}`);
+      throw new Error(`Supabase Storage upload of image failed: ${uploadError.message}`);
     }
 
     const { data: { publicUrl } } = supabase.storage
