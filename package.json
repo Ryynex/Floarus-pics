@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@gradio/client": "^2.3.1",
-    "@next/swc-win32-x64-msvc": "^16.2.10",
     "@supabase/supabase-js": "^2.110.1",
     "@upscalerjs/esrgan-thick": "^1.0.0",
     "cloudinary": "^2.10.0",
