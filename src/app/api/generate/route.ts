@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
           "Authorization": `Bearer ${openrouterKey}`,
         },
         body: JSON.stringify({
-          model: "google/gemini-3.1-flash-lite-image",
+          model: "google/gemini-3.1-flash-image",
           prompt: masterPrompt,
           size: "1K",
           input_references: input_references.length > 0 ? input_references : undefined,
