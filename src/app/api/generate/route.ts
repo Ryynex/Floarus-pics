@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { v2 as cloudinary } from "cloudinary";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
-
-// Configure Cloudinary using environmental credentials
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
 
 export async function POST(req: NextRequest) {
   try {
@@ -54,14 +46,14 @@ export async function POST(req: NextRequest) {
 
     // 2. Parse input request payload
     const body = await req.json();
-    const { sareeUrl, faceUrl, resolution, prompt, currentBalance } = body; // resolution is "1K", "2K", or "4K"
+    const { sareeUrl, faceUrl, prompt, currentBalance } = body;
 
     if (!sareeUrl) {
       return NextResponse.json({ error: "Product Saree Flat-lay image URL is required" }, { status: 400 });
     }
 
-    // Calculate dynamic cost
-    const cost = resolution === "4K" ? 10.00 : resolution === "2K" ? 2.50 : 1.00;
+    // Flat cost for native 1K generation
+    const cost = 1.00;
 
     // Use current balance from request body in mock mode if available, for dynamic sandbox simulation
     const activeBalance = (isMock && typeof currentBalance === "number") ? currentBalance : balance;
@@ -83,7 +75,7 @@ export async function POST(req: NextRequest) {
       await new Promise((resolve) => setTimeout(resolve, 3000));
       
       // Sandbox fallback image path
-      const simulatedUrl = resolution === "4K" ? "/images/model-purple.png" : resolution === "2K" ? "/images/model-purple.png" : "/images/model-fuchsia.png";
+      const simulatedUrl = "/images/model-fuchsia.png";
       const newBalance = activeBalance - cost;
       
       if (user) {
@@ -98,7 +90,7 @@ export async function POST(req: NextRequest) {
             .from("generations")
             .insert({
               user_id: user.id,
-              prompt: prompt || "Simulated Luxury Saree Campaign (API Fallback)",
+              prompt: prompt || "Simulated Saree Campaign (API Fallback)",
               garment_url: sareeUrl,
               face_url: faceUrl || null,
               output_url: simulatedUrl,
@@ -195,88 +187,27 @@ export async function POST(req: NextRequest) {
     // Convert base64 data to binary buffer
     const baseImageBuffer = Buffer.from(base64Image, "base64");
     
-    // Save base layout natively to Supabase Storage first and retrieve public URL
-    const baseFileName = `${user.id}/temp-${Date.now()}-base.png`;
+    // Save base layout natively to Supabase Storage and retrieve public URL
+    const fileName = `${user.id}/${Date.now()}-1k.png`;
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    const { error: baseUploadError } = await supabase.storage
-      .from("generated-lookbooks")
-      .upload(baseFileName, baseImageBuffer, {
-        contentType: "image/png",
-        upsert: true,
-      });
-
-    if (baseUploadError) {
-      throw new Error(`Supabase Storage upload of base image failed: ${baseUploadError.message}`);
-    }
-
-    const { data: { publicUrl: baseSupabaseUrl } } = supabase.storage
-      .from("generated-lookbooks")
-      .getPublicUrl(baseFileName);
-
-    console.log("Base image uploaded to Supabase. Public URL:", baseSupabaseUrl);
-
-    // 6. Cloudinary AI Upscaling or Direct Usage
-    let processedBuffer = baseImageBuffer;
-    let isUpscaled = false;
-
-    if ((resolution === "4K" || resolution === "2K") && process.env.CLOUDINARY_CLOUD_NAME) {
-      try {
-        console.log(`Piping Supabase base image to Cloudinary for ${resolution} AI upscaling...`);
-        
-        // Upload image to Cloudinary using Supabase URL
-        const uploadResult = await cloudinary.uploader.upload(baseSupabaseUrl, {
-          folder: "floarus_pics",
-        });
-        
-        // Apply AI upscale transformation
-        const upscaledUrl = cloudinary.url(uploadResult.public_id, {
-          transformation: [
-            { effect: "upscale" }
-          ]
-        });
-        
-        console.log("Cloudinary AI upscale generated link:", upscaledUrl);
-
-        // Download upscaled image binary buffer
-        const cloudinaryResponse = await fetch(upscaledUrl);
-        if (cloudinaryResponse.ok) {
-          processedBuffer = Buffer.from(await cloudinaryResponse.arrayBuffer());
-          isUpscaled = true;
-        } else {
-          console.warn(`Failed to download upscaled image from Cloudinary: ${cloudinaryResponse.statusText}. Using base layout.`);
-        }
-      } catch (upscaleErr) {
-        console.error("Cloudinary AI upscaling failed, falling back to base 1K image:", upscaleErr);
-      }
-    }
-
-    // 7. Upload final asset (upscaled or native) to permanent path in Supabase Storage
-    const finalFileName = `${user.id}/${Date.now()}-${resolution.toLowerCase()}${isUpscaled ? "-upscaled" : ""}.png`;
 
     const { error: uploadError } = await supabase.storage
       .from("generated-lookbooks")
-      .upload(finalFileName, processedBuffer, {
+      .upload(fileName, baseImageBuffer, {
         contentType: "image/png",
         upsert: true,
       });
 
     if (uploadError) {
-      throw new Error(`Supabase Storage final upload failed: ${uploadError.message}`);
+      throw new Error(`Supabase Storage upload of base image failed: ${uploadError.message}`);
     }
 
     const { data: { publicUrl } } = supabase.storage
       .from("generated-lookbooks")
-      .getPublicUrl(finalFileName);
+      .getPublicUrl(fileName);
 
-    // Clean up temporary base upload from storage to save space
-    try {
-      await supabase.storage
-        .from("generated-lookbooks")
-        .remove([baseFileName]);
-    } catch (cleanupErr) {
-      console.warn("Failed to clean up temp base image:", cleanupErr);
-    }
+    console.log("Runway canvas uploaded to Supabase. Public URL:", publicUrl);
+
     // 8. Deduct balance from ledger database
     const newBalance = activeBalance - cost;
     const { error: updateError } = await supabase

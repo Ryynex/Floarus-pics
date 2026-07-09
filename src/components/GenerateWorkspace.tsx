@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabaseClient";
 export function GenerateWorkspace() {
   // Input fields
   const [prompt, setPrompt] = useState("");
-  const [resolution, setResolution] = useState<"1K" | "2K" | "4K">("2K");
+  const resolution = "1K";
   
   // Upload states
   const [sareeFile, setSareeFile] = useState<File | null>(null);
@@ -40,7 +40,7 @@ export function GenerateWorkspace() {
   const faceInputRef = useRef<HTMLInputElement>(null);
 
   // Costs
-  const costEstimation = resolution === "4K" ? 10.00 : resolution === "2K" ? 2.50 : 1.00;
+  const costEstimation = 1.00;
 
   // Handle saree flat-lay upload to Supabase bucket
   const handleSareeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +127,7 @@ export function GenerateWorkspace() {
     }
 
     setLoading(true);
-    setLoadingStage(resolution === "4K" || resolution === "2K" ? "AI Studio: Fabricating & Cloud Upscaling..." : "AI Studio: Fabricating Layout (1K)...");
+    setLoadingStage("AI Studio: Fabricating Runway Asset (1K)...");
     setErrorMsg(null);
     setOutputUrl(null);
     setSuccessData(null);
@@ -328,21 +328,7 @@ export function GenerateWorkspace() {
               />
             </div>
 
-            {/* Input 4: Choose Resolution Dropdown */}
-            <div className="flex flex-col gap-1.5 font-sans">
-              <label className="text-xs font-mono uppercase tracking-wider text-foreground-muted">
-                Choose Output Resolution
-              </label>
-              <select
-                value={resolution}
-                onChange={(e) => setResolution(e.target.value as "1K" | "2K" | "4K")}
-                className="w-full bg-surface border border-muted-purple/60 px-3 py-2.5 rounded-lg text-sm text-white focus:border-fuchsia-accent focus:outline-none"
-              >
-                <option value="1K">Standard 1K Resolution (Flat Rate: ₹1.00 per render)</option>
-                <option value="2K">Hero 2K Resolution (Flat Rate: ₹2.50 per render)</option>
-                <option value="4K">Luxury 4K Resolution (Flat Rate: ₹10.00 per render)</option>
-              </select>
-            </div>
+
             {/* Errors display */}
             {errorMsg && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 flex gap-2 items-start">
@@ -427,7 +413,7 @@ export function GenerateWorkspace() {
                 </button>
                 <a
                   href={outputUrl || undefined}
-                  download={resolution === "4K" ? "floarus-lookbook-4k.png" : resolution === "2K" ? "floarus-lookbook-2k.png" : "floarus-lookbook-1k.png"}
+                  download="floarus-lookbook-1k.png"
                   className="flex-1 py-2.5 rounded-lg bg-fuchsia-accent hover:bg-fuchsia-accent/90 text-xs font-semibold text-white flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
                   <Download className="h-4 w-4" /> Download Asset
@@ -487,7 +473,7 @@ export function GenerateWorkspace() {
               <span className="text-zinc-500">Press download to save uncompressed source</span>
               <a 
                 href={outputUrl} 
-                download={resolution === "4K" ? "floarus-lookbook-4k.png" : resolution === "2K" ? "floarus-lookbook-2k.png" : "floarus-lookbook-1k.png"}
+                download="floarus-lookbook-1k.png"
                 className="px-4 py-2 bg-gradient-to-r from-fuchsia-accent to-purple-accent text-white font-bold rounded-lg flex items-center gap-2 cursor-pointer text-[10px] uppercase tracking-wider"
               >
                 <Download className="h-4 w-4" /> Save High-Res PNG
