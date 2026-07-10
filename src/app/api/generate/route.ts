@@ -1,125 +1,200 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { v2 as cloudinary } from "cloudinary";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
 
+// Configure Cloudinary SDK
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Helper function to retry asynchronous operations with exponential backoff
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  retries = 2,
+  delayMs = 1000
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (error) {
+      attempt++;
+      if (attempt > retries) {
+        throw error;
+      }
+      const waitTime = delayMs * Math.pow(2, attempt - 1);
+      console.warn(`DEBUG: Attempt ${attempt} failed. Retrying in ${waitTime}ms... Error: ${error instanceof Error ? error.message : String(error)}`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
-  try {
-    // 1. Auth check
-    const authHeader = req.headers.get("authorization") || "";
-    const token = authHeader.replace("Bearer ", "");
+  let requestSareeUrl = "";
+  let requestFaceUrl = "";
+
+  // 1. Auth check
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.replace("Bearer ", "");
+  
+  if (!token || token === "undefined" || token === "null" || token === "") {
+    return NextResponse.json({ error: "Unauthorized: Active user session required" }, { status: 401 });
+  }
+
+  // Instantiate standard supabase client helper authenticated as the user
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  });
+
+  // Asynchronous background cleanup helper for user uploaded files on Supabase Storage
+  const cleanupInputs = (sareeUrl: string, faceUrl?: string) => {
+    if (!sareeUrl) return;
     
-    const isPlaceholderEnv = 
-      supabaseUrl.includes("placeholder.supabase.co") || 
-      supabaseAnonKey.includes("placeholder-anon-key") ||
-      !token || token === "undefined" || token === "null" || token === "";
-
-    let user = null;
-    let balance = 450.00;
-    let isMock = true;
-
-    if (!isPlaceholderEnv) {
+    // Execute asynchronously (non-blocking for the HTTP response)
+    (async () => {
       try {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+        const filesToDelete: string[] = [];
         
-        if (authUser && !authError) {
-          user = authUser;
-          isMock = false;
+        const getStoragePath = (url: string) => {
+          const marker = "/public/generated-lookbooks/";
+          const idx = url.indexOf(marker);
+          return idx !== -1 ? url.substring(idx + marker.length) : null;
+        };
 
-          // Fetch profile from database
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("balance_inr")
-            .eq("id", authUser.id)
-            .single();
+        const sareePath = getStoragePath(sareeUrl);
+        if (sareePath) filesToDelete.push(sareePath);
 
-          if (!profileError && profile) {
-            balance = Number(profile.balance_inr);
+        if (faceUrl) {
+          const facePath = getStoragePath(faceUrl);
+          if (facePath) filesToDelete.push(facePath);
+        }
+
+        if (filesToDelete.length > 0) {
+          console.log("DEBUG: Cleaning up user-uploaded inputs from Supabase Storage:", filesToDelete);
+          const { error: deleteError } = await supabase.storage
+            .from("generated-lookbooks")
+            .remove(filesToDelete);
+          if (deleteError) {
+            console.warn("DEBUG WARNING: Supabase Storage cleanup error:", deleteError.message);
+          } else {
+            console.log("DEBUG: Successfully cleaned up temporary input files from Supabase Storage.");
           }
         }
-      } catch (err) {
-        console.error("Auth verification failed, using sandbox fallback:", err);
+      } catch (cleanupErr) {
+        console.error("DEBUG ERROR: Asynchronous storage cleanup exception:", cleanupErr);
       }
+    })();
+  };
+
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized: Active user session required" }, { status: 401 });
     }
 
     // 2. Parse input request payload
     const body = await req.json();
-    const { sareeUrl, faceUrl, resolution, prompt, currentBalance } = body;
+    const { sareeUrl, faceUrl, prompt } = body;
 
     if (!sareeUrl) {
       return NextResponse.json({ error: "Product Saree Flat-lay image URL is required" }, { status: 400 });
     }
 
-    // Dynamic cost: 1K resolution is ₹6.00, 2K resolution is ₹10.00
-    const selectedResolution = resolution === "2K" ? "2K" : "1K";
-    const cost = selectedResolution === "2K" ? 10.00 : 6.00;
+    // Cache inputs for cleanup in finally/error paths
+    requestSareeUrl = sareeUrl;
+    requestFaceUrl = faceUrl || "";
 
-    // Use current balance from request body in mock mode if available, for dynamic sandbox simulation
-    const activeBalance = (isMock && typeof currentBalance === "number") ? currentBalance : balance;
+    // Fetch profile balance from database
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("balance_inr")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      console.error("DEBUG ERROR: Profile query failed for user ID:", user.id, "Error:", profileError, "Data found:", profile);
+      return NextResponse.json({ 
+        error: `User profile not found. Database diagnostics: ${profileError?.message || "No profile record exists in the table for this user ID"}` 
+      }, { status: 404 });
+    }
+
+    const balance = Number(profile.balance_inr);
+
+    // Enforce 1K resolution generation flat rate
+    const selectedResolution = "1K";
+    const cost = 6.00;
 
     // Check if user has enough balance
-    if (activeBalance < cost) {
+    if (balance < cost) {
+      cleanupInputs(requestSareeUrl, requestFaceUrl);
       return NextResponse.json({ 
-        error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${activeBalance.toFixed(2)}.` 
+        error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${balance.toFixed(2)}.` 
       }, { status: 403 });
     }
 
     const openrouterKey = process.env.OPENROUTER_API_KEY;
+    const simulatedUrl = "/images/model-fuchsia.png";
 
-    // Sandbox execution helper
-    const executeSandboxFallback = async (reason = "standard mock mode") => {
+    // Sandbox execution helper using Supabase RPC for atomic ledger write (handles cleanups as well)
+    const executeSandboxFallback = async (outputUrl: string, reason = "standard mock mode") => {
       console.log(`Executing sandbox simulation fallback. Reason: ${reason}`);
       
       // Simulate network delay
       await new Promise((resolve) => setTimeout(resolve, 3000));
       
-      // Sandbox fallback image path
-      const simulatedUrl = selectedResolution === "2K" ? "/images/model-purple.png" : "/images/model-fuchsia.png";
-      const newBalance = activeBalance - cost;
-      
-      if (user) {
-        try {
-          const supabase = createClient(supabaseUrl, supabaseAnonKey);
-          await supabase
-            .from("profiles")
-            .update({ balance_inr: newBalance })
-            .eq("id", user.id);
+      try {
+        const { data: newBalance, error: rpcError } = await supabase.rpc(
+          "deduct_balance_for_generation",
+          {
+            p_cost: cost,
+            p_prompt: prompt || "Simulated Saree Campaign (API Fallback)",
+            p_garment_url: sareeUrl,
+            p_face_url: faceUrl || null,
+            p_output_url: outputUrl
+          }
+        );
 
-          await supabase
-            .from("generations")
-            .insert({
-              user_id: user.id,
-              prompt: prompt || "Simulated Saree Campaign (API Fallback)",
-              garment_url: sareeUrl,
-              face_url: faceUrl || null,
-              output_url: simulatedUrl,
-              status: "completed",
-              cost_inr: cost,
-            });
-        } catch (dbErr) {
-          console.error("Failed to write mock balance/logs to database:", dbErr);
+        if (rpcError) {
+          return NextResponse.json({ error: rpcError.message }, { status: 400 });
         }
-      }
 
-      return NextResponse.json({
-        success: true,
-        outputUrl: simulatedUrl,
-        cost,
-        newBalance,
-        simulated: true,
-        fallbackMessage: `Notice: Operating in local GPU sandbox mode due to API limitations. (${reason})`
-      });
+        return NextResponse.json({
+          success: true,
+          outputUrl,
+          blurPlaceholderUrl: outputUrl, // Mock same URL for placeholder in sandbox
+          cost,
+          newBalance: Number(newBalance),
+          simulated: true,
+          fallbackMessage: `Notice: Operating in local GPU sandbox mode due to API limitations. (${reason})`
+        });
+      } catch (dbErr) {
+        const errorMsg = dbErr instanceof Error ? dbErr.message : "Failed to execute transaction";
+        console.error("Failed to write mock balance/logs to database:", dbErr);
+        return NextResponse.json({ error: errorMsg }, { status: 500 });
+      } finally {
+        cleanupInputs(requestSareeUrl, requestFaceUrl);
+      }
     };
 
-    // 3. Sandbox Mock Generation if API Key is not set or set to placeholder, or if we are in mock mode
-    if (isMock || !openrouterKey || openrouterKey === "" || openrouterKey.startsWith("placeholder")) {
-      return executeSandboxFallback("missing or placeholder API key credentials");
+    // 3. Sandbox Mock Generation if API Key is not set or set to placeholder
+    if (!openrouterKey || openrouterKey === "" || openrouterKey.startsWith("placeholder")) {
+      return executeSandboxFallback(simulatedUrl, "missing or placeholder API key credentials");
     }
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized: Active user session required" }, { status: 401 });
+    // Validate Cloudinary environment variables before triggering pipeline
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.error("DEBUG ERROR: Cloudinary environment variables are missing!");
+      return executeSandboxFallback(simulatedUrl, "missing Cloudinary environment credentials");
     }
 
     // 4. Assemble the Master High-Fashion Saree Prompt Template
@@ -132,7 +207,7 @@ export async function POST(req: NextRequest) {
 - User creative prompt: ${prompt || "luxury designer style"}
 - Strict Negative Prompt: low quality, blurry, distorted details, bad anatomy, deformed hands, cheap textures, plain flat photo.`;
 
-    const input_references = [];
+    const input_references: any[] = [];
 
     if (sareeUrl) {
       input_references.push({
@@ -148,34 +223,38 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 5. OpenRouter Network API Request
+    // 5. OpenRouter Network API Request using google/gemini-3.1-flash-lite-image (with Retries)
     let openRouterResponse;
     try {
-      openRouterResponse = await fetch("https://openrouter.ai/api/v1/images", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${openrouterKey}`,
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3.1-flash-image",
-          prompt: masterPrompt,
-          size: selectedResolution, // Pass selected resolution directly (1K or 2K)
-          input_references: input_references.length > 0 ? input_references : undefined,
-          response_format: "b64_json",
-          providers: ["google_ai_studio"],
-          max_tokens: 1200
-        }),
-      });
-    } catch (fetchErr: any) {
-      console.warn("Outbound OpenRouter connection failed. Falling back to Sandbox:", fetchErr);
-      return executeSandboxFallback(`Connection error: ${fetchErr.message}`);
-    }
+      openRouterResponse = await retryOperation(async () => {
+        const res = await fetch("https://openrouter.ai/api/v1/images", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openrouterKey}`,
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3.1-flash-lite-image",
+            prompt: masterPrompt,
+            size: selectedResolution, // Set size strictly to 1K (e.g. 1024x1024)
+            input_references: input_references.length > 0 ? input_references : undefined,
+            response_format: "b64_json",
+            providers: ["google_ai_studio"],
+            max_tokens: 1200
+          }),
+        });
 
-    if (!openRouterResponse.ok) {
-      const errorText = await openRouterResponse.text();
-      console.warn(`OpenRouter API responded with error status: ${openRouterResponse.status}. Details: ${errorText}. Falling back to Sandbox.`);
-      return executeSandboxFallback(`API Credit/Hold limits: ${errorText}`);
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`OpenRouter API error status ${res.status}: ${errorText}`);
+        }
+
+        return res;
+      });
+    } catch (fetchErr) {
+      const errorMsg = fetchErr instanceof Error ? fetchErr.message : "Network fetch failed";
+      console.warn("Outbound OpenRouter connection failed after retries. Falling back to Sandbox:", fetchErr);
+      return executeSandboxFallback(simulatedUrl, `Connection error: ${errorMsg}`);
     }
 
     const resultData = await openRouterResponse.json();
@@ -185,68 +264,67 @@ export async function POST(req: NextRequest) {
       throw new Error("No base64 image returned from OpenRouter API response");
     }
 
-    // Convert base64 data to binary buffer
-    const baseImageBuffer = Buffer.from(base64Image, "base64");
+    // 6. Upload base layout generated image directly to Cloudinary (with Retries)
+    console.log("DEBUG: Uploading base generated image to Cloudinary...");
+    const dataUrl = `data:image/png;base64,${base64Image}`;
     
-    // Save base layout natively to Supabase Storage and retrieve public URL
-    const fileName = `${user.id}/${Date.now()}-${selectedResolution.toLowerCase()}.png`;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    const { error: uploadError } = await supabase.storage
-      .from("generated-lookbooks")
-      .upload(fileName, baseImageBuffer, {
-        contentType: "image/png",
-        upsert: true,
+    let uploadResult;
+    try {
+      uploadResult = await retryOperation(async () => {
+        return await cloudinary.uploader.upload(dataUrl, {
+          folder: "floarus-lookbooks",
+        });
       });
+    } catch (uploadErr) {
+      const errorMsg = uploadErr instanceof Error ? uploadErr.message : "Upload failed";
+      throw new Error(`Cloudinary upload failed after retries: ${errorMsg}`);
+    }
+    
+    console.log("DEBUG: Cloudinary upload successful. public_id:", uploadResult.public_id);
 
-    if (uploadError) {
-      throw new Error(`Supabase Storage upload of image failed: ${uploadError.message}`);
+    // 7. Upscale image using Cloudinary transformation URL injection
+    const upscaledUrl = uploadResult.secure_url.replace("/upload/", "/upload/e_upscale/");
+    console.log("DEBUG: Upscaled image generated on Cloudinary. URL:", upscaledUrl);
+
+    // 7b. Generate a low-resolution blurred placeholder image dynamically from Cloudinary URL injection
+    const blurPlaceholderUrl = uploadResult.secure_url.replace("/upload/", "/upload/w_32,c_scale,e_blur:200/");
+    console.log("DEBUG: Blur placeholder generated. URL:", blurPlaceholderUrl);
+
+    // 8. Deduct balance and log generation atomically using Postgres RPC (storing Cloudinary Upscaled URL)
+    const { data: newBalance, error: rpcError } = await supabase.rpc(
+      "deduct_balance_for_generation",
+      {
+        p_cost: cost,
+        p_prompt: prompt || "",
+        p_garment_url: sareeUrl,
+        p_face_url: faceUrl || null,
+        p_output_url: upscaledUrl
+      }
+    );
+
+    if (rpcError) {
+      throw new Error(`Transaction failed: ${rpcError.message}`);
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from("generated-lookbooks")
-      .getPublicUrl(fileName);
-
-    console.log("Runway canvas uploaded to Supabase. Public URL:", publicUrl);
-
-    // 8. Deduct balance from ledger database
-    const newBalance = activeBalance - cost;
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ balance_inr: newBalance })
-      .eq("id", user.id);
-
-    if (updateError) {
-      console.error("Failed to update profile balance:", updateError);
-    }
-
-    // 9. Log generation event record
-    const { error: logError } = await supabase
-      .from("generations")
-      .insert({
-        user_id: user.id,
-        prompt: prompt || "",
-        garment_url: sareeUrl,
-        face_url: faceUrl || null,
-        output_url: publicUrl,
-        status: "completed",
-        cost_inr: cost,
-      });
-
-    if (logError) {
-      console.error("Failed to log generation event:", logError);
-    }
+    // Trigger asynchronous background cleanup of user-uploaded input files from Supabase
+    cleanupInputs(requestSareeUrl, requestFaceUrl);
 
     return NextResponse.json({
       success: true,
-      outputUrl: publicUrl,
+      outputUrl: upscaledUrl,
+      blurPlaceholderUrl: blurPlaceholderUrl,
       cost,
-      newBalance,
+      newBalance: Number(newBalance),
       simulated: false
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Internal server error";
     console.error("Generation API internal error:", error);
-    return NextResponse.json({ error: error.message || "Internal server error during generation" }, { status: 500 });
+    
+    // Trigger storage cleanup even on error path
+    cleanupInputs(requestSareeUrl, requestFaceUrl);
+    
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

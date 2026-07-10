@@ -9,14 +9,15 @@ import {
   ShieldCheck, 
   ImageIcon, 
   Download,
-  AlertCircle
+  AlertCircle,
+  X
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 export function GenerateWorkspace() {
   // Input fields
   const [prompt, setPrompt] = useState("");
-  const [resolution, setResolution] = useState<"1K" | "2K">("1K");
+  const [resolution] = useState<"1K">("1K");
   
   // Upload states
   const [sareeFile, setSareeFile] = useState<File | null>(null);
@@ -32,15 +33,33 @@ export function GenerateWorkspace() {
   const [loadingStage, setLoadingStage] = useState("");
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successData, setSuccessData] = useState<{ cost: number; newBalance: number } | null>(null);
+
+  // Progressive Image Loading States
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
+
+  // Floating Toast Stack System State
+  interface Toast {
+    id: string;
+    type: "success" | "error" | "info";
+    message: string;
+  }
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = (type: "success" | "error" | "info", message: string) => {
+    const id = Date.now().toString() + Math.random().toString().substring(2, 6);
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
 
   // File Input Refs
   const sareeInputRef = useRef<HTMLInputElement>(null);
   const faceInputRef = useRef<HTMLInputElement>(null);
 
   // Costs
-  const costEstimation = resolution === "2K" ? 10.00 : 6.00;
+  const costEstimation = 6.00;
 
   // Handle saree flat-lay upload to Supabase bucket
   const handleSareeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,15 +68,15 @@ export function GenerateWorkspace() {
 
     setSareeFile(file);
     setSareeUploading(true);
-    setErrorMsg(null);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const folder = session?.user?.id || "anonymous";
+      if (!session?.user) throw new Error("Unauthorized: Session is required");
+      const folder = session.user.id;
       const fileName = `${folder}/uploads/saree-${Date.now()}-${file.name}`;
 
       // Upload file directly to Supabase storage bucket
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from("generated-lookbooks")
         .upload(fileName, file, {
           contentType: file.type,
@@ -72,9 +91,11 @@ export function GenerateWorkspace() {
         .getPublicUrl(fileName);
 
       setSareeUrl(publicUrl);
-    } catch (err: any) {
+      addToast("success", "Saree sketch uploaded successfully!");
+    } catch (err) {
       console.error("Saree upload error:", err);
-      setErrorMsg(`Saree upload failed: ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : "Unknown error during upload";
+      addToast("error", `Saree upload failed: ${errMsg}`);
     } finally {
       setSareeUploading(false);
     }
@@ -87,15 +108,15 @@ export function GenerateWorkspace() {
 
     setFaceFile(file);
     setFaceUploading(true);
-    setErrorMsg(null);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const folder = session?.user?.id || "anonymous";
+      if (!session?.user) throw new Error("Unauthorized: Session is required");
+      const folder = session.user.id;
       const fileName = `${folder}/uploads/face-${Date.now()}-${file.name}`;
 
       // Upload file directly to Supabase storage bucket
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from("generated-lookbooks")
         .upload(fileName, file, {
           contentType: file.type,
@@ -110,9 +131,11 @@ export function GenerateWorkspace() {
         .getPublicUrl(fileName);
 
       setFaceUrl(publicUrl);
-    } catch (err: any) {
+      addToast("success", "Face reference uploaded successfully!");
+    } catch (err) {
       console.error("Face upload error:", err);
-      setErrorMsg(`Face upload failed: ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : "Unknown error during upload";
+      addToast("error", `Face upload failed: ${errMsg}`);
     } finally {
       setFaceUploading(false);
     }
@@ -122,49 +145,31 @@ export function GenerateWorkspace() {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sareeUrl) {
-      setErrorMsg("Please upload a Saree Flat-lay image before rendering.");
+      addToast("error", "Please upload a Saree Flat-lay image before rendering.");
       return;
     }
 
     setLoading(true);
-    setLoadingStage(`AI Studio: Fabricating Runway Asset (${resolution})...`);
-    setErrorMsg(null);
+    setLoadingStage("AI Studio: Fabricating Runway Asset & AI Upscaling...");
     setOutputUrl(null);
-    setSuccessData(null);
+    setBlurPlaceholderUrl(null);
+    setImageLoaded(false);
 
     try {
-      // Fetch active balance from Supabase or default mock
-      let currentBalance = 450.00;
-      try {
-        const { data: { session: activeSession } } = await supabase.auth.getSession();
-        if (activeSession?.user) {
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("balance_inr")
-            .eq("id", activeSession.user.id)
-            .single();
-          if (!error && data) {
-            currentBalance = Number(data.balance_inr);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch balance for submission:", e);
-      }
-
       const { data: { session } } = await supabase.auth.getSession();
-      
+      if (!session) throw new Error("Session expired, please sign in again");
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token || ""}`
+          "Authorization": `Bearer ${session.access_token || ""}`
         },
         body: JSON.stringify({
           sareeUrl,
           faceUrl,
-          resolution, // Send actual selected resolution
-          prompt,
-          currentBalance
+          resolution: "1K", // Send standard 1K resolution to API
+          prompt
         })
       });
 
@@ -175,19 +180,47 @@ export function GenerateWorkspace() {
       }
 
       setOutputUrl(result.outputUrl);
-      setSuccessData({
-        cost: result.cost,
-        newBalance: result.newBalance
-      });
+      setBlurPlaceholderUrl(result.blurPlaceholderUrl);
+      addToast("success", `Lookbook generated! Deducted ₹${result.cost.toFixed(2)}. Remaining Balance: ₹${result.newBalance.toFixed(2)}.`);
       
       // Emit profile updated event to reload the sidebar wallet balance
       window.dispatchEvent(new Event("profile-updated"));
-    } catch (err: any) {
+    } catch (err) {
       console.error("Generation error:", err);
-      setErrorMsg(err.message || "An unexpected error occurred during rendering.");
+      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred during rendering.";
+      addToast("error", errMsg);
     } finally {
+      // Clear input images from client state as they are cleaned up in Supabase Storage
+      setSareeFile(null);
+      setSareeUrl(null);
+      setFaceFile(null);
+      setFaceUrl(null);
+
       setLoading(false);
       setLoadingStage("");
+    }
+  };
+
+  // Byte-lossless download handler to fetch original file bytes from Supabase
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Lossless download failed, falling back to direct navigation:", err);
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.download = filename;
+      link.click();
     }
   };
 
@@ -328,67 +361,30 @@ export function GenerateWorkspace() {
               />
             </div>
 
-            {/* Input 4: Choose Resolution Step Slider */}
+            {/* Resolution and upscale notice info badge */}
             <div className="flex flex-col gap-2 font-sans">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-mono uppercase tracking-wider text-foreground-muted">
-                  Choose Output Resolution
-                </label>
-                <span className="text-xs font-semibold font-mono text-fuchsia-accent bg-fuchsia-accent/10 px-2 py-0.5 rounded-full border border-fuchsia-accent/30">
-                  {resolution} (₹{costEstimation.toFixed(2)})
+                <span className="text-xs font-mono uppercase tracking-wider text-foreground-muted">
+                  Output Resolution Pipeline
+                </span>
+                <span className="text-[10px] font-semibold font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                  4K AI Upscaling Active
                 </span>
               </div>
               
-              <div className="relative w-full bg-void/50 border border-muted-purple/40 rounded-xl p-3.5 flex flex-col gap-3">
-                {/* Dynamic Range Slider Input */}
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="1"
-                  value={resolution === "2K" ? "1" : "0"}
-                  onChange={(e) => setResolution(e.target.value === "1" ? "2K" : "1K")}
-                  className="w-full h-1.5 bg-surface rounded-lg appearance-none cursor-pointer accent-fuchsia-accent focus:outline-none"
-                />
-                
-                {/* Slider Tick Indicators */}
-                <div className="flex justify-between text-[10px] font-mono text-zinc-500 px-1">
-                  <button
-                    type="button"
-                    onClick={() => setResolution("1K")}
-                    className={`flex flex-col gap-0.5 cursor-pointer text-left ${resolution === "1K" ? "text-fuchsia-accent font-bold" : "hover:text-white"}`}
-                  >
-                    <span>1K Resolution</span>
-                    <span className="text-[9px] opacity-75">Standard (₹6.00)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setResolution("2K")}
-                    className={`flex flex-col gap-0.5 cursor-pointer text-right ${resolution === "2K" ? "text-fuchsia-accent font-bold" : "hover:text-white"}`}
-                  >
-                    <span>2K Resolution</span>
-                    <span className="text-[9px] opacity-75">HD Render (₹10.00)</span>
-                  </button>
+              <div className="bg-void/50 border border-muted-purple/40 rounded-xl p-3.5 flex flex-col gap-1 text-[11px] leading-relaxed text-foreground-muted font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-fuchsia-accent shrink-0 animate-pulse" />
+                  <span>Generates in 1K and upscales instantly via Cloudinary AI.</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-accent shrink-0" />
+                  <span>Deduction cost is set to a flat rate of <strong>₹6.00</strong>.</span>
                 </div>
               </div>
-            </div>            {/* Errors display */}
-            {errorMsg && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 flex gap-2 items-start">
-                <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
+            </div>
 
-            {/* Success cost deduction summary */}
-            {successData && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 flex gap-2 items-start">
-                <ShieldCheck className="h-4.5 w-4.5 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold block">Lookbook generated!</span>
-                  <span className="font-mono">Deducted ₹{successData.cost.toFixed(2)}. Remaining Balance: ₹{successData.newBalance.toFixed(2)}.</span>
-                </div>
-              </div>
-            )}
+
 
             {/* Action Submit Button */}
             <button
@@ -421,7 +417,7 @@ export function GenerateWorkspace() {
             <span className="text-foreground-muted flex items-center gap-1.5">
               Synthesis Viewer
             </span>
-            <span className="text-zinc-500">{resolution} Mode</span>
+            <span className="text-zinc-500">4K Upscaled Mode</span>
           </div>
 
           {/* Core frame with dotted border */}
@@ -439,11 +435,33 @@ export function GenerateWorkspace() {
           ) : outputUrl ? (
             <div className="flex-1 flex flex-col gap-4">
               <div className="relative w-full aspect-[4/5] rounded-xl overflow-hidden border border-muted-purple/50 bg-void">
+                {/* 1. Low-res blurred background placeholder */}
+                {blurPlaceholderUrl && (
+                  <img
+                    src={blurPlaceholderUrl}
+                    alt="Blurred preview"
+                    className="absolute inset-0 object-cover w-full h-full filter blur-md scale-105 transition-opacity duration-500"
+                    style={{ opacity: imageLoaded ? 0 : 1 }}
+                  />
+                )}
+                {/* 2. High-res output image with smooth 500ms opacity cross-fade when loaded */}
                 <img
                   src={outputUrl}
-                  alt="OpenRouter Generative Output"
-                  className="object-cover w-full h-full animate-fade-in"
+                  alt="Upscaled Runway Output"
+                  onLoad={() => setImageLoaded(true)}
+                  className="absolute inset-0 object-cover w-full h-full transition-opacity duration-500 ease-in-out"
+                  style={{ opacity: imageLoaded ? 1 : 0 }}
                 />
+                
+                {/* Tiny absolute loading label overlay if image is loading */}
+                {!imageLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-xs">
+                    <div className="flex items-center gap-2 bg-void/80 border border-muted-purple/60 px-3 py-1.5 rounded-lg text-[10px] text-foreground-muted font-mono animate-pulse">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin text-fuchsia-accent" />
+                      <span>Loading HD Asset...</span>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
@@ -453,13 +471,13 @@ export function GenerateWorkspace() {
                 >
                   <ImageIcon className="h-4 w-4" /> View Fullscreen
                 </button>
-                <a
-                  href={outputUrl || undefined}
-                  download={resolution === "2K" ? "floarus-lookbook-2k.png" : "floarus-lookbook-1k.png"}
+                <button
+                  type="button"
+                  onClick={() => downloadImage(outputUrl, "floarus-lookbook-4k.png")}
                   className="flex-1 py-2.5 rounded-lg bg-fuchsia-accent hover:bg-fuchsia-accent/90 text-xs font-semibold text-white flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
                   <Download className="h-4 w-4" /> Download Asset
-                </a>
+                </button>
               </div>
             </div>
           ) : (
@@ -476,7 +494,7 @@ export function GenerateWorkspace() {
 
           {/* Footer Info */}
           <div className="border-t border-muted-purple/30 pt-4 flex justify-between items-center text-[10px] font-mono text-zinc-500">
-            <span>Model: Gemini-3.1-Flash-Image</span>
+            <span>Model: Gemini-3.1-Flash-Lite (Cloudinary AI Upscaled)</span>
             <span>GPU Nodes Active</span>
           </div>
 
@@ -492,7 +510,7 @@ export function GenerateWorkspace() {
           <div className="relative max-w-5xl w-full h-full flex flex-col justify-between items-center" onClick={(e) => e.stopPropagation()}>
             {/* Lightbox Header */}
             <div className="w-full flex justify-between items-center text-xs font-mono text-zinc-400 py-2 border-b border-muted-purple/30 mb-4">
-              <span>HIGH-RESOLUTION RUNWAY PREVIEW ({resolution})</span>
+              <span>HIGH-RESOLUTION RUNWAY PREVIEW (4K AI Upscaled)</span>
               <button 
                 onClick={() => setShowLightbox(false)}
                 className="px-3 py-1 bg-surface border border-muted-purple text-[10px] text-white rounded-md hover:border-fuchsia-accent cursor-pointer"
@@ -513,17 +531,52 @@ export function GenerateWorkspace() {
             {/* Lightbox Footer Actions */}
             <div className="w-full flex justify-between items-center mt-4 pt-4 border-t border-muted-purple/30 text-xs font-mono">
               <span className="text-zinc-500">Press download to save uncompressed source</span>
-              <a 
-                href={outputUrl} 
-                download={resolution === "2K" ? "floarus-lookbook-2k.png" : "floarus-lookbook-1k.png"}
+              <button 
+                type="button"
+                onClick={() => downloadImage(outputUrl, "floarus-lookbook-4k.png")}
                 className="px-4 py-2 bg-gradient-to-r from-fuchsia-accent to-purple-accent text-white font-bold rounded-lg flex items-center gap-2 cursor-pointer text-[10px] uppercase tracking-wider"
               >
                 <Download className="h-4 w-4" /> Save High-Res PNG
-              </a>
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Toast Notification Container Stack */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none max-w-sm w-full px-4 sm:px-0">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`pointer-events-auto p-4 rounded-xl border flex items-start gap-3 shadow-2xl backdrop-blur-md transition-all duration-300 transform translate-x-0 animate-fade-in ${
+              toast.type === "success"
+                ? "bg-emerald-950/85 border-emerald-500/40 text-emerald-300"
+                : toast.type === "error"
+                ? "bg-red-950/85 border-red-500/40 text-red-300"
+                : "bg-void/85 border-purple-accent/40 text-purple-300"
+            }`}
+          >
+            <div className="mt-0.5 flex-shrink-0">
+              {toast.type === "success" ? (
+                <ShieldCheck className="h-4.5 w-4.5 text-emerald-400" />
+              ) : toast.type === "error" ? (
+                <AlertCircle className="h-4.5 w-4.5 text-red-400" />
+              ) : (
+                <Sparkles className="h-4.5 w-4.5 text-purple-400" />
+              )}
+            </div>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <span className="text-[11px] font-mono leading-relaxed">{toast.message}</span>
+            </div>
+            <button
+              onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+              className="text-zinc-500 hover:text-white flex-shrink-0 cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
 
     </div>
   );

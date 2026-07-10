@@ -57,7 +57,7 @@ export default function Home() {
         }, 1000);
       } else {
         // Sign up with additional metadata
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -72,10 +72,11 @@ export default function Home() {
           text: "Registration initiated! Check your email for validation link.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred. Please try again.";
       setMessage({
         type: "error",
-        text: err.message || "An unexpected error occurred. Please try again.",
+        text: errorMsg,
       });
     } finally {
       setLoading(false);
@@ -139,6 +140,7 @@ export default function Home() {
                 src={showcaseOutfit === "fuchsia" ? "/images/model-fuchsia.png" : "/images/model-purple.png"} 
                 alt="AI Fashion Model Showcase" 
                 fill 
+                sizes="(max-width: 768px) 100vw, 576px"
                 className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                 priority
               />

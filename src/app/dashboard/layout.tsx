@@ -15,7 +15,9 @@ import {
   User,
   X,
   CheckCircle2,
-  Lock
+  Lock,
+  Copy,
+  Check
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -33,46 +35,41 @@ function Sidebar() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
+  
+  // UPI Form State
   const [topUpAmount, setTopUpAmount] = useState("1000");
+  const [upiTxnId, setUpiTxnId] = useState("");
   const [topUpSuccess, setTopUpSuccess] = useState(false);
   const [topUpLoading, setTopUpLoading] = useState(false);
+  const [topUpError, setTopUpError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // Fetch Supabase user profile
-  const fetchProfile = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("email, balance_inr")
-          .eq("id", session.user.id)
-          .single();
-
-        if (error) throw error;
-        setProfile({
-          email: data.email || session.user.email || null,
-          balance_inr: Number(data.balance_inr),
-        });
-      } else {
-        // Mock fallback if user is not logged in
-        setProfile({
-          email: "guest.brand@maison.com",
-          balance_inr: 450.00,
-        });
-      }
-    } catch (err) {
-      console.error("Error fetching profile:", err);
-      // Fallback
-      setProfile({
-        email: "guest.brand@maison.com",
-        balance_inr: 450.00,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const upiId = process.env.NEXT_PUBLIC_UPI_ID || "placeholder@upi";
 
   useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("email, balance_inr")
+            .eq("id", session.user.id)
+            .single();
+
+          if (error) throw error;
+          setProfile({
+            email: data.email || session.user.email || null,
+            balance_inr: Number(data.balance_inr),
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchProfile();
 
     // Set up auth state change listener to re-fetch profile if user logs in
@@ -88,40 +85,53 @@ function Sidebar() {
     };
   }, []);
 
-  // Handle Wallet Top Up Simulation
+  // Handle Wallet Top Up Submission via RPC
   const handleTopUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTopUpLoading(true);
     setTopUpSuccess(false);
+    setTopUpError(null);
 
     try {
       const amountToAdd = parseFloat(topUpAmount);
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        // Update balance in Supabase
-        const currentBalance = profile?.balance_inr || 0;
-        const newBalance = currentBalance + amountToAdd;
-
-        const { error } = await supabase
-          .from("profiles")
-          .update({ balance_inr: newBalance })
-          .eq("id", session.user.id);
-
-        if (error) throw error;
-        setProfile(prev => prev ? { ...prev, balance_inr: newBalance } : null);
-      } else {
-        // Update local state for guest
-        setProfile(prev => prev ? { ...prev, balance_inr: prev.balance_inr + amountToAdd } : null);
+      if (isNaN(amountToAdd) || amountToAdd <= 0) {
+        throw new Error("Invalid top up amount");
+      }
+      if (!upiTxnId.trim()) {
+        throw new Error("UPI Transaction Ref ID / UTR is required");
       }
 
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error("Session expired, please sign in again");
+      }
+
+      // Log payment and credit balance atomically in database
+      const { data: newBalance, error: rpcError } = await supabase.rpc(
+        "submit_upi_payment",
+        {
+          p_amount: amountToAdd,
+          p_upi_txn_id: upiTxnId.trim()
+        }
+      );
+
+      if (rpcError) throw rpcError;
+
+      setProfile(prev => prev ? { ...prev, balance_inr: Number(newBalance) } : null);
       setTopUpSuccess(true);
+      setUpiTxnId("");
+      
+      // Dispatch update to let the GenerateWorkspace know about the new balance
+      window.dispatchEvent(new Event("profile-updated"));
+
       setTimeout(() => {
         setShowTopUpModal(false);
         setTopUpSuccess(false);
-      }, 1500);
+      }, 4500);
     } catch (err) {
       console.error("Top up error:", err);
+      const errMsg = err instanceof Error ? err.message : "Failed to submit transaction details.";
+      setTopUpError(errMsg);
     } finally {
       setTopUpLoading(false);
     }
@@ -131,6 +141,12 @@ function Sidebar() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/");
+  };
+
+  const copyUpiId = () => {
+    navigator.clipboard.writeText(upiId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   // Navigation Items
@@ -234,12 +250,15 @@ function Sidebar() {
         </div>
       </aside>
 
-      {/* Top Up Wallet Dialog Modal */}
+      {/* UPI Wallet Top Up Dialog Modal */}
       {showTopUpModal && (
         <div className="fixed inset-0 bg-void/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="w-full max-w-md glassmorphic-card rounded-2xl p-6 relative border border-muted-purple/60">
             <button
-              onClick={() => setShowTopUpModal(false)}
+              onClick={() => {
+                setShowTopUpModal(false);
+                setTopUpError(null);
+              }}
               className="absolute right-4 top-4 text-foreground-muted hover:text-white transition-colors cursor-pointer"
             >
               <X className="h-5 w-5" />
@@ -247,49 +266,43 @@ function Sidebar() {
 
             <div className="flex items-center gap-2 mb-4">
               <Wallet className="h-5 w-5 text-purple-accent" />
-              <h3 className="text-lg font-bold">Secure Wallet Top Up</h3>
+              <h3 className="text-lg font-bold">Replenish via UPI</h3>
             </div>
 
             {topUpSuccess ? (
               <div className="py-8 flex flex-col items-center justify-center gap-3 text-center">
                 <CheckCircle2 className="h-16 w-16 text-emerald-500 animate-bounce" />
-                <h4 className="text-xl font-bold text-white">Payment Successful</h4>
-                <p className="text-xs text-foreground-muted font-mono">
-                  Added ₹{parseFloat(topUpAmount).toFixed(2)} to your balance.
+                <h4 className="text-base font-bold text-white leading-snug">Transaction Submitted!</h4>
+                <p className="text-xs text-foreground-muted font-mono leading-relaxed max-w-[280px]">
+                  Transaction submitted successfully! Your payment is pending manual validation. Balance will be updated once approved by the administrator.
                 </p>
               </div>
             ) : (
               <form onSubmit={handleTopUpSubmit} className="flex flex-col gap-4">
-                <p className="text-xs text-foreground-muted leading-relaxed">
-                  Select a B2B replenishment package to top up your virtual currency. These credits are consumed per image synthesis.
-                </p>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: "₹500", value: "500" },
-                    { label: "₹1,000", value: "1000" },
-                    { label: "₹5,000", value: "5000" }
-                  ].map((pkg) => (
+                <div className="bg-void/50 border border-muted-purple/60 rounded-xl p-3.5 flex flex-col gap-2">
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase">Step 1: Scan / Transfer to UPI ID</span>
+                  
+                  <div className="flex items-center justify-between bg-surface border border-muted-purple/50 px-3 py-2 rounded-lg mt-1">
+                    <span className="text-xs text-white font-mono select-all truncate">{upiId}</span>
                     <button
-                      key={pkg.value}
                       type="button"
-                      onClick={() => setTopUpAmount(pkg.value)}
-                      className={`py-2 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
-                        topUpAmount === pkg.value
-                          ? "border-purple-accent bg-purple-accent/20 text-white"
-                          : "border-muted-purple bg-void/50 text-foreground-muted hover:text-white"
-                      }`}
+                      onClick={copyUpiId}
+                      className="text-foreground-muted hover:text-white transition-colors p-1"
+                      title="Copy UPI ID"
                     >
-                      {pkg.label}
+                      {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                     </button>
-                  ))}
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1 leading-normal">
+                    Complete the payment for the desired replenishment amount in your preferred UPI application.
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-foreground-muted">Custom Amount (INR)</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-foreground-muted">Amount Transferred (INR)</label>
                   <input
                     type="number"
-                    min="100"
+                    min="1"
                     max="100000"
                     required
                     value={topUpAmount}
@@ -298,9 +311,27 @@ function Sidebar() {
                   />
                 </div>
 
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-foreground-muted">UPI UTR / Transaction Ref ID</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 12-digit transaction ID"
+                    value={upiTxnId}
+                    onChange={(e) => setUpiTxnId(e.target.value)}
+                    className="w-full bg-void/50 border border-muted-purple/60 px-3 py-2 rounded-lg text-sm text-white font-mono focus:border-purple-accent focus:outline-none"
+                  />
+                </div>
+
+                {topUpError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400">
+                    {topUpError}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-1.5 border-t border-muted-purple/40 pt-4 mt-2">
                   <span className="text-[9px] font-mono text-zinc-500 uppercase flex items-center gap-1">
-                    <Lock className="h-3 w-3 text-purple-accent" /> Simulated Sandbox Payment Gateway
+                    <Lock className="h-3 w-3 text-purple-accent" /> Payments credited to profiles atomically.
                   </span>
                 </div>
 
@@ -312,7 +343,7 @@ function Sidebar() {
                   {topUpLoading ? (
                     <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <span>Authorize Transaction</span>
+                    <span>Confirm UPI Transfer</span>
                   )}
                 </button>
               </form>
@@ -329,6 +360,48 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.replace("/");
+        } else {
+          setAuthorized(true);
+        }
+      } catch (err) {
+        console.error("Session verification failed:", err);
+        router.replace("/");
+      }
+    }
+    checkAuth();
+
+    // Subscribe to auth state changes to redirect on logout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        router.replace("/");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  if (!authorized) {
+    return (
+      <div className="min-h-screen w-full bg-void flex items-center justify-center text-foreground-muted font-mono text-xs">
+        <div className="flex flex-col items-center gap-3">
+          <span className="h-5 w-5 border-2 border-fuchsia-accent/30 border-t-fuchsia-accent rounded-full animate-spin" />
+          <span>Verifying authorization session...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full flex bg-void text-white font-sans relative overflow-hidden">
       
