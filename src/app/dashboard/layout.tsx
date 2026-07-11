@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   Lock,
   Copy,
-  Check
+  Check,
+  Menu
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -26,7 +27,7 @@ interface Profile {
   balance_inr: number;
 }
 
-function Sidebar() {
+function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => void }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const currentTab = searchParams.get("tab") || "generate";
@@ -159,18 +160,29 @@ function Sidebar() {
 
   return (
     <>
-      <aside className="w-72 bg-surface border-r border-muted-purple/40 flex flex-col justify-between z-10 shrink-0 select-none">
-        
-        {/* Top: Branding Logo & Status */}
-        <div className="flex flex-col gap-6 p-6 border-b border-muted-purple/30">
+      <aside className={`${isMobile ? "w-full" : "w-72"} bg-surface border-r border-muted-purple/40 flex flex-col justify-between z-10 shrink-0 select-none h-full`}>
+      
+      {/* Top: Branding Logo & Status */}
+      <div className="flex flex-col gap-6 p-6 border-b border-muted-purple/30">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-gradient-to-tr from-fuchsia-accent to-purple-accent flex items-center justify-center shadow-lg shadow-fuchsia-accent/15">
               <Sparkles className="h-4.5 w-4.5 text-white" />
             </div>
             <span className="text-lg font-bold tracking-[0.2em] text-white">
-              FLOARUS<span className="text-fuchsia-accent">.</span>PICS
+              FLORUS<span className="text-fuchsia-accent">.</span>PICS
             </span>
           </div>
+          {isMobile && (
+            <button 
+              onClick={onClose}
+              className="p-1 text-zinc-500 hover:text-white cursor-pointer"
+              title="Close Drawer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
           
           <div className="flex items-center gap-3 bg-void/50 border border-muted-purple/40 px-3 py-2 rounded-xl">
             <div className="h-8 w-8 rounded-full bg-gradient-to-r from-muted-purple to-surface border border-muted-purple flex items-center justify-center">
@@ -196,6 +208,7 @@ function Sidebar() {
               <Link
                 key={item.id}
                 href={`/dashboard?tab=${item.id}`}
+                onClick={onClose}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group border-l-2 cursor-pointer ${
                   isActive
                     ? "bg-gradient-to-r from-fuchsia-accent/10 to-transparent border-fuchsia-accent text-white"
@@ -362,6 +375,8 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [profileBalance, setProfileBalance] = useState<number | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -391,6 +406,32 @@ export default function DashboardLayout({
     };
   }, [router]);
 
+  useEffect(() => {
+    async function fetchBalance() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("balance_inr")
+            .eq("id", session.user.id)
+            .single();
+          if (data) setProfileBalance(Number(data.balance_inr));
+        }
+      } catch (err) {
+        console.error("Error loading header balance:", err);
+      }
+    }
+    if (authorized) {
+      fetchBalance();
+    }
+
+    window.addEventListener("profile-updated", fetchBalance);
+    return () => {
+      window.removeEventListener("profile-updated", fetchBalance);
+    };
+  }, [authorized]);
+
   if (!authorized) {
     return (
       <div className="min-h-screen w-full bg-void flex items-center justify-center text-foreground-muted font-mono text-xs">
@@ -409,14 +450,54 @@ export default function DashboardLayout({
       <div className="absolute top-0 right-0 w-[40vw] h-[40vw] rounded-full bg-purple-accent/5 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[40vw] h-[40vw] rounded-full bg-fuchsia-accent/5 blur-[120px] pointer-events-none" />
 
-      {/* Sidebar - Wrapped in Suspense to resolve searchParams SSR/CSR bailout */}
-      <Suspense fallback={<div className="w-72 bg-surface border-r border-muted-purple/40 animate-pulse" />}>
-        <Sidebar />
-      </Suspense>
+      {/* Sidebar Desktop View (Hidden on mobile/tablet) */}
+      <div className="hidden lg:flex w-72 shrink-0 border-r border-muted-purple/40 bg-surface">
+        <Suspense fallback={<div className="w-72 bg-surface border-r border-muted-purple/40 animate-pulse" />}>
+          <Sidebar />
+        </Suspense>
+      </div>
+
+      {/* Mobile Drawer Menu Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex lg:hidden bg-void/85 backdrop-blur-xs animate-fade-in"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <div 
+            className="w-72 h-full bg-surface flex flex-col justify-between select-none animate-slide-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Suspense fallback={<div className="w-full h-full bg-surface animate-pulse" />}>
+              <Sidebar isMobile onClose={() => setIsMobileMenuOpen(false)} />
+            </Suspense>
+          </div>
+        </div>
+      )}
 
       {/* Main Canvas Scrollable Area */}
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto z-10 relative">
-        <div className="flex-1 p-8 md:p-12">
+        {/* Mobile top-bar navigation header */}
+        <header className="lg:hidden flex items-center justify-between px-5 py-4 bg-surface/50 border-b border-muted-purple/30 backdrop-blur-md sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 rounded-lg border border-muted-purple/50 bg-void/40 hover:bg-void/70 hover:border-purple-accent/60 transition-all text-white cursor-pointer"
+              title="Open Navigation Menu"
+            >
+              <Menu className="h-4.5 w-4.5" />
+            </button>
+            <span className="text-sm font-bold tracking-[0.2em] text-white">
+              FLORUS<span className="text-fuchsia-accent">.</span>PICS
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-void/50 border border-muted-purple/40 px-3 py-1.5 rounded-xl text-xs font-mono">
+            <Wallet className="h-3.5 w-3.5 text-purple-accent animate-pulse" />
+            <span className="text-white font-semibold">₹{profileBalance !== null ? profileBalance.toFixed(2) : "0.00"}</span>
+          </div>
+        </header>
+
+        <div className="flex-1 p-4 md:p-8 lg:p-12">
           {children}
         </div>
       </main>

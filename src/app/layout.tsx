@@ -8,9 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Floarus.pics | High-End B2B AI Fashion Platform",
+  title: "Florus.pics | High-End B2B AI Fashion Platform",
   description: "The premier digital luxury fashion generative AI platform. Transform fashion designs, generate studio-grade model photoshoots, and power B2B digital catalogs with AI.",
-  keywords: ["AI Fashion", "B2B SaaS", "Digital Luxury", "Generative AI", "Fashion Modeling", "Floarus"],
+  keywords: ["AI Fashion", "B2B SaaS", "Digital Luxury", "Generative AI", "Fashion Modeling", "Florus"],
 };
 
 export default function RootLayout({

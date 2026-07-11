@@ -20,8 +20,7 @@ export function GenerateWorkspace() {
   const [resolution] = useState<"1K">("1K");
   
   // Upload states
-  const [sareeFile, setSareeFile] = useState<File | null>(null);
-  const [sareeUrl, setSareeUrl] = useState<string | null>(null);
+  const [sareeUrls, setSareeUrls] = useState<string[]>([]);
   const [sareeUploading, setSareeUploading] = useState(false);
 
   const [faceFile, setFaceFile] = useState<File | null>(null);
@@ -59,45 +58,102 @@ export function GenerateWorkspace() {
   const faceInputRef = useRef<HTMLInputElement>(null);
 
   // Costs
-  const costEstimation = 6.00;
+  const costEstimation = 37.00;
 
-  // Handle saree flat-lay upload to Supabase bucket
+  // Client-side helper to extract relative path inside the storage bucket from Supabase public URL
+  const getStoragePath = (url: string) => {
+    const marker = "/public/generated-lookbooks/";
+    const idx = url.indexOf(marker);
+    return idx !== -1 ? url.substring(idx + marker.length) : null;
+  };
+
+  // Helper to trigger asynchronous file deletion from Supabase Storage in the background
+  const deleteUploadedFile = (url: string) => {
+    (async () => {
+      try {
+        const path = getStoragePath(url);
+        if (path) {
+          console.log("DEBUG Client: Cleaning up old file from Supabase storage:", path);
+          const { error } = await supabase.storage
+            .from("generated-lookbooks")
+            .remove([path]);
+          if (error) {
+            console.warn("DEBUG Client warning: Storage file removal error:", error.message);
+          } else {
+            console.log("DEBUG Client: Successfully cleaned up storage asset in background.");
+          }
+        }
+      } catch (err) {
+        console.error("DEBUG Client error during storage cleanup execution:", err);
+      }
+    })();
+  };
+
+  // Delete a specific cloth reference thumbnail from local state and background database storage
+  const handleRemoveSareeUrl = (urlToRemove: string) => {
+    deleteUploadedFile(urlToRemove);
+    setSareeUrls((prev) => prev.filter((url) => url !== urlToRemove));
+  };
+
+  // Delete face reference uploader asset
+  const handleRemoveFace = () => {
+    if (faceUrl) {
+      deleteUploadedFile(faceUrl);
+    }
+    setFaceFile(null);
+    setFaceUrl(null);
+  };
+
+  // Handle saree flat-lay upload to Supabase bucket (Supports multiple files up to 5 total)
   const handleSareeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    setSareeFile(file);
+    if (sareeUrls.length + files.length > 5) {
+      addToast("error", "You can upload up to 5 cloth reference images max.");
+      return;
+    }
+
     setSareeUploading(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error("Unauthorized: Session is required");
       const folder = session.user.id;
-      const fileName = `${folder}/uploads/saree-${Date.now()}-${file.name}`;
 
-      // Upload file directly to Supabase storage bucket
-      const { error } = await supabase.storage
-        .from("generated-lookbooks")
-        .upload(fileName, file, {
-          contentType: file.type,
-          upsert: true
-        });
+      const newUrls: string[] = [];
 
-      if (error) throw error;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = `${folder}/uploads/saree-${Date.now()}-${i}-${file.name}`;
 
-      // Retrieve public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from("generated-lookbooks")
-        .getPublicUrl(fileName);
+        // Upload file directly to Supabase storage bucket
+        const { error } = await supabase.storage
+          .from("generated-lookbooks")
+          .upload(fileName, file, {
+            contentType: file.type,
+            upsert: true
+          });
 
-      setSareeUrl(publicUrl);
-      addToast("success", "Saree sketch uploaded successfully!");
+        if (error) throw error;
+
+        // Retrieve public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from("generated-lookbooks")
+          .getPublicUrl(fileName);
+
+        newUrls.push(publicUrl);
+      }
+
+      setSareeUrls((prev) => [...prev, ...newUrls]);
+      addToast("success", `Successfully uploaded ${files.length} cloth reference image(s)!`);
     } catch (err) {
       console.error("Saree upload error:", err);
       const errMsg = err instanceof Error ? err.message : "Unknown error during upload";
       addToast("error", `Saree upload failed: ${errMsg}`);
     } finally {
       setSareeUploading(false);
+      if (sareeInputRef.current) sareeInputRef.current.value = "";
     }
   };
 
@@ -105,6 +161,11 @@ export function GenerateWorkspace() {
   const handleFaceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Delete old face image in background if present
+    if (faceUrl) {
+      deleteUploadedFile(faceUrl);
+    }
 
     setFaceFile(file);
     setFaceUploading(true);
@@ -144,8 +205,8 @@ export function GenerateWorkspace() {
   // Execute Real Generation Pipeline Call
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sareeUrl) {
-      addToast("error", "Please upload a Saree Flat-lay image before rendering.");
+    if (sareeUrls.length === 0) {
+      addToast("error", "Please upload at least one cloth reference image before rendering.");
       return;
     }
 
@@ -166,7 +227,7 @@ export function GenerateWorkspace() {
           "Authorization": `Bearer ${session.access_token || ""}`
         },
         body: JSON.stringify({
-          sareeUrl,
+          sareeUrls, // Send array of cloth references to the API
           faceUrl,
           resolution: "1K", // Send standard 1K resolution to API
           prompt
@@ -190,12 +251,6 @@ export function GenerateWorkspace() {
       const errMsg = err instanceof Error ? err.message : "An unexpected error occurred during rendering.";
       addToast("error", errMsg);
     } finally {
-      // Clear input images from client state as they are cleaned up in Supabase Storage
-      setSareeFile(null);
-      setSareeUrl(null);
-      setFaceFile(null);
-      setFaceUrl(null);
-
       setLoading(false);
       setLoadingStage("");
     }
@@ -241,43 +296,47 @@ export function GenerateWorkspace() {
 
           <form onSubmit={handleGenerate} className="flex flex-col gap-5">
             
-            {/* Input 1: Saree Flat-lay upload */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-mono uppercase tracking-wider text-foreground-muted">
-                Product Saree Flat-lay <span className="text-red-500">*</span>
+            {/* Input 1: Saree Flat-lay upload (Support up to 5 reference files) */}
+            <div className="flex flex-col gap-2.5">
+              <label className="text-xs font-mono uppercase tracking-wider text-foreground-muted flex justify-between items-center">
+                <span>Product Saree Reference Photos <span className="text-red-500">*</span></span>
+                <span className="text-[10px] font-bold text-fuchsia-accent bg-fuchsia-500/10 px-2.5 py-0.5 rounded-full border border-fuchsia-500/20">{sareeUrls.length}/5 Uploaded</span>
               </label>
               
               <input
                 type="file"
                 accept="image/*"
+                multiple
                 ref={sareeInputRef}
                 onChange={handleSareeUpload}
                 className="hidden"
               />
 
-              {sareeUrl ? (
-                <div className="relative w-full h-32 rounded-xl overflow-hidden border border-fuchsia-accent/30 bg-void flex items-center justify-between p-4 group">
-                  <div className="relative h-24 w-20 rounded border border-muted-purple bg-surface overflow-hidden">
-                    <img src={sareeUrl} alt="Saree Upload" className="object-cover h-full w-full" />
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1 px-4 min-w-0">
-                    <span className="text-xs text-white font-semibold truncate">{sareeFile?.name}</span>
-                    <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5" /> Uploaded to Supabase
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setSareeFile(null); setSareeUrl(null); }}
-                    className="px-3 py-1 bg-void/80 border border-muted-purple rounded-lg text-[10px] text-foreground-muted hover:text-white cursor-pointer"
-                  >
-                    Change
-                  </button>
+              {sareeUrls.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-void/30 border border-muted-purple/50 rounded-xl">
+                  {sareeUrls.map((url, index) => (
+                    <div key={index} className="relative aspect-[4/5] rounded-lg overflow-hidden border border-muted-purple/80 bg-void group shadow-md">
+                      <img src={url} alt={`Saree Ref ${index + 1}`} className="object-cover h-full w-full" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSareeUrl(url)}
+                        className="absolute top-1.5 right-1.5 p-1 rounded-full bg-red-950/80 border border-red-500/40 text-red-400 hover:text-white cursor-pointer transition-colors shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                        title="Remove Image"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="absolute bottom-1 left-1.5 px-1 py-0.2 rounded bg-void/80 text-[8px] text-zinc-500 font-mono">
+                        Slot {index + 1}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ) : (
+              )}
+
+              {sareeUrls.length < 5 && (
                 <div 
                   onClick={() => sareeInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 text-center transition-all cursor-pointer bg-void/30 ${
+                  className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2.5 text-center transition-all cursor-pointer bg-void/30 ${
                     sareeUploading 
                       ? "border-fuchsia-accent bg-fuchsia-accent/5 animate-pulse" 
                       : "border-muted-purple/60 hover:border-fuchsia-accent/50 hover:bg-void/50"
@@ -286,9 +345,9 @@ export function GenerateWorkspace() {
                   <UploadCloud className="h-8 w-8 text-foreground-muted animate-bounce" />
                   <div className="flex flex-col">
                     <span className="text-xs font-semibold text-white">
-                      {sareeUploading ? "Uploading fabric..." : "Upload Saree Sketch / Photo"}
+                      {sareeUploading ? "Uploading cloth reference..." : "Upload Cloth Reference Image"}
                     </span>
-                    <span className="text-[10px] text-zinc-500 mt-1">Supports PNG, JPG up to 5MB</span>
+                    <span className="text-[10px] text-zinc-500 mt-1">Select one or more images (supports up to 5 max)</span>
                   </div>
                 </div>
               )}
@@ -321,7 +380,7 @@ export function GenerateWorkspace() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setFaceFile(null); setFaceUrl(null); }}
+                    onClick={handleRemoveFace}
                     className="px-3 py-1 bg-void/80 border border-muted-purple rounded-lg text-[10px] text-foreground-muted hover:text-white cursor-pointer"
                   >
                     Remove
@@ -379,7 +438,7 @@ export function GenerateWorkspace() {
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-purple-accent shrink-0" />
-                  <span>Deduction cost is set to a flat rate of <strong>₹6.00</strong>.</span>
+                  <span>Deduction cost is set to a flat rate of <strong>₹37.00</strong>.</span>
                 </div>
               </div>
             </div>
@@ -473,7 +532,7 @@ export function GenerateWorkspace() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => downloadImage(outputUrl, "floarus-lookbook-4k.png")}
+                  onClick={() => downloadImage(outputUrl, "florus-lookbook-4k.png")}
                   className="flex-1 py-2.5 rounded-lg bg-fuchsia-accent hover:bg-fuchsia-accent/90 text-xs font-semibold text-white flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
                   <Download className="h-4 w-4" /> Download Asset
@@ -533,7 +592,7 @@ export function GenerateWorkspace() {
               <span className="text-zinc-500">Press download to save uncompressed source</span>
               <button 
                 type="button"
-                onClick={() => downloadImage(outputUrl, "floarus-lookbook-4k.png")}
+                onClick={() => downloadImage(outputUrl, "florus-lookbook-4k.png")}
                 className="px-4 py-2 bg-gradient-to-r from-fuchsia-accent to-purple-accent text-white font-bold rounded-lg flex items-center gap-2 cursor-pointer text-[10px] uppercase tracking-wider"
               >
                 <Download className="h-4 w-4" /> Save High-Res PNG

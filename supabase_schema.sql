@@ -1,4 +1,4 @@
--- Supabase Database Schema for Floarus.pics B2B AI Fashion SaaS
+-- Supabase Database Schema for Florus.pics B2B AI Fashion SaaS
 -- paste this script directly into your Supabase SQL Editor
 
 -- --------------------------------------------------------
@@ -217,7 +217,7 @@ $$;
 
 
 -- --------------------------------------------------------
--- 7. Admin RLS Policies (For admin@floarus.pics)
+-- 7. Admin RLS Policies (For admin@florus.pics)
 -- --------------------------------------------------------
 
 -- Allow admin full CRUD on Profiles
@@ -225,24 +225,24 @@ drop policy if exists "Admin full access on profiles" on public.profiles;
 create policy "Admin full access on profiles"
   on public.profiles
   for all
-  using (auth.jwt() ->> 'email' = 'admin@floarus.pics')
-  with check (auth.jwt() ->> 'email' = 'admin@floarus.pics');
+  using (auth.jwt() ->> 'email' = 'admin@florus.pics')
+  with check (auth.jwt() ->> 'email' = 'admin@florus.pics');
 
 -- Allow admin full CRUD on Generations
 drop policy if exists "Admin full access on generations" on public.generations;
 create policy "Admin full access on generations"
   on public.generations
   for all
-  using (auth.jwt() ->> 'email' = 'admin@floarus.pics')
-  with check (auth.jwt() ->> 'email' = 'admin@floarus.pics');
+  using (auth.jwt() ->> 'email' = 'admin@florus.pics')
+  with check (auth.jwt() ->> 'email' = 'admin@florus.pics');
 
 -- Allow admin full CRUD on Payments
 drop policy if exists "Admin full access on payments" on public.payments;
 create policy "Admin full access on payments"
   on public.payments
   for all
-  using (auth.jwt() ->> 'email' = 'admin@floarus.pics')
-  with check (auth.jwt() ->> 'email' = 'admin@floarus.pics');
+  using (auth.jwt() ->> 'email' = 'admin@florus.pics')
+  with check (auth.jwt() ->> 'email' = 'admin@florus.pics');
 
 
 -- Storage Policies: allow authenticated users to delete their own uploaded files

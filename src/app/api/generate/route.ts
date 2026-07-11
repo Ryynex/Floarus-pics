@@ -35,9 +35,6 @@ async function retryOperation<T>(
 }
 
 export async function POST(req: NextRequest) {
-  let requestSareeUrl = "";
-  let requestFaceUrl = "";
-
   // 1. Auth check
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace("Bearer ", "");
@@ -55,46 +52,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Asynchronous background cleanup helper for user uploaded files on Supabase Storage
-  const cleanupInputs = (sareeUrl: string, faceUrl?: string) => {
-    if (!sareeUrl) return;
-    
-    // Execute asynchronously (non-blocking for the HTTP response)
-    (async () => {
-      try {
-        const filesToDelete: string[] = [];
-        
-        const getStoragePath = (url: string) => {
-          const marker = "/public/generated-lookbooks/";
-          const idx = url.indexOf(marker);
-          return idx !== -1 ? url.substring(idx + marker.length) : null;
-        };
-
-        const sareePath = getStoragePath(sareeUrl);
-        if (sareePath) filesToDelete.push(sareePath);
-
-        if (faceUrl) {
-          const facePath = getStoragePath(faceUrl);
-          if (facePath) filesToDelete.push(facePath);
-        }
-
-        if (filesToDelete.length > 0) {
-          console.log("DEBUG: Cleaning up user-uploaded inputs from Supabase Storage:", filesToDelete);
-          const { error: deleteError } = await supabase.storage
-            .from("generated-lookbooks")
-            .remove(filesToDelete);
-          if (deleteError) {
-            console.warn("DEBUG WARNING: Supabase Storage cleanup error:", deleteError.message);
-          } else {
-            console.log("DEBUG: Successfully cleaned up temporary input files from Supabase Storage.");
-          }
-        }
-      } catch (cleanupErr) {
-        console.error("DEBUG ERROR: Asynchronous storage cleanup exception:", cleanupErr);
-      }
-    })();
-  };
-
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
@@ -104,15 +61,12 @@ export async function POST(req: NextRequest) {
 
     // 2. Parse input request payload
     const body = await req.json();
-    const { sareeUrl, faceUrl, prompt } = body;
+    const { sareeUrls, faceUrl, prompt } = body;
 
-    if (!sareeUrl) {
-      return NextResponse.json({ error: "Product Saree Flat-lay image URL is required" }, { status: 400 });
+    // Validate that we have at least one cloth reference image
+    if (!sareeUrls || !Array.isArray(sareeUrls) || sareeUrls.length === 0) {
+      return NextResponse.json({ error: "At least one product Saree reference image URL is required" }, { status: 400 });
     }
-
-    // Cache inputs for cleanup in finally/error paths
-    requestSareeUrl = sareeUrl;
-    requestFaceUrl = faceUrl || "";
 
     // Fetch profile balance from database
     const { data: profile, error: profileError } = await supabase
@@ -130,13 +84,12 @@ export async function POST(req: NextRequest) {
 
     const balance = Number(profile.balance_inr);
 
-    // Enforce 1K resolution generation flat rate
+    // Enforce flat cost rate of ₹37.00
     const selectedResolution = "1K";
-    const cost = 6.00;
+    const cost = 37.00;
 
     // Check if user has enough balance
     if (balance < cost) {
-      cleanupInputs(requestSareeUrl, requestFaceUrl);
       return NextResponse.json({ 
         error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${balance.toFixed(2)}.` 
       }, { status: 403 });
@@ -145,7 +98,7 @@ export async function POST(req: NextRequest) {
     const openrouterKey = process.env.OPENROUTER_API_KEY;
     const simulatedUrl = "/images/model-fuchsia.png";
 
-    // Sandbox execution helper using Supabase RPC for atomic ledger write (handles cleanups as well)
+    // Sandbox execution helper using Supabase RPC for atomic ledger write
     const executeSandboxFallback = async (outputUrl: string, reason = "standard mock mode") => {
       console.log(`Executing sandbox simulation fallback. Reason: ${reason}`);
       
@@ -158,7 +111,7 @@ export async function POST(req: NextRequest) {
           {
             p_cost: cost,
             p_prompt: prompt || "Simulated Saree Campaign (API Fallback)",
-            p_garment_url: sareeUrl,
+            p_garment_url: sareeUrls.join(","), // Concatenate garment URLs for logging
             p_face_url: faceUrl || null,
             p_output_url: outputUrl
           }
@@ -181,8 +134,6 @@ export async function POST(req: NextRequest) {
         const errorMsg = dbErr instanceof Error ? dbErr.message : "Failed to execute transaction";
         console.error("Failed to write mock balance/logs to database:", dbErr);
         return NextResponse.json({ error: errorMsg }, { status: 500 });
-      } finally {
-        cleanupInputs(requestSareeUrl, requestFaceUrl);
       }
     };
 
@@ -198,24 +149,29 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Assemble the Master High-Fashion Saree Prompt Template
+    const garmentSourceList = sareeUrls.map((url, i) => `Reference Cloth ${i + 1}: ${url}`).join("\n");
     const masterPrompt = `HIGH-FASHION EDITORIAL PHOTOGRAPHY: A model showcasing a premium luxury saree.
-- Product Details: The saree details are sourced from: ${sareeUrl}. Enhance the intricate weave, fabric shine, and high-end materials.
-- Model Styling: Model features based on reference: ${faceUrl || "random high-fashion model portrait"}. Elegant drape, natural pose, luxury editorial runway styling.
-- Camera and Lens: Shot on 85mm lens, f/1.4 aperture, crisp details on the saree pattern, soft cinematic background falloff.
-- Lighting: Professional studio rim lighting, subtle highlights, deep contrast, void black background.
-- Theme: Digital luxury fashion look matching Floarus.pics platform.
+- Product Details: The saree fabric, drapes, patterns, and ornaments are sourced from the following reference images:
+${garmentSourceList}
+Combine the textures, details, and color palettes from these reference drapes to formulate the unified premium garment design.
+- Model Styling: Model features based on reference: ${faceUrl || "random high-fashion model portrait"}. Elegant drape, drapes styling, drapes draping style, natural pose, luxury editorial runway styling.
+- Camera and Lens: Shot on 85mm lens, f/1.4 aperture, drapes details, crisp details on the saree pattern, soft cinematic background drapes falloff.
+- Lighting: drapes professional studio rim lighting, subtle highlights, deep contrast, void black background.
+- Theme: Digital luxury fashion look matching Florus.pics platform.
 - User creative prompt: ${prompt || "luxury designer style"}
-- Strict Negative Prompt: low quality, blurry, distorted details, bad anatomy, deformed hands, cheap textures, plain flat photo.`;
+- Strict drapes Negative Prompt: low quality, blurry, distorted details, bad anatomy, deformed hands, cheap textures, plain flat photo.`;
 
     const input_references: any[] = [];
 
-    if (sareeUrl) {
+    // Append up to 5 cloth image references
+    sareeUrls.forEach((url) => {
       input_references.push({
         type: "image_url",
-        image_url: { url: sareeUrl }
+        image_url: { url }
       });
-    }
+    });
 
+    // Append face reference if provided
     if (faceUrl) {
       input_references.push({
         type: "image_url",
@@ -264,7 +220,7 @@ export async function POST(req: NextRequest) {
       throw new Error("No base64 image returned from OpenRouter API response");
     }
 
-    // 6. Upload base layout generated image directly to Cloudinary (with Retries)
+    // 6. Upload base generated image directly to Cloudinary (with Retries)
     console.log("DEBUG: Uploading base generated image to Cloudinary...");
     const dataUrl = `data:image/png;base64,${base64Image}`;
     
@@ -272,7 +228,7 @@ export async function POST(req: NextRequest) {
     try {
       uploadResult = await retryOperation(async () => {
         return await cloudinary.uploader.upload(dataUrl, {
-          folder: "floarus-lookbooks",
+          folder: "florus-lookbooks",
         });
       });
     } catch (uploadErr) {
@@ -296,7 +252,7 @@ export async function POST(req: NextRequest) {
       {
         p_cost: cost,
         p_prompt: prompt || "",
-        p_garment_url: sareeUrl,
+        p_garment_url: sareeUrls.join(","), // Concatenate garment URLs for database log
         p_face_url: faceUrl || null,
         p_output_url: upscaledUrl
       }
@@ -305,9 +261,6 @@ export async function POST(req: NextRequest) {
     if (rpcError) {
       throw new Error(`Transaction failed: ${rpcError.message}`);
     }
-
-    // Trigger asynchronous background cleanup of user-uploaded input files from Supabase
-    cleanupInputs(requestSareeUrl, requestFaceUrl);
 
     return NextResponse.json({
       success: true,
@@ -321,10 +274,6 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Internal server error";
     console.error("Generation API internal error:", error);
-    
-    // Trigger storage cleanup even on error path
-    cleanupInputs(requestSareeUrl, requestFaceUrl);
-    
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

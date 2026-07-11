@@ -101,7 +101,7 @@ export default function AdminPage() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           const email = session.user.email;
-          if (email === "admin@floarus.pics") {
+          if (email === "admin@florus.pics") {
             setIsAdmin(true);
             setAdminEmail(email);
             // Fetch dashboard data
@@ -553,7 +553,7 @@ export default function AdminPage() {
           <Sparkles className="h-6 w-6 text-white" />
         </div>
         <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-bold tracking-[0.25em] text-white">FLOARUS.PICS</h2>
+          <h2 className="text-lg font-bold tracking-[0.25em] text-white">FLORUS.PICS</h2>
           <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest animate-pulse mt-1">Securing God Mode Portal...</p>
         </div>
       </div>
@@ -609,7 +609,7 @@ export default function AdminPage() {
               <span className="text-xs font-mono text-zinc-500">v2.4 - God Mode</span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              FLOARUS.PICS <span className="text-zinc-500">//</span> <span className="bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-accent to-purple-accent">ADMIN DASHBOARD</span>
+              FLORUS.PICS <span className="text-zinc-500">//</span> <span className="bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-accent to-purple-accent">ADMIN DASHBOARD</span>
             </h1>
             <p className="text-xs text-foreground-muted font-mono">
               Root Authentication: <span className="text-emerald-400 font-semibold">{adminEmail}</span>
@@ -1084,7 +1084,7 @@ export default function AdminPage() {
 
       {/* FOOTER */}
       <footer className="w-full border-t border-muted-purple/40 bg-surface/20 py-6 text-center text-xs font-mono text-zinc-600 mt-12 z-10">
-        <span>© {new Date().getFullYear()} Floarus.pics Inc. Admin panel access audited. IP logged and monitored.</span>
+        <span>© {new Date().getFullYear()} Florus.pics Inc. Admin panel access audited. IP logged and monitored.</span>
       </footer>
 
       {/* =============================================================

@@ -118,7 +118,7 @@ function DashboardContent() {
       <section className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-surface border border-muted-purple/40 p-6 rounded-2xl">
         <div className="flex flex-col gap-1">
           <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Welcome to Floarus Studio
+            Welcome to Florus Studio
             <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-fuchsia-accent/10 border border-fuchsia-accent/30 text-fuchsia-accent animate-pulse font-mono font-medium">B2B Portal</span>
           </h2>
           <p className="text-xs text-foreground-muted font-mono">
@@ -231,11 +231,11 @@ function DashboardContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-void/50 border border-muted-purple/50 p-4 rounded-xl flex flex-col gap-2">
-              <span className="text-[10px] font-mono text-zinc-500 uppercase">1K / 2K Synthesis Rates</span>
+              <span className="text-[10px] font-mono text-zinc-500 uppercase">Lookbook Synthesis Rate</span>
               <span className="text-2xl font-black text-white">
-                ₹6.00 <span className="text-xs text-foreground-muted font-normal">/ ₹10.00</span>
+                ₹37.00
               </span>
-              <p className="text-[10px] text-foreground-muted mt-1 leading-relaxed">Flat GPU billing rate covering detailed 1K/2K resolution runs.</p>
+              <p className="text-[10px] text-foreground-muted mt-1 leading-relaxed">Flat rate per generation (upscaled automatically to HD resolution via Cloudinary AI).</p>
             </div>
 
             <div className="bg-void/50 border border-muted-purple/50 p-4 rounded-xl flex flex-col gap-2">

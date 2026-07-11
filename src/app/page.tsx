@@ -97,7 +97,7 @@ export default function Home() {
             <Sparkles className="h-5 w-5 text-white animate-pulse" />
           </div>
           <span className="text-xl font-bold tracking-[0.25em] text-white">
-            FLOARUS<span className="text-fuchsia-accent">.</span>PICS
+            FLORUS<span className="text-fuchsia-accent">.</span>PICS
           </span>
         </div>
         <div className="flex items-center gap-4 text-sm text-foreground-muted">
@@ -121,7 +121,7 @@ export default function Home() {
               Elevate Your Fashion Line with <span className="bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-accent via-pink-400 to-purple-accent">Virtual Runway Models</span>
             </h1>
             <p className="text-base md:text-lg text-foreground-muted max-w-xl leading-relaxed">
-              Floarus.pics delivers premium studio-grade AI generation for luxury fashion catalogs. Transform designs from fabric sketches to photorealistic digital campaigns instantly.
+              Florus.pics delivers premium studio-grade AI generation for luxury fashion catalogs. Transform designs from fabric sketches to photorealistic digital campaigns instantly.
             </p>
           </div>
 
@@ -390,7 +390,7 @@ export default function Home() {
         </div>
         
         <div className="max-w-7xl mx-auto px-6 mt-8 pt-4 border-t border-muted-purple/20 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-mono text-zinc-500">
-          <span>&copy; {new Date().getFullYear()} Floarus.pics Inc. All rights reserved. B2B AI Luxury.</span>
+          <span>&copy; {new Date().getFullYear()} Florus.pics Inc. All rights reserved. B2B AI Luxury.</span>
           <div className="flex gap-6">
             <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
             <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
