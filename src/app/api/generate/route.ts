@@ -84,9 +84,9 @@ export async function POST(req: NextRequest) {
 
     const balance = Number(profile.balance_inr);
 
-    // Enforce flat cost rate of ₹37.00
+    // Enforce flat cost rate of ₹35.00
     const selectedResolution = "1K";
-    const cost = 37.00;
+    const cost = 35.00;
 
     // Check if user has enough balance
     if (balance < cost) {

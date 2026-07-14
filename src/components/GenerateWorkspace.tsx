@@ -10,7 +10,9 @@ import {
   ImageIcon, 
   Download,
   AlertCircle,
-  X
+  X,
+  Plus,
+  User
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -32,6 +34,7 @@ export function GenerateWorkspace() {
   const [loadingStage, setLoadingStage] = useState("");
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
   // Progressive Image Loading States
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -58,7 +61,17 @@ export function GenerateWorkspace() {
   const faceInputRef = useRef<HTMLInputElement>(null);
 
   // Costs
-  const costEstimation = 37.00;
+  const costEstimation = 35.00;
+
+  // Append style tag to the prompt guidance
+  const appendPromptTag = (tag: string) => {
+    setPrompt((prev) => prev ? `${prev}, ${tag}` : tag);
+  };
+
+  const applyTemplate = (name: string, templateText: string) => {
+    setSelectedTemplate(name);
+    setPrompt(templateText);
+  };
 
   // Client-side helper to extract relative path inside the storage bucket from Supabase public URL
   const getStoragePath = (url: string) => {
@@ -300,7 +313,21 @@ export function GenerateWorkspace() {
             <div className="flex flex-col gap-2.5">
               <label className="text-xs font-mono uppercase tracking-wider text-foreground-muted flex justify-between items-center">
                 <span>Product Saree Reference Photos <span className="text-red-500">*</span></span>
-                <span className="text-[10px] font-bold text-fuchsia-accent bg-fuchsia-500/10 px-2.5 py-0.5 rounded-full border border-fuchsia-500/20">{sareeUrls.length}/5 Uploaded</span>
+                <div className="flex items-center gap-3">
+                  {sareeUrls.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sareeUrls.forEach(url => deleteUploadedFile(url));
+                        setSareeUrls([]);
+                      }}
+                      className="text-[9px] font-mono text-zinc-500 hover:text-red-400 transition-colors uppercase cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                  <span className="text-[10px] font-bold text-fuchsia-accent bg-fuchsia-500/10 px-2.5 py-0.5 rounded-full border border-fuchsia-500/20">{sareeUrls.length}/5 Uploaded</span>
+                </div>
               </label>
               
               <input
@@ -312,42 +339,43 @@ export function GenerateWorkspace() {
                 className="hidden"
               />
 
-              {sareeUrls.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-void/30 border border-muted-purple/50 rounded-xl">
+              {sareeUrls.length > 0 ? (
+                <div className="flex flex-wrap gap-3 p-3 bg-void/40 border border-muted-purple/50 rounded-xl">
                   {sareeUrls.map((url, index) => (
-                    <div key={index} className="relative aspect-[4/5] rounded-lg overflow-hidden border border-muted-purple/80 bg-void group shadow-md">
+                    <div key={index} className="relative h-16 w-16 rounded-lg overflow-hidden border border-muted-purple bg-void group shadow-md flex-shrink-0">
                       <img src={url} alt={`Saree Ref ${index + 1}`} className="object-cover h-full w-full" />
                       <button
                         type="button"
                         onClick={() => handleRemoveSareeUrl(url)}
-                        className="absolute top-1.5 right-1.5 p-1 rounded-full bg-red-950/80 border border-red-500/40 text-red-400 hover:text-white cursor-pointer transition-colors shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                        className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-red-950/90 border border-red-500/40 text-red-400 hover:text-white cursor-pointer transition-colors shadow shadow-black/80"
                         title="Remove Image"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <X className="h-2.5 w-2.5" />
                       </button>
-                      <span className="absolute bottom-1 left-1.5 px-1 py-0.2 rounded bg-void/80 text-[8px] text-zinc-500 font-mono">
-                        Slot {index + 1}
+                      <span className="absolute bottom-0.5 left-1 px-1 rounded bg-void/85 text-[7px] text-zinc-500 font-mono">
+                        #{index + 1}
                       </span>
                     </div>
                   ))}
+                  {sareeUrls.length < 5 && (
+                    <div 
+                      onClick={() => sareeInputRef.current?.click()}
+                      className={`h-16 w-16 rounded-lg border border-dashed border-muted-purple/60 hover:border-fuchsia-accent/50 hover:bg-void/40 flex flex-col items-center justify-center cursor-pointer transition-all gap-1 group ${sareeUploading ? "animate-pulse" : ""}`}
+                    >
+                      <Plus className="h-3.5 w-3.5 text-zinc-500 group-hover:text-fuchsia-accent" />
+                      <span className="text-[8px] font-mono text-zinc-500 group-hover:text-white uppercase tracking-wider">Add</span>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {sareeUrls.length < 5 && (
+              ) : (
                 <div 
                   onClick={() => sareeInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2.5 text-center transition-all cursor-pointer bg-void/30 ${
-                    sareeUploading 
-                      ? "border-fuchsia-accent bg-fuchsia-accent/5 animate-pulse" 
-                      : "border-muted-purple/60 hover:border-fuchsia-accent/50 hover:bg-void/50"
-                  }`}
+                  className={`border border-dashed border-muted-purple/60 hover:border-fuchsia-accent/50 hover:bg-void/40 rounded-xl p-6 flex flex-col items-center justify-center gap-2.5 text-center transition-all cursor-pointer bg-void/20 ${sareeUploading ? "animate-pulse" : ""}`}
                 >
-                  <UploadCloud className="h-8 w-8 text-foreground-muted animate-bounce" />
+                  <UploadCloud className="h-6 w-6 text-zinc-500 group-hover:text-fuchsia-accent" />
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-white">
-                      {sareeUploading ? "Uploading cloth reference..." : "Upload Cloth Reference Image"}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 mt-1">Select one or more images (supports up to 5 max)</span>
+                    <span className="text-xs font-semibold text-white">Upload Fabric Catalogs</span>
+                    <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mt-0.5">Supports up to 5 reference flat-lays</span>
                   </div>
                 </div>
               )}
@@ -368,20 +396,22 @@ export function GenerateWorkspace() {
               />
 
               {faceUrl ? (
-                <div className="relative w-full h-32 rounded-xl overflow-hidden border border-purple-accent/30 bg-void flex items-center justify-between p-4">
-                  <div className="relative h-24 w-20 rounded border border-muted-purple bg-surface overflow-hidden">
-                    <img src={faceUrl} alt="Face Reference" className="object-cover h-full w-full" />
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1 px-4 min-w-0">
-                    <span className="text-xs text-white font-semibold truncate">{faceFile?.name}</span>
-                    <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5" /> Uploaded to Supabase
-                    </span>
+                <div className="relative w-full h-16 rounded-xl overflow-hidden border border-purple-accent/30 bg-void/40 flex items-center justify-between p-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative h-10 w-10 rounded border border-muted-purple bg-surface overflow-hidden flex-shrink-0">
+                      <img src={faceUrl} alt="Face Reference" className="object-cover h-full w-full" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[11px] text-white font-semibold truncate font-mono">Runway Face Profile Loaded</span>
+                      <span className="text-[9px] text-emerald-400 font-mono flex items-center gap-1">
+                        <ShieldCheck className="h-3 w-3" /> Synthesis layer active
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleRemoveFace}
-                    className="px-3 py-1 bg-void/80 border border-muted-purple rounded-lg text-[10px] text-foreground-muted hover:text-white cursor-pointer"
+                    className="px-2.5 py-1 bg-void/80 border border-muted-purple rounded-lg text-[9px] font-mono text-foreground-muted hover:text-white cursor-pointer transition-colors"
                   >
                     Remove
                   </button>
@@ -389,19 +419,20 @@ export function GenerateWorkspace() {
               ) : (
                 <div 
                   onClick={() => faceInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 text-center transition-all cursor-pointer bg-void/30 ${
-                    faceUploading 
-                      ? "border-purple-accent bg-purple-accent/5 animate-pulse" 
-                      : "border-muted-purple/60 hover:border-purple-accent/50 hover:bg-void/50"
+                  className={`border border-dashed border-muted-purple/60 hover:border-purple-accent/50 hover:bg-void/50 rounded-xl p-4 flex items-center justify-between transition-all cursor-pointer bg-void/20 ${
+                    faceUploading ? "animate-pulse" : ""
                   }`}
                 >
-                  <UploadCloud className="h-8 w-8 text-foreground-muted" />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-white">
-                      {faceUploading ? "Uploading face reference..." : "Upload Specific Model Face"}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 mt-1">Leaves face to random if empty</span>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-surface border border-muted-purple flex items-center justify-center text-zinc-500">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-semibold text-white">Model Face Reference (Optional)</span>
+                      <span className="text-[9px] font-mono text-zinc-500">Provides exact facial structure mapping</span>
+                    </div>
                   </div>
+                  <span className="text-[8px] font-mono text-zinc-500 border border-muted-purple px-1.5 py-0.5 rounded">SELECT</span>
                 </div>
               )}
             </div>
@@ -412,12 +443,27 @@ export function GenerateWorkspace() {
                 Creative Theme & Background Guidance
               </label>
               <textarea
-                rows={3}
+                rows={6}
                 placeholder="Describe lighting mood, style options, setting background, jewelry ornaments details..."
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                className="w-full bg-void/50 border border-muted-purple/60 px-3 py-2.5 rounded-lg text-sm text-white placeholder:text-zinc-600 focus:border-fuchsia-accent focus:outline-none resize-none"
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  setSelectedTemplate(null);
+                }}
+                className="w-full bg-void/50 border border-muted-purple/60 px-3 py-2.5 rounded-lg text-sm text-white placeholder:text-zinc-600 focus:border-fuchsia-accent focus:outline-none resize-none font-mono"
               />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {["Vibrant Rim Light", "Editorial Drape", "Silk Satin Glow", "Cinematic Falloff"].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => appendPromptTag(tag)}
+                    className="text-[9px] font-mono px-2.5 py-1 rounded-full border border-muted-purple/80 bg-surface/50 text-zinc-400 hover:text-white hover:border-fuchsia-accent/40 cursor-pointer transition-colors"
+                  >
+                    + {tag}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Resolution and upscale notice info badge */}
@@ -427,18 +473,18 @@ export function GenerateWorkspace() {
                   Output Resolution Pipeline
                 </span>
                 <span className="text-[10px] font-semibold font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                  4K AI Upscaling Active
+                  2K Resolution Active
                 </span>
               </div>
               
               <div className="bg-void/50 border border-muted-purple/40 rounded-xl p-3.5 flex flex-col gap-1 text-[11px] leading-relaxed text-foreground-muted font-mono">
                 <div className="flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-fuchsia-accent shrink-0 animate-pulse" />
-                  <span>Generates in 1K and upscales instantly via Cloudinary AI.</span>
+                  <span>Generates in high-fidelity 2K Resolution via Florus Engine.</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-purple-accent shrink-0" />
-                  <span>Deduction cost is set to a flat rate of <strong>₹37.00</strong>.</span>
+                  <span>Deduction cost is set to a flat rate of <strong>₹35.00</strong>.</span>
                 </div>
               </div>
             </div>
@@ -476,24 +522,50 @@ export function GenerateWorkspace() {
             <span className="text-foreground-muted flex items-center gap-1.5">
               Synthesis Viewer
             </span>
-            <span className="text-zinc-500">4K Upscaled Mode</span>
+            <span className="text-zinc-500">2K Resolution Mode</span>
           </div>
 
           {/* Core frame with dotted border */}
           {loading ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
-              <div className="relative h-14 w-14 flex items-center justify-center">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-fuchsia-accent/30 opacity-75 animate-ping" />
-                <Sparkles className="h-7 w-7 text-fuchsia-accent animate-pulse" />
+            <div className="flex-1 flex flex-col justify-center items-center py-12 px-6 gap-6">
+              <div className="relative h-16 w-16 flex items-center justify-center">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-fuchsia-accent/20 opacity-75 animate-ping" />
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-fuchsia-accent to-purple-accent flex items-center justify-center shadow-lg shadow-fuchsia-accent/25">
+                  <Sparkles className="h-6 w-6 text-white animate-pulse" />
+                </div>
               </div>
-              <div className="flex flex-col gap-1 text-center">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">Processing Canvas</span>
-                <span className="text-[10px] text-zinc-500 font-mono">{loadingStage}</span>
+              
+              <div className="w-full max-w-xs flex flex-col gap-3 font-mono text-[11px] text-zinc-500">
+                <div className="flex items-center justify-between border-b border-muted-purple/20 pb-2">
+                  <span className="text-zinc-400">1. Verification Gate</span>
+                  <span className="text-emerald-400 font-bold">✓ SECURED</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-muted-purple/20 pb-2">
+                  <span className="text-zinc-400">2. Fabric Mapping</span>
+                  <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" /> READY ({sareeUrls.length} files)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-b border-muted-purple/20 pb-2">
+                  <span className="text-zinc-400">3. Runway Engine</span>
+                  <span className="text-fuchsia-accent font-bold animate-pulse">PROCESSING...</span>
+                </div>
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-zinc-500">4. 2K resolution mapping</span>
+                  <span className="text-zinc-600 animate-pulse">WAITING</span>
+                </div>
+              </div>
+
+              <div className="text-center flex flex-col gap-1 mt-2">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Generating Lookbook Asset</span>
+                <p className="text-[10px] text-foreground-muted font-mono max-w-[260px] leading-relaxed">
+                  Executing GPU fabric simulation campaigns. This takes about 15-20 seconds.
+                </p>
               </div>
             </div>
           ) : outputUrl ? (
             <div className="flex-1 flex flex-col gap-4">
-              <div className="relative w-full aspect-[4/5] rounded-xl overflow-hidden border border-muted-purple/50 bg-void">
+              <div className="relative w-full aspect-[4/5] rounded-xl overflow-hidden border border-muted-purple/50 bg-void group shadow-2xl">
                 {/* 1. Low-res blurred background placeholder */}
                 {blurPlaceholderUrl && (
                   <img
@@ -506,16 +578,28 @@ export function GenerateWorkspace() {
                 {/* 2. High-res output image with smooth 500ms opacity cross-fade when loaded */}
                 <img
                   src={outputUrl}
-                  alt="Upscaled Runway Output"
+                  alt="2K Runway Output"
                   onLoad={() => setImageLoaded(true)}
-                  className="absolute inset-0 object-cover w-full h-full transition-opacity duration-500 ease-in-out"
+                  className="absolute inset-0 object-cover w-full h-full transition-opacity duration-500 ease-in-out group-hover:scale-[1.02]"
                   style={{ opacity: imageLoaded ? 1 : 0 }}
                 />
                 
+                {/* Floating telemetry info tags on image hover */}
+                {imageLoaded && (
+                  <>
+                    <div className="absolute top-3 left-3 bg-void/85 border border-muted-purple/60 backdrop-blur-md px-2 py-1 rounded text-[8px] font-mono text-zinc-400 select-none shadow-md">
+                      HD COMPOSITION // REF-OK
+                    </div>
+                    <div className="absolute bottom-3 right-3 bg-void/85 border border-muted-purple/60 backdrop-blur-md px-2 py-1 rounded text-[8px] font-mono text-fuchsia-accent select-none shadow-md animate-pulse">
+                      FLORUS 2K RESOLUTION
+                    </div>
+                  </>
+                )}
+
                 {/* Tiny absolute loading label overlay if image is loading */}
                 {!imageLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-xs">
-                    <div className="flex items-center gap-2 bg-void/80 border border-muted-purple/60 px-3 py-1.5 rounded-lg text-[10px] text-foreground-muted font-mono animate-pulse">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-xs">
+                    <div className="flex items-center gap-2 bg-void/85 border border-muted-purple/60 px-3 py-1.5 rounded-lg text-[10px] text-foreground-muted font-mono animate-pulse">
                       <RefreshCw className="h-3.5 w-3.5 animate-spin text-fuchsia-accent" />
                       <span>Loading HD Asset...</span>
                     </div>
@@ -540,20 +624,26 @@ export function GenerateWorkspace() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center gap-2 py-16 text-center border border-dashed border-muted-purple/40 rounded-xl bg-void/20">
-              <div className="h-12 w-12 rounded-xl bg-surface border border-muted-purple/60 flex items-center justify-center text-zinc-600 mb-2">
-                <ImageIcon className="h-5 w-5" />
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16 text-center border border-dashed border-muted-purple/40 rounded-xl bg-void/20 relative overflow-hidden">
+              {/* Blueprint wireframe circles */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
+                <div className="h-64 w-64 rounded-full border border-white" />
+                <div className="h-48 w-48 rounded-full border border-white absolute" />
+                <div className="h-32 w-32 rounded-full border border-white absolute" />
               </div>
-              <span className="text-xs font-semibold text-white">Output Runway Canvas</span>
-              <p className="text-[10px] text-foreground-muted max-w-[240px] leading-relaxed">
-                Provide fabric flat-lays, set prompts, and launch engine to synthesize photorealistic runway catalogs.
+              <div className="h-12 w-12 rounded-xl bg-surface border border-muted-purple/60 flex items-center justify-center text-zinc-500 mb-2 relative z-10 shadow-lg">
+                <ImageIcon className="h-5 w-5 text-purple-accent animate-pulse" />
+              </div>
+              <span className="text-xs font-semibold text-white font-mono uppercase tracking-wider relative z-10">Output Runway Canvas</span>
+              <p className="text-[10px] text-foreground-muted max-w-[240px] leading-relaxed relative z-10 font-mono">
+                Supply fabric layouts, model features, and guidance prompt to synthesize luxury fashion assets.
               </p>
             </div>
           )}
 
           {/* Footer Info */}
           <div className="border-t border-muted-purple/30 pt-4 flex justify-between items-center text-[10px] font-mono text-zinc-500">
-            <span>Model: Gemini-3.1-Flash-Lite (Cloudinary AI Upscaled)</span>
+            <span>Model Engine: Florus</span>
             <span>GPU Nodes Active</span>
           </div>
 
@@ -569,7 +659,7 @@ export function GenerateWorkspace() {
           <div className="relative max-w-5xl w-full h-full flex flex-col justify-between items-center" onClick={(e) => e.stopPropagation()}>
             {/* Lightbox Header */}
             <div className="w-full flex justify-between items-center text-xs font-mono text-zinc-400 py-2 border-b border-muted-purple/30 mb-4">
-              <span>HIGH-RESOLUTION RUNWAY PREVIEW (4K AI Upscaled)</span>
+              <span>HIGH-RESOLUTION RUNWAY PREVIEW (2K Resolution)</span>
               <button 
                 onClick={() => setShowLightbox(false)}
                 className="px-3 py-1 bg-surface border border-muted-purple text-[10px] text-white rounded-md hover:border-fuchsia-accent cursor-pointer"

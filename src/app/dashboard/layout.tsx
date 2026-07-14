@@ -166,9 +166,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
       <div className="flex flex-col gap-6 p-6 border-b border-muted-purple/30">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-gradient-to-tr from-fuchsia-accent to-purple-accent flex items-center justify-center shadow-lg shadow-fuchsia-accent/15">
-              <Sparkles className="h-4.5 w-4.5 text-white" />
-            </div>
+            <img src="/images/florus_logo.png" alt="Florus Logo" className="h-9 w-9 object-contain" />
             <span className="text-lg font-bold tracking-[0.2em] text-white">
               FLORUS<span className="text-fuchsia-accent">.</span>PICS
             </span>

@@ -549,8 +549,8 @@ export default function AdminPage() {
   if (isAdmin === null) {
     return (
       <div className="min-h-screen bg-void w-full flex flex-col justify-center items-center gap-4 text-center px-4">
-        <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-fuchsia-accent to-purple-accent flex items-center justify-center shadow-lg shadow-fuchsia-accent/25 animate-pulse">
-          <Sparkles className="h-6 w-6 text-white" />
+        <div className="h-12 w-12 flex items-center justify-center animate-pulse">
+          <img src="/images/florus_logo.png" alt="Florus Logo" className="h-12 w-12 object-contain" />
         </div>
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-bold tracking-[0.25em] text-white">FLORUS.PICS</h2>
@@ -1275,7 +1275,7 @@ export default function AdminPage() {
                 <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Generated Output Image URL</label>
                 <input
                   type="text"
-                  placeholder="Paste cloudinary/bucket image URL"
+                  placeholder="Paste image asset URL"
                   value={editGenOutputUrl}
                   onChange={(e) => setEditGenOutputUrl(e.target.value)}
                   className="w-full bg-void/50 border border-muted-purple/60 px-4 py-2.5 rounded-lg text-xs text-white font-mono glow-input"

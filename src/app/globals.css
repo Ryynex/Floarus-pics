@@ -2,10 +2,10 @@
 
 @theme {
   --color-void: #050507;
-  --color-surface: #0F0F15;
-  --color-fuchsia-accent: #EC4899;
-  --color-purple-accent: #8B5CF6;
-  --color-muted-purple: #1F1F2E;
+  --color-surface: #0E0B12;
+  --color-fuchsia-accent: #FF2E93;
+  --color-purple-accent: #D946EF;
+  --color-muted-purple: #251B2B;
   --color-foreground-muted: #CBD5E1;
 }
 
@@ -17,16 +17,16 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', system-ui, -apple-system, sans-serif;
   overflow-x: hidden;
 }
 
 /* Custom Utilities for Digital Luxury styling */
 .glassmorphic-card {
-  background: rgba(15, 15, 21, 0.65);
+  background: rgba(14, 11, 18, 0.7);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(31, 31, 46, 0.5);
+  border: 1px solid rgba(37, 27, 43, 0.6);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8),
               inset 0 1px 1px rgba(255, 255, 255, 0.05);
 }
@@ -37,13 +37,13 @@ body {
 }
 
 .glow-btn-fuchsia:hover {
-  box-shadow: 0 0 20px rgba(236, 72, 153, 0.4);
+  box-shadow: 0 0 20px rgba(255, 46, 147, 0.45);
   transform: translateY(-1px);
 }
 
 .glow-btn-fuchsia:active {
   transform: translateY(0px);
-  box-shadow: 0 0 10px rgba(236, 72, 153, 0.6);
+  box-shadow: 0 0 10px rgba(255, 46, 147, 0.6);
 }
 
 .glow-btn-purple {
@@ -52,13 +52,13 @@ body {
 }
 
 .glow-btn-purple:hover {
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 20px rgba(217, 70, 239, 0.45);
   transform: translateY(-1px);
 }
 
 .glow-btn-purple:active {
   transform: translateY(0px);
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
+  box-shadow: 0 0 10px rgba(217, 70, 239, 0.6);
 }
 
 /* Glow inputs */
@@ -67,8 +67,8 @@ body {
 }
 
 .glow-input:focus {
-  border-color: rgba(139, 92, 246, 0.6);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.15);
+  border-color: rgba(255, 46, 147, 0.5);
+  box-shadow: 0 0 15px rgba(255, 46, 147, 0.15);
   outline: none;
 }
 
@@ -96,5 +96,12 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.25s ease-out forwards;
+}
+
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 46, 147, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 46, 147, 0.035) 1px, transparent 1px);
 }
 
