@@ -195,8 +195,8 @@ ${prompt || "A high-fashion editorial photograph of a model showcasing a premium
             size: selectedResolution, // Set size strictly to 1K (e.g. 1024x1024)
             input_references: input_references.length > 0 ? input_references : undefined,
             response_format: "b64_json",
-            providers: ["google_ai_studio"],
-            max_tokens: 1200
+            providers: ["google_ai_studio"]
+            // max_tokens: 1200
           }),
         });
 
