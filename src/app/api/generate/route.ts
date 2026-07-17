@@ -148,17 +148,17 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedUrl, "missing Cloudinary environment credentials");
     }
 
-    // 4. Assemble the Master High-Fashion Garment Prompt Template
+    // 4. Assemble the Master High-Fashion Garment Prompt Template (Simplified for detailed user prompts)
     const garmentSourceList = sareeUrls.map((url, i) => `Reference Cloth ${i + 1}: ${url}`).join("\n");
-    const masterPrompt = `HIGH-FASHION EDITORIAL PHOTOGRAPHY: A model showcasing a premium luxury garment.
+    const masterPrompt = `Reference mapping details:
 - Product Details: The garment fabric, patterns, and ornaments are sourced from the following reference images:
 ${garmentSourceList}
 Combine the textures, details, and color palettes from these reference images to formulate the unified premium garment design.
-- Model Styling: Model features based on reference: ${faceUrl || "random high-fashion model portrait"}. Elegant fit and styling, natural pose, luxury editorial runway styling.
-- Camera and Lens: Shot on 85mm lens, crisp details on the garment pattern.
-- Lighting: professional studio rim lighting, subtle highlights, deep contrast, void black background.
-- Theme: Digital luxury fashion look matching Florus.pics platform.
-- User creative prompt: ${prompt || "luxury designer style"}
+- Model Face: Model features based on reference: ${faceUrl || "random model portrait"}.
+
+User Scene Description:
+${prompt || "A high-fashion editorial photograph of a model showcasing a premium luxury garment."}
+
 - Strict Negative Prompt: low quality, distorted details, bad anatomy, deformed hands, cheap textures, plain flat photo.`;
 
     const input_references: any[] = [];
