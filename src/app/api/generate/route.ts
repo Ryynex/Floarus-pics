@@ -179,7 +179,7 @@ ${prompt || "A high-fashion editorial photograph of a model showcasing a premium
       });
     }
 
-    // 5. OpenRouter Network API Request using google/gemini-3.1-flash-lite-image (with Retries)
+    // 5. OpenRouter Network API Request using google/gemini-3.1-flash-image (with Retries)
     let openRouterResponse;
     try {
       openRouterResponse = await retryOperation(async () => {
@@ -190,7 +190,7 @@ ${prompt || "A high-fashion editorial photograph of a model showcasing a premium
             "Authorization": `Bearer ${openrouterKey}`,
           },
           body: JSON.stringify({
-            model: "google/gemini-3.1-flash-lite-image",
+            model: "google/gemini-3.1-flash-image",
             prompt: masterPrompt,
             size: selectedResolution, // Set size strictly to 1K (e.g. 1024x1024)
             input_references: input_references.length > 0 ? input_references : undefined,
