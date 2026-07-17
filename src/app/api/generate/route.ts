@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   // 1. Auth check
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace("Bearer ", "");
-  
+
   if (!token || token === "undefined" || token === "null" || token === "") {
     return NextResponse.json({ error: "Unauthorized: Active user session required" }, { status: 401 });
   }
@@ -77,8 +77,8 @@ export async function POST(req: NextRequest) {
 
     if (profileError || !profile) {
       console.error("DEBUG ERROR: Profile query failed for user ID:", user.id, "Error:", profileError, "Data found:", profile);
-      return NextResponse.json({ 
-        error: `User profile not found. Database diagnostics: ${profileError?.message || "No profile record exists in the table for this user ID"}` 
+      return NextResponse.json({
+        error: `User profile not found. Database diagnostics: ${profileError?.message || "No profile record exists in the table for this user ID"}`
       }, { status: 404 });
     }
 
@@ -90,8 +90,8 @@ export async function POST(req: NextRequest) {
 
     // Check if user has enough balance
     if (balance < cost) {
-      return NextResponse.json({ 
-        error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${balance.toFixed(2)}.` 
+      return NextResponse.json({
+        error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${balance.toFixed(2)}.`
       }, { status: 403 });
     }
 
@@ -101,10 +101,10 @@ export async function POST(req: NextRequest) {
     // Sandbox execution helper using Supabase RPC for atomic ledger write
     const executeSandboxFallback = async (outputUrl: string, reason = "standard mock mode") => {
       console.log(`Executing sandbox simulation fallback. Reason: ${reason}`);
-      
+
       // Simulate network delay
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      
+
       try {
         const { data: newBalance, error: rpcError } = await supabase.rpc(
           "deduct_balance_for_generation",
@@ -148,18 +148,18 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedUrl, "missing Cloudinary environment credentials");
     }
 
-    // 4. Assemble the Master High-Fashion Saree Prompt Template
+    // 4. Assemble the Master High-Fashion Garment Prompt Template
     const garmentSourceList = sareeUrls.map((url, i) => `Reference Cloth ${i + 1}: ${url}`).join("\n");
-    const masterPrompt = `HIGH-FASHION EDITORIAL PHOTOGRAPHY: A model showcasing a premium luxury saree.
-- Product Details: The saree fabric, drapes, patterns, and ornaments are sourced from the following reference images:
+    const masterPrompt = `HIGH-FASHION EDITORIAL PHOTOGRAPHY: A model showcasing a premium luxury garment.
+- Product Details: The garment fabric, patterns, and ornaments are sourced from the following reference images:
 ${garmentSourceList}
-Combine the textures, details, and color palettes from these reference drapes to formulate the unified premium garment design.
-- Model Styling: Model features based on reference: ${faceUrl || "random high-fashion model portrait"}. Elegant drape, drapes styling, drapes draping style, natural pose, luxury editorial runway styling.
-- Camera and Lens: Shot on 85mm lens, f/1.4 aperture, drapes details, crisp details on the saree pattern, soft cinematic background drapes falloff.
-- Lighting: drapes professional studio rim lighting, subtle highlights, deep contrast, void black background.
+Combine the textures, details, and color palettes from these reference images to formulate the unified premium garment design.
+- Model Styling: Model features based on reference: ${faceUrl || "random high-fashion model portrait"}. Elegant fit and styling, natural pose, luxury editorial runway styling.
+- Camera and Lens: Shot on 85mm lens, crisp details on the garment pattern.
+- Lighting: professional studio rim lighting, subtle highlights, deep contrast, void black background.
 - Theme: Digital luxury fashion look matching Florus.pics platform.
 - User creative prompt: ${prompt || "luxury designer style"}
-- Strict drapes Negative Prompt: low quality, blurry, distorted details, bad anatomy, deformed hands, cheap textures, plain flat photo.`;
+- Strict Negative Prompt: low quality, distorted details, bad anatomy, deformed hands, cheap textures, plain flat photo.`;
 
     const input_references: any[] = [];
 
@@ -223,7 +223,7 @@ Combine the textures, details, and color palettes from these reference drapes to
     // 6. Upload base generated image directly to Cloudinary (with Retries)
     console.log("DEBUG: Uploading base generated image to Cloudinary...");
     const dataUrl = `data:image/png;base64,${base64Image}`;
-    
+
     let uploadResult;
     try {
       uploadResult = await retryOperation(async () => {
@@ -235,7 +235,7 @@ Combine the textures, details, and color palettes from these reference drapes to
       const errorMsg = uploadErr instanceof Error ? uploadErr.message : "Upload failed";
       throw new Error(`Cloudinary upload failed after retries: ${errorMsg}`);
     }
-    
+
     console.log("DEBUG: Cloudinary upload successful. public_id:", uploadResult.public_id);
 
     // 7. Upscale image using Cloudinary transformation URL injection
