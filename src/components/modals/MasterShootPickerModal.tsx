@@ -195,12 +195,11 @@ export function MasterShootPickerModal({
           {/* Filter Categories Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-none text-xs">
             {[
-              { id: "all", label: "All Shoots (28)" },
-              { id: "heritage", label: "Palace & Haveli" },
-              { id: "studio", label: "Clean Studio" },
-              { id: "garden", label: "Botanical Garden" },
-              { id: "festive_temple", label: "Temple & Festive" },
-              { id: "terrace", label: "Royal Balcony" },
+              { id: "all", label: "All Shoots (16)" },
+              { id: "studio", label: "Studio & Catalog (5)" },
+              { id: "heritage", label: "Palace & Haveli (4)" },
+              { id: "festive_temple", label: "Temple & Floor (3)" },
+              { id: "garden", label: "Botanical Daylight (4)" },
               { id: "custom", label: "Custom Uploads" }
             ].map((tab) => (
               <button

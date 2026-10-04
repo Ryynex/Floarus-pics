@@ -694,141 +694,7 @@ export interface MasterShoot {
 }
 
 export const MASTER_SHOOTS: MasterShoot[] = [
-  // 1. Botanical Gardens & Outdoor (5 Shoots)
-  {
-    id: "shoot_10_garden_morning",
-    title: "Morning Sun Botanical Garden",
-    category: "garden",
-    imageUrl: "/reference_shoots/garden_01_morning_sun.jpg",
-    modelPersona: "Warm Approachable Indian Woman with radiant natural smile",
-    settingTitle: "Botanical Garden with Soft Greenery Bokeh & Natural Morning Flare",
-    lighting: "Dappled morning sunlight filtering through garden foliage",
-    poseDescription: "Relaxed natural standing pose with hand resting gently at waist",
-    badge: "Flagship Choice"
-  },
-  {
-    id: "shoot_11_mustard_meadow",
-    title: "Mustard Blossom Meadow",
-    category: "garden",
-    imageUrl: "/reference_shoots/garden_02_mustard_meadow.jpg",
-    modelPersona: "Poised Indian Woman with traditional alta on hands",
-    settingTitle: "Blooming Yellow Mustard Flower Field under Open Daylight",
-    lighting: "Soft natural overcast daylight horizon",
-    poseDescription: "Gentle standing pose with hands clasped in flower field",
-    badge: "Natural Daylight"
-  },
-  {
-    id: "shoot_12_sunset_meadow",
-    title: "Sunset Golden Hour Meadow",
-    category: "garden",
-    imageUrl: "/reference_shoots/garden_03_sunset_meadow.jpg",
-    modelPersona: "Joyful Indian Woman with golden-hour hair glow",
-    settingTitle: "Open Meadow at Sunset with Backlit Golden Rays",
-    lighting: "Warm golden-hour backlight",
-    poseDescription: "Arms outstretched in freedom motion, flowing fabric",
-    badge: "Golden Hour"
-  },
-  {
-    id: "shoot_13_garden_estate",
-    title: "Lush Royal Estate Lawn",
-    category: "garden",
-    imageUrl: "/reference_shoots/garden_04_estate_lawn.jpg",
-    modelPersona: "Graceful Indian Woman with serene expression and soft wave hair",
-    settingTitle: "Emerald Lawn of Heritage Estate with Manicured Shrubs",
-    lighting: "Crisp outdoor morning light with natural fill",
-    poseDescription: "Poised standing stance holding pallu edge gracefully",
-    badge: "Estate"
-  },
-  {
-    id: "shoot_28_tropical_canopy",
-    title: "Tropical Lawn & Dappled Canopy",
-    category: "garden",
-    imageUrl: "/reference_shoots/garden_05_tropical_canopy.jpg",
-    modelPersona: "Traditional South Indian Model with neat hair bun & temple pendant",
-    settingTitle: "Lush Tropical Lawn with Palm Trees & Dappled Sunlight",
-    lighting: "Dappled morning sunlight under palm canopy",
-    poseDescription: "Full-length stance holding pallu corner open displaying border",
-    badge: "Border Display"
-  },
-
-  // 2. Palace & Haveli Heritage (7 Shoots)
-  {
-    id: "shoot_01_heritage_doorway",
-    title: "Heritage Haveli Carved Doorway",
-    category: "heritage",
-    imageUrl: "/reference_shoots/heritage_01_haveli_doorway.jpg",
-    modelPersona: "North Indian Bridal Model, bold red lips, elegant wavy hair",
-    settingTitle: "Carved Rajasthani Wooden Doorway with Brass Bells & Diyas",
-    lighting: "Warm natural daylight with architectural stone shadows",
-    poseDescription: "Classic front-facing catalog pose, hand on hip resting over waist pleats",
-    badge: "Most Popular"
-  },
-  {
-    id: "shoot_03_jaipur_archway",
-    title: "Jaipur Palace Archway Walking",
-    category: "heritage",
-    imageUrl: "/reference_shoots/heritage_02_jaipur_archway.jpg",
-    modelPersona: "Graceful High-Fashion Model with silver payal anklets",
-    settingTitle: "Distressed Turquoise Haveli Frame overlooking Mountain Fort",
-    lighting: "Soft morning sunlight streaming through open archway",
-    poseDescription: "Graceful walking motion, flowing pallu in mid-air",
-    badge: "Motion"
-  },
-  {
-    id: "shoot_04_khandela_pillars",
-    title: "Mughal Courtyard Painted Pillars",
-    category: "heritage",
-    imageUrl: "/reference_shoots/heritage_03_khandela_pillars.jpg",
-    modelPersona: "Rajputana Bride with kundan maang tikka and ivory chuda",
-    settingTitle: "Khandela Haveli Fresco Corridor with Elephant Motifs & Pillars",
-    lighting: "Soft diffused courtyard daylight",
-    poseDescription: "Leaning gently against carved fresco pillar in traditional poshak drape"
-  },
-  {
-    id: "shoot_05_amber_twirl",
-    title: "Amber Fort Jali Lattice Twirl",
-    category: "heritage",
-    imageUrl: "/reference_shoots/heritage_04_amber_twirl.jpg",
-    modelPersona: "Joyful Celebratory Indian Bride with candid smile",
-    settingTitle: "Carved Sandstone Jali Lattice Windows with Sunlight Beams",
-    lighting: "Dramatic diagonal sunbeams through carved lattice",
-    poseDescription: "Joyous celebratory twirl with arms outstretched displaying full skirt flare",
-    badge: "Flared Skirt"
-  },
-  {
-    id: "shoot_14_heritage_corridor",
-    title: "Royal Palace Marble Corridor",
-    category: "heritage",
-    imageUrl: "/reference_shoots/heritage_05_marble_corridor.jpg",
-    modelPersona: "Regal Indian Model with antique gold choker necklace",
-    settingTitle: "White Marble Palace Colonnade with Arched Perspectives",
-    lighting: "High-contrast architectural sunbeams across marble floor",
-    poseDescription: "Stately walkway stance, gazing towards palace courtyard",
-    badge: "Regal"
-  },
-  {
-    id: "shoot_15_sheesh_mahal",
-    title: "Sheesh Mahal Mirrored Palace",
-    category: "heritage",
-    imageUrl: "/reference_shoots/heritage_06_sheesh_mahal.jpg",
-    modelPersona: "Authoritative Royal Bride with ornate matha patti",
-    settingTitle: "Intricate Mirror-Inlaid Wall of Sheesh Mahal with Golden Accents",
-    lighting: "Glistening mirror reflections with soft spotlighting",
-    poseDescription: "Formal catalog center stance with both hands gently folded",
-    badge: "Mirrored Palace"
-  },
-  {
-    id: "shoot_16_sandstone_walkway",
-    title: "Sunlit Sandstone Courtyard",
-    category: "heritage",
-    imageUrl: "/reference_shoots/heritage_07_sandstone_courtyard.jpg",
-    modelPersona: "Classic Indian Model with neat braided hair and red tilak",
-    settingTitle: "Warm Ochre Sandstone Courtyard with Mughal Arch Geometry",
-    lighting: "Brilliant warm afternoon Indian sun with soft shadows",
-    poseDescription: "Sideways 3/4 turn showcasing side embroidery and pallu pleats"
-  },
-
-  // 3. Clean Commercial Studio (7 Shoots)
+  // 1. Studio & High-Fidelity Catalog (Best for E-Commerce Listings) - 5 Shoots
   {
     id: "shoot_06_earthy_studio",
     title: "Earthy Minimalist Studio",
@@ -837,19 +703,8 @@ export const MASTER_SHOOTS: MasterShoot[] = [
     modelPersona: "Contemporary High-Fashion Model with silver chandbali earrings",
     settingTitle: "Mottled Terracotta & Taupe Studio Cyclorama with Brass Stool",
     lighting: "Directional soft studio key light with subtle rim",
-    poseDescription: "High-fashion pensive pose, hand resting delicately near collarbone",
+    poseDescription: "Upright standing posture, clean mottled background, visible waist pleats, and clear pallu fall",
     badge: "High-Fashion"
-  },
-  {
-    id: "shoot_07_couture_teal",
-    title: "Haute Couture Studio S-Curve",
-    category: "studio",
-    imageUrl: "/reference_shoots/studio_02_couture_teal.jpg",
-    modelPersona: "Striking Couture Editorial Model with bold lip",
-    settingTitle: "Deep Midnight Teal Studio Backdrop with Sculpted Floor Shadows",
-    lighting: "Sculpted key lighting with sharp rim highlights",
-    poseDescription: "S-curve fashion stance, hand on hip, fingers resting lightly on chin",
-    badge: "Couture"
   },
   {
     id: "shoot_20_studio_pedestal",
@@ -859,8 +714,19 @@ export const MASTER_SHOOTS: MasterShoot[] = [
     modelPersona: "Contemporary High-Street Fashion Model with minimal makeup",
     settingTitle: "Seamless Warm Sand Cyclorama with Fluted Plaster Column",
     lighting: "Clean diffuse softbox key lighting with pure color rendition",
-    poseDescription: "Relaxed commercial catalog stance leaning near pedestal",
+    poseDescription: "Standard upright e-commerce catalog stance; drape, pleats, and border unobstructed",
     badge: "E-Commerce"
+  },
+  {
+    id: "shoot_07_couture_teal",
+    title: "Haute Couture Studio S-Curve",
+    category: "studio",
+    imageUrl: "/reference_shoots/studio_02_couture_teal.jpg",
+    modelPersona: "Striking Couture Editorial Model with bold lip",
+    settingTitle: "Deep Midnight Teal Studio Backdrop with Sculpted Floor Shadows",
+    lighting: "Sculpted key lighting with sharp rim highlights",
+    poseDescription: "Modern ready-to-wear silhouette on clean backdrop; ideal for designer, lycra, or cocktail party sarees",
+    badge: "Couture"
   },
   {
     id: "shoot_21_studio_high_key",
@@ -869,7 +735,7 @@ export const MASTER_SHOOTS: MasterShoot[] = [
     imageUrl: "/reference_shoots/studio_04_high_key.jpg",
     modelPersona: "Modern Commercial Catalog Model with confident gaze",
     settingTitle: "Clean Studio Set with Balanced Fill & Soft Shadows",
-    lighting: "Commercial high-key catalog lighting",
+    lighting: "Clean studio lighting for shimmer, sequin, and partywear sarees",
     poseDescription: "Direct front catalog pose, perfect for e-commerce listings",
     badge: "Catalog Front"
   },
@@ -881,43 +747,57 @@ export const MASTER_SHOOTS: MasterShoot[] = [
     modelPersona: "Glamorous Indian Model with voluminous dark curls",
     settingTitle: "Textured Navy & Royal Blue Painted Canvas Studio Backdrop",
     lighting: "Crisp studio portrait lighting with glowing skin tone",
-    poseDescription: "Over-the-shoulder turn pose showing back pallu drape",
-    badge: "Over-Shoulder"
-  },
-  {
-    id: "shoot_23_studio_warm_sand",
-    title: "Warm Sand Studio Portrait",
-    category: "studio",
-    imageUrl: "/reference_shoots/studio_06_warm_sand.jpg",
-    modelPersona: "Poised Editorial Model with clean center-parted sleek hair",
-    settingTitle: "Warm Ochre & Sand Matte Studio Wall with Soft Floor Gradient",
-    lighting: "Beauty dish key lighting with warm rim fill",
-    poseDescription: "Straight portrait posture with hands resting gently at sides",
-    badge: "Studio Clean"
-  },
-  {
-    id: "shoot_24_studio_terracotta",
-    title: "Soft Terracotta Editorial Studio",
-    category: "studio",
-    imageUrl: "/reference_shoots/studio_07_soft_terracotta.jpg",
-    modelPersona: "Expressive Indian Model with artistic styling and bronze accents",
-    settingTitle: "Muted Terracotta Plaster Studio with Architectural Arch Niche",
-    lighting: "Directional golden hour studio simulation with soft penumbra",
-    poseDescription: "Artistic 3/4 profile pose highlighting neckline and sleeve border"
+    poseDescription: "Crucial back-view reference showing blouse cut, back waist tuck, and pallu trail",
+    badge: "Back & Pallu View"
   },
 
-  // 4. Temple & Sacred Festive (7 Shoots)
+  // 2. Heritage & Palace Architecture (Best for Festive & Bridal Collections) - 4 Shoots
   {
-    id: "shoot_02_palace_diwan",
-    title: "Royal Palace Diwan & Mirror",
-    category: "festive_temple",
-    imageUrl: "/reference_shoots/temple_01_palace_diwan.jpg",
-    modelPersona: "Regal Indian Queen Persona, calm authoritative gaze, pearl necklace",
-    settingTitle: "Red Velvet Diwan, Candelabra with Glowing Candles & Gilded Mirror",
-    lighting: "Warm candlelit glow with dramatic luxury reflections",
-    poseDescription: "Seated queen majesty, hand touching pearl necklace with scattered rose petals",
-    badge: "Royal Luxury"
+    id: "shoot_01_heritage_doorway",
+    title: "Heritage Haveli Carved Doorway",
+    category: "heritage",
+    imageUrl: "/reference_shoots/heritage_01_haveli_doorway.jpg",
+    modelPersona: "North Indian Bridal Model, bold red lips, elegant wavy hair",
+    settingTitle: "Carved Rajasthani Wooden Doorway with Brass Bells & Diyas",
+    lighting: "Warm natural daylight with architectural stone shadows",
+    poseDescription: "Classic carved entryway framing; ideal for heavy Banarasi, Kanjeevaram, and wedding silks",
+    badge: "Most Popular"
   },
+  {
+    id: "shoot_03_jaipur_archway",
+    title: "Jaipur Palace Archway Walking",
+    category: "heritage",
+    imageUrl: "/reference_shoots/heritage_02_jaipur_archway.jpg",
+    modelPersona: "Graceful High-Fashion Model with silver payal anklets",
+    settingTitle: "Distressed Turquoise Haveli Frame overlooking Mountain Fort",
+    lighting: "Soft morning sunlight streaming through open archway",
+    poseDescription: "Editorial walking motion through architectural doors; best for Chanderi, linen, and handloom silks",
+    badge: "Walking Motion"
+  },
+  {
+    id: "shoot_19_jharokha_urli",
+    title: "Jharokha Archway & Urli Flowers",
+    category: "heritage",
+    imageUrl: "/reference_shoots/temple_04_jharokha_urli.jpg",
+    modelPersona: "Radiant Indian Bride with traditional jhumkas",
+    settingTitle: "Symmetrical carved archway with brass urlis and floral elements",
+    lighting: "Warm ambient glow with hanging brass diyas",
+    poseDescription: "Standing inside carved archway surrounded by white jasmine flowers",
+    badge: "Banarasi Special"
+  },
+  {
+    id: "shoot_17_terrace_balcony",
+    title: "Heritage Balcony Moody Spotlight",
+    category: "heritage",
+    imageUrl: "/reference_shoots/terrace_01_balcony_spotlight.jpg",
+    modelPersona: "Classical Banarasi Model with jhumkas",
+    settingTitle: "Antique Heritage Mansion Balcony with Wrought-Iron Railing",
+    lighting: "High-contrast dramatic spotlight on an antique balcony; rich editorial feel",
+    poseDescription: "Standing against ornate wrought-iron railing with dramatic gaze",
+    badge: "Moody Couture"
+  },
+
+  // 3. Traditional Temple & Floor Drapes (Best for Border & Pallu Showcases) - 3 Shoots
   {
     id: "shoot_08_temple_steps",
     title: "South Indian Temple Stone Steps",
@@ -926,7 +806,7 @@ export const MASTER_SHOOTS: MasterShoot[] = [
     modelPersona: "Kanjeevaram Temple Bride with jasmine gajra hair styling",
     settingTitle: "Ancient Granite Temple Pillars & Weathered Stone Steps",
     lighting: "Warm low-angle sun flare grazing the temple cornice",
-    poseDescription: "Regal standing pose with silk drape cascading down 5 stone steps",
+    poseDescription: "Saree pallu spread down stone temple steps; excellent for wide borders and intricate pallu motifs",
     badge: "Cascading Pallu"
   },
   {
@@ -937,76 +817,65 @@ export const MASTER_SHOOTS: MasterShoot[] = [
     modelPersona: "Dusky South Indian Classical Model with temple jewelry & bindi",
     settingTitle: "Carved Teakwood Wall & Temple Steps with Fresh Yellow Marigolds",
     lighting: "Warm festive temple sanctuary glow",
-    poseDescription: "Seated classical grace on temple steps surrounded by marigolds and brass urli",
+    poseDescription: "Grounded seating posture surrounded by marigolds and brassware; ideal for festive/Pooja marketing",
     badge: "Temple Silks"
   },
   {
-    id: "shoot_19_jharokha_urli",
-    title: "Jharokha Archway & Urli Flowers",
-    category: "festive_temple",
-    imageUrl: "/reference_shoots/temple_04_jharokha_urli.jpg",
-    modelPersona: "Radiant Indian Bride with traditional jhumkas",
-    settingTitle: "Carved Peach Jharokha Archway with Brass Urli & Mogra Flowers",
-    lighting: "Warm ambient glow with hanging brass diyas",
-    poseDescription: "Standing inside carved archway surrounded by white jasmine flowers",
-    badge: "Banarasi Special"
-  },
-  {
-    id: "shoot_25_temple_ancient_pillars",
-    title: "Ancient Stone Temple Pillar Corridor",
-    category: "festive_temple",
-    imageUrl: "/reference_shoots/temple_05_ancient_mandapam.jpg",
-    modelPersona: "Devotional South Indian Classical Model with fresh gajra",
-    settingTitle: "Centuries-Old Carved Granite Mandapam with Deep Perspectives",
-    lighting: "Atmospheric low-angle sun grazing weathered stone carvings",
-    poseDescription: "Graceful stance holding brass thali or flower garland",
-    badge: "Classical"
-  },
-  {
-    id: "shoot_26_temple_bell_courtyard",
-    title: "Brass Bell Sanctuary Courtyard",
-    category: "festive_temple",
-    imageUrl: "/reference_shoots/temple_06_bell_courtyard.jpg",
-    modelPersona: "Festive Indian Bride with ornate gold temple choker and kamarbandh",
-    settingTitle: "Temple Sanctuary Courtyard with Hanging Antiqued Brass Bells",
-    lighting: "Warm sacred temple daylight with subtle incense haze",
-    poseDescription: "Standing with one hand gently reaching towards brass bell",
-    badge: "Sacred Festive"
-  },
-  {
-    id: "shoot_27_temple_wooden_mandap",
-    title: "Carved Wooden Pooja Mandap",
-    category: "festive_temple",
-    imageUrl: "/reference_shoots/temple_07_wooden_pooja.jpg",
-    modelPersona: "Traditional Homemaker / Festive Persona with auspicious red bindi",
-    settingTitle: "Intricately Carved Teakwood Temple Mandap with Brass Oil Lamps",
-    lighting: "Warm golden glow from burning oil diyas and ambient soft light",
-    poseDescription: "Respectful folded-hands Namaste pose in traditional silk saree",
-    badge: "Namaste Pose"
-  },
-
-  // 5. Royal Balcony & Terrace (2 Shoots)
-  {
-    id: "shoot_17_terrace_balcony",
-    title: "Heritage Balcony Moody Spotlight",
-    category: "terrace",
-    imageUrl: "/reference_shoots/terrace_01_balcony_spotlight.jpg",
-    modelPersona: "Classical Banarasi Model with jhumkas",
-    settingTitle: "Antique Heritage Mansion Balcony with Wrought-Iron Railing",
-    lighting: "Dramatic moody spotlighting with distressed walls",
-    poseDescription: "Standing against ornate wrought-iron railing with dramatic gaze",
-    badge: "Moody Couture"
-  },
-  {
     id: "shoot_18_terrace_sunset",
-    title: "Palace Rooftop Golden Sunset",
-    category: "terrace",
+    title: "Palace Rooftop Floor Sunset",
+    category: "festive_temple",
     imageUrl: "/reference_shoots/terrace_02_palace_rooftop_sunset.jpg",
     modelPersona: "Sophisticated Modern Indian Woman with gold studs",
-    settingTitle: "Open Palace Terrace overlooking Fort and Violet Dusk Horizon",
-    lighting: "Cinematic magic hour dusk flare",
-    poseDescription: "Gentle turn overlooking parapet wall with billowing dupatta",
-    badge: "Dusk Horizon"
+    settingTitle: "Open Palace Terrace Floor with Ambient Lighting",
+    lighting: "Ambient golden dusk light displaying silk sheen",
+    poseDescription: "Relaxed seated floor pose with ambient lighting; displays silk fabric sheen and spread-out border work",
+    badge: "Spread Border"
+  },
+
+  // 4. Outdoor & Botanical Daylight (Best for Casual, Cotton, & Printed Sarees) - 4 Shoots
+  {
+    id: "shoot_28_tropical_canopy",
+    title: "Tropical Lawn & Dappled Canopy",
+    category: "garden",
+    imageUrl: "/reference_shoots/garden_05_tropical_canopy.jpg",
+    modelPersona: "Traditional South Indian Model with neat hair bun & temple pendant",
+    settingTitle: "Lush Tropical Lawn with Palm Trees & Dappled Sunlight",
+    lighting: "Diffuse natural light under lush greenery; clean drape representation with zero color tinting",
+    poseDescription: "Full-length stance holding pallu corner open displaying border",
+    badge: "Border Display"
+  },
+  {
+    id: "shoot_16_sandstone_courtyard",
+    title: "Sandstone Courtyard & Lily Pond",
+    category: "garden",
+    imageUrl: "/reference_shoots/heritage_07_sandstone_courtyard.jpg",
+    modelPersona: "Classic Indian Model with neat braided hair and red tilak",
+    settingTitle: "Sandstone Architecture overlooking Lily Pond",
+    lighting: "Brilliant natural daylight with reflection highlights",
+    poseDescription: "Editorial boat on lily pond; high aspirational value for brand campaigns",
+    badge: "Aspirational"
+  },
+  {
+    id: "shoot_11_mustard_meadow",
+    title: "Mustard Blossom Meadow",
+    category: "garden",
+    imageUrl: "/reference_shoots/garden_02_mustard_meadow.jpg",
+    modelPersona: "Poised Indian Woman with traditional alta on hands",
+    settingTitle: "Blooming Yellow Mustard Flower Field under Open Daylight",
+    lighting: "High-key outdoor daylight with vibrant floral contrast",
+    poseDescription: "Upright standing posture with hands clasped in flower field",
+    badge: "Natural Daylight"
+  },
+  {
+    id: "shoot_10_garden_morning",
+    title: "Morning Sun Botanical Garden",
+    category: "garden",
+    imageUrl: "/reference_shoots/garden_01_morning_sun.jpg",
+    modelPersona: "Warm Approachable Indian Woman with radiant natural smile",
+    settingTitle: "Botanical Garden with Soft Greenery Bokeh & Natural Morning Flare",
+    lighting: "Dappled morning sunlight filtering through garden foliage",
+    poseDescription: "Medium-close portrait angle for blouse detailing and neck jewelry",
+    badge: "Flagship Choice"
   }
 ];
 
