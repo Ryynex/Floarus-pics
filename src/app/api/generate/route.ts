@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { v2 as cloudinary } from "cloudinary";
+import { fal } from "@fal-ai/client";
+import fs from "fs";
+import path from "path";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
@@ -11,6 +14,77 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Configure Fal.ai client
+const falKey = process.env.FAL_KEY || "";
+if (falKey) {
+  fal.config({ credentials: falKey.trim() });
+}
+
+// In-memory cache for uploaded local assets so they are only uploaded to Fal storage once
+const publicUrlCache = new Map<string, string>();
+
+/**
+ * Ensures any image URL (local file path or remote) is accessible via a public HTTPS URL for Fal.ai.
+ * If given a local path like "/reference_shoots/01_heritage_haveli_doorway.jpg", it reads the file
+ * from disk and uploads it to Fal's high-speed CDN storage.
+ */
+async function ensurePublicUrl(urlOrPath: string): Promise<string> {
+  if (!urlOrPath) return "";
+  const trimmed = urlOrPath.trim();
+
+  // If already a remote public URL (and not localhost)
+  if (
+    (trimmed.startsWith("http://") || trimmed.startsWith("https://")) &&
+    !trimmed.includes("localhost") &&
+    !trimmed.includes("127.0.0.1")
+  ) {
+    return trimmed;
+  }
+
+  // Check cache
+  if (publicUrlCache.has(trimmed)) {
+    return publicUrlCache.get(trimmed)!;
+  }
+
+  // Extract relative path from public folder
+  let localRelative = trimmed;
+  if (localRelative.startsWith("http")) {
+    try {
+      const parsed = new URL(localRelative);
+      localRelative = parsed.pathname;
+    } catch {
+      // continue
+    }
+  }
+
+  if (localRelative.startsWith("/")) {
+    localRelative = localRelative.slice(1);
+  }
+
+  const filePath = path.join(process.cwd(), "public", localRelative);
+
+  if (fs.existsSync(filePath)) {
+    try {
+      const fileBuffer = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+      const blob = new Blob([fileBuffer], { type: mimeType });
+      const uploadedUrl = await fal.storage.upload(blob);
+      if (uploadedUrl) {
+        publicUrlCache.set(trimmed, uploadedUrl);
+        console.log(`DEBUG: Uploaded local asset '${trimmed}' to Fal storage: ${uploadedUrl}`);
+        return uploadedUrl;
+      }
+    } catch (uploadErr) {
+      console.warn(`Failed to upload local image '${trimmed}' to Fal storage:`, uploadErr);
+    }
+  } else {
+    console.warn(`Local file path does not exist on disk: ${filePath}`);
+  }
+
+  return trimmed;
+}
 
 // Helper function to retry asynchronous operations with exponential backoff
 async function retryOperation<T>(
@@ -37,14 +111,14 @@ async function retryOperation<T>(
 export async function POST(req: NextRequest) {
   // 1. Auth check
   const authHeader = req.headers.get("authorization") || "";
-  const token = authHeader.replace("Bearer ", "");
+  const token = authHeader.replace("Bearer ", "").trim();
 
   if (!token || token === "undefined" || token === "null" || token === "") {
     return NextResponse.json({ error: "Unauthorized: Active user session required" }, { status: 401 });
   }
 
-  // Instantiate standard supabase client helper authenticated as the user
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  // Instantiate standard supabase client authenticated as the user
+  const supabase = createClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
     global: {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -61,11 +135,53 @@ export async function POST(req: NextRequest) {
 
     // 2. Parse input request payload
     const body = await req.json();
-    const { sareeUrls, faceUrl, prompt } = body;
+    const {
+      mode = "sarees",
+      outfitType = "Wholesale Saree (6-Yard)",
+      
+      // Master photoshoot reference (Zero Hallucination Anchor)
+      shootId = "shoot_10_garden_morning",
+      shootTitle = "Morning Sun Botanical Garden",
+      shootImageUrl = "/reference_shoots/10_botanical_garden_morning_sun.jpg",
+      shootSetting = "Botanical Garden with Soft Greenery Bokeh & Natural Morning Flare",
+      shootPose = "Relaxed natural standing pose with hand resting gently at waist",
+      
+      // 3 Face Modes: "keep_original" | "custom_face" | "random_face"
+      faceMode = "keep_original",
+      customFaceUrl = null,
 
-    // Validate that we have at least one cloth reference image
-    if (!sareeUrls || !Array.isArray(sareeUrls) || sareeUrls.length === 0) {
-      return NextResponse.json({ error: "At least one product Saree reference image URL is required" }, { status: 400 });
+      // Legacy fallbacks
+      modelId = "indian_female_standard",
+      modelName = "Indian Female Model",
+      modelFaceUrl = null,
+      poseId = "hand-on-hip",
+      poseName = "Hand on hip — full length",
+      poseImageUrl = "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80",
+      backgroundId = "pastel-palace",
+      backgroundName = "Pastel painted palace interior",
+      backgroundUrl = "https://images.unsplash.com/photo-1582650625119-3a31f8418b7d?auto=format&fit=crop&w=600&q=80",
+      backgroundMode = "inspiration",
+      hairstyle = "Default (as before)",
+      jewellery = "Default (as before)",
+      customNotes = "",
+      garments = [],
+      sareeUrls = []
+    } = body;
+
+    // Collect garment photos from either structured garments array or legacy sareeUrls
+    interface GarmentItem {
+      url: string;
+      note?: string;
+      slotId?: string;
+      slotLabel?: string;
+    }
+
+    const activeGarments: GarmentItem[] = garments.length > 0 
+      ? garments 
+      : sareeUrls.map((url: string) => ({ url, note: "" }));
+
+    if (activeGarments.length === 0 || !activeGarments[0]?.url) {
+      return NextResponse.json({ error: "At least one product fabric reference image is required" }, { status: 400 });
     }
 
     // Fetch profile balance from database
@@ -76,43 +192,37 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (profileError || !profile) {
-      console.error("DEBUG ERROR: Profile query failed for user ID:", user.id, "Error:", profileError, "Data found:", profile);
+      console.error("DEBUG ERROR: Profile query failed for user ID:", user.id);
       return NextResponse.json({
-        error: `User profile not found. Database diagnostics: ${profileError?.message || "No profile record exists in the table for this user ID"}`
+        error: `User profile not found. Database diagnostics: ${profileError?.message || "No profile record exists"}`
       }, { status: 404 });
     }
 
     const balance = Number(profile.balance_inr);
+    const cost = 49.00;
 
-    // Enforce flat cost rate of ₹35.00
-    const selectedResolution = "1K";
-    const cost = 35.00;
-
-    // Check if user has enough balance
+    // Check balance
     if (balance < cost) {
       return NextResponse.json({
-        error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${balance.toFixed(2)}.`
+        error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${balance.toFixed(2)}. Please recharge your wallet.`
       }, { status: 403 });
     }
 
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-    const simulatedUrl = "/images/model-fuchsia.png";
+    const simulatedFallbackUrl = "/images/output_flux2_pro.jpg";
 
-    // Sandbox execution helper using Supabase RPC for atomic ledger write
+    // Sandbox execution fallback helper
     const executeSandboxFallback = async (outputUrl: string, reason = "standard mock mode") => {
       console.log(`Executing sandbox simulation fallback. Reason: ${reason}`);
-
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 2500));
 
       try {
         const { data: newBalance, error: rpcError } = await supabase.rpc(
           "deduct_balance_for_generation",
           {
             p_cost: cost,
-            p_prompt: prompt || "Simulated Saree Campaign (API Fallback)",
-            p_garment_url: sareeUrls.join(","), // Concatenate garment URLs for logging
-            p_face_url: faceUrl || null,
+            p_prompt: `${mode.toUpperCase()}: ${outfitType} | Shoot: ${shootTitle} | Face: ${faceMode} (${reason})`,
+            p_garment_url: activeGarments.map(g => g.url).join(","),
+            p_face_url: customFaceUrl || modelFaceUrl || null,
             p_output_url: outputUrl
           }
         );
@@ -124,137 +234,135 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success: true,
           outputUrl,
-          blurPlaceholderUrl: outputUrl, // Mock same URL for placeholder in sandbox
+          blurPlaceholderUrl: outputUrl,
           cost,
           newBalance: Number(newBalance),
           simulated: true,
-          fallbackMessage: `Notice: Operating in local GPU sandbox mode due to API limitations. (${reason})`
+          fallbackMessage: `Notice: Operating in sandbox simulation mode. (${reason})`
         });
       } catch (dbErr) {
         const errorMsg = dbErr instanceof Error ? dbErr.message : "Failed to execute transaction";
-        console.error("Failed to write mock balance/logs to database:", dbErr);
         return NextResponse.json({ error: errorMsg }, { status: 500 });
       }
     };
 
-    // 3. Sandbox Mock Generation if API Key is not set or set to placeholder
-    if (!openrouterKey || openrouterKey === "" || openrouterKey.startsWith("placeholder")) {
-      return executeSandboxFallback(simulatedUrl, "missing or placeholder API key credentials");
+    // Check Fal API key
+    if (!falKey || falKey === "" || falKey.startsWith("placeholder")) {
+      return executeSandboxFallback(simulatedFallbackUrl, "missing or placeholder Fal API credentials");
     }
 
-    // Validate Cloudinary environment variables before triggering pipeline
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      console.error("DEBUG ERROR: Cloudinary environment variables are missing!");
-      return executeSandboxFallback(simulatedUrl, "missing Cloudinary environment credentials");
+    // 3. Resolve Public URLs for All Images (Ensures local /reference_shoots/... are uploaded to Fal CDN)
+    const rawShootUrl = shootImageUrl || poseImageUrl;
+    const publicShootUrl = await ensurePublicUrl(rawShootUrl);
+
+    const publicGarmentUrls = await Promise.all(
+      activeGarments.map(async (g) => await ensurePublicUrl(g.url))
+    );
+
+    // Formulate per-layer fabric notes
+    const notesSummary = activeGarments
+      .map((g, i) => g.note ? `Layer ${i + 1} (${g.slotLabel || 'Garment'}): ${g.note}` : "")
+      .filter(Boolean)
+      .join("; ");
+
+    // 4. Formulate Multi-Image References and Prompt based on Face Mode
+    let imageUrls: string[] = [];
+    let fluxPrompt = "";
+
+    if (faceMode === "custom_face" && (customFaceUrl || modelFaceUrl)) {
+      // CUSTOM FACE MODE:
+      // Image 1: Brand Model Face
+      // Image 2: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
+      // Images 3+: Product Garment Fabrics
+      const publicFaceUrl = await ensurePublicUrl(customFaceUrl || modelFaceUrl);
+      imageUrls = [publicFaceUrl, publicShootUrl, ...publicGarmentUrls];
+
+      fluxPrompt = [
+        `High-end luxury Indian fashion catalog editorial portrait photograph.`,
+        `Transfer the exact facial identity, features, and expression of the model in the first reference image onto the model in the second reference image.`,
+        `Preserve the exact body pose, natural hand anatomy, posture, lighting, and background setting from the second reference image (${shootTitle}: ${shootSetting || backgroundName}).`,
+        `Drape her in the authentic ethnic garment from the subsequent product reference images.`,
+        notesSummary ? `Product specifications: ${notesSummary}.` : "",
+        customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
+        `Transfer the exact intricate embroidery, zari borders, fabric color, texture, and authentic pleats/pallu drape directly onto the outfit.`,
+        `Seamless skin tone matching, realistic human hand anatomy, perfect physical fabric drape, sharp editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+      ].filter(Boolean).join(" ");
+
+    } else if (faceMode === "random_face") {
+      // RANDOM DIVERSE INDIAN FACE MODE:
+      // Image 1: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
+      // Images 2+: Product Garment Fabrics
+      imageUrls = [publicShootUrl, ...publicGarmentUrls];
+
+      fluxPrompt = [
+        `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural features and a warm confident expression.`,
+        `Preserve the exact body pose, posture, natural hand anatomy, and background setting from the first reference image: ${shootTitle} (${shootSetting || backgroundName}).`,
+        `Replace her outfit completely with the authentic ethnic garment from the subsequent product reference images.`,
+        notesSummary ? `Product specifications: ${notesSummary}.` : "",
+        customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
+        `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and authentic drape directly onto her outfit.`,
+        `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+      ].filter(Boolean).join(" ");
+
+    } else {
+      // KEEP ORIGINAL SHOOT FACE (FLAGSHIP / ZERO HALLUCINATION):
+      // Image 1: Master Photoshoot Reference (Model Face + Pose + Hands + Lighting + Setting)
+      // Images 2+: Product Garment Fabrics
+      imageUrls = [publicShootUrl, ...publicGarmentUrls];
+
+      fluxPrompt = [
+        `High-end luxury Indian fashion catalog editorial photograph of the exact model from the first reference image wearing the authentic ethnic garment from the subsequent garment reference images.`,
+        `Crucial requirements: Preserve the exact model's facial features, facial identity, warm natural smile, skin tone, hair, natural hand anatomy, posture, pose, and background environment exactly as shown in the first image (${shootTitle}).`,
+        `Replace her outfit completely with the authentic ethnic garment shown in the product reference images.`,
+        notesSummary ? `Product specifications: ${notesSummary}.` : "",
+        customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
+        `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and pallu drape directly onto the draped outfit.`,
+        `Harmonize natural ambient lighting, soft daylight highlights, and depth of field with the setting: ${shootSetting || backgroundName}.`,
+        `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape and pleat physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+      ].filter(Boolean).join(" ");
     }
 
-    // 4. Assemble the Master High-Fashion Garment Prompt Template (Simplified for detailed user prompts)
-    const garmentSourceList = sareeUrls.map((url, i) => `Reference Cloth ${i + 1}: ${url}`).join("\n");
-    const masterPrompt = `Reference mapping details:
-- Product Details: The garment fabric, patterns, and ornaments are sourced from the following reference images:
-${garmentSourceList}
-Combine the textures, details, and color palettes from these reference images to formulate the unified premium garment design.
-- Model Face: Model features based on reference: ${faceUrl || "random model portrait"}.
+    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${imageUrls.length})`);
 
-User Scene Description:
-${prompt || "A high-fashion editorial photograph of a model showcasing a premium luxury garment."}
-
-- Strict Negative Prompt: low quality, distorted details, bad anatomy, deformed hands, cheap textures, plain flat photo.`;
-
-    const input_references: any[] = [];
-
-    // Append up to 5 cloth image references
-    sareeUrls.forEach((url) => {
-      input_references.push({
-        type: "image_url",
-        image_url: { url }
-      });
-    });
-
-    // Append face reference if provided
-    if (faceUrl) {
-      input_references.push({
-        type: "image_url",
-        image_url: { url: faceUrl }
-      });
-    }
-
-    // 5. OpenRouter Network API Request using google/gemini-3.1-flash-lite-image (with Retries)
-    let openRouterResponse;
+    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline
+    let falResult: any;
     try {
-      openRouterResponse = await retryOperation(async () => {
-        const res = await fetch("https://openrouter.ai/api/v1/images", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${openrouterKey}`,
-          },
-          body: JSON.stringify({
-            model: "google/gemini-3.1-flash-lite-image",
-            prompt: masterPrompt,
-            size: selectedResolution, // Set size strictly to 1K (e.g. 1024x1024)
-            input_references: input_references.length > 0 ? input_references : undefined,
-            response_format: "b64_json",
-            providers: ["google_ai_studio"]
-            // max_tokens: 1200
-          }),
+      falResult = await retryOperation(async () => {
+        return await fal.run("fal-ai/flux-2-pro/edit", {
+          input: {
+            image_urls: imageUrls,
+            prompt: fluxPrompt
+          }
         });
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`OpenRouter API error status ${res.status}: ${errorText}`);
-        }
-
-        return res;
-      });
-    } catch (fetchErr) {
-      const errorMsg = fetchErr instanceof Error ? fetchErr.message : "Network fetch failed";
-      console.warn("Outbound OpenRouter connection failed after retries. Falling back to Sandbox:", fetchErr);
-      return executeSandboxFallback(simulatedUrl, `Connection error: ${errorMsg}`);
+      }, 2, 3000);
+    } catch (falErr) {
+      const errMsg = falErr instanceof Error ? falErr.message : "Fal inference failed";
+      console.warn("Outbound Fal.ai call failed after retries. Falling back to sandbox:", errMsg);
+      return executeSandboxFallback(simulatedFallbackUrl, `Fal API Error: ${errMsg}`);
     }
 
-    const resultData = await openRouterResponse.json();
-    const base64Image = resultData.data?.[0]?.b64_json;
+    const generatedImageUrl = 
+      falResult?.data?.images?.[0]?.url || 
+      falResult?.images?.[0]?.url || 
+      falResult?.data?.image?.url || 
+      falResult?.image?.url;
 
-    if (!base64Image) {
-      throw new Error("No base64 image returned from OpenRouter API response");
+    if (!generatedImageUrl) {
+      console.warn("No direct image URL from Fal result:", falResult);
+      return executeSandboxFallback(simulatedFallbackUrl, "No image returned by Fal engine");
     }
 
-    // 6. Upload base generated image directly to Cloudinary (with Retries)
-    console.log("DEBUG: Uploading base generated image to Cloudinary...");
-    const dataUrl = `data:image/png;base64,${base64Image}`;
+    console.log("DEBUG: Fal.ai FLUX 2 Pro generation successful. Generated URL:", generatedImageUrl);
 
-    let uploadResult;
-    try {
-      uploadResult = await retryOperation(async () => {
-        return await cloudinary.uploader.upload(dataUrl, {
-          folder: "florus-lookbooks",
-        });
-      });
-    } catch (uploadErr) {
-      const errorMsg = uploadErr instanceof Error ? uploadErr.message : "Upload failed";
-      throw new Error(`Cloudinary upload failed after retries: ${errorMsg}`);
-    }
-
-    console.log("DEBUG: Cloudinary upload successful. public_id:", uploadResult.public_id);
-
-    // 7. Upscale image using Cloudinary transformation URL injection
-    const upscaledUrl = uploadResult.secure_url.replace("/upload/", "/upload/e_upscale/");
-    console.log("DEBUG: Upscaled image generated on Cloudinary. URL:", upscaledUrl);
-
-    // 7b. Generate a low-resolution blurred placeholder image dynamically from Cloudinary URL injection
-    const blurPlaceholderUrl = uploadResult.secure_url.replace("/upload/", "/upload/w_32,c_scale,e_blur:200/");
-    console.log("DEBUG: Blur placeholder generated. URL:", blurPlaceholderUrl);
-
-    // 8. Deduct balance and log generation atomically using Postgres RPC (storing Cloudinary Upscaled URL)
+    // 6. Deduct balance and log generation atomically in Supabase (Immediate)
     const { data: newBalance, error: rpcError } = await supabase.rpc(
       "deduct_balance_for_generation",
       {
         p_cost: cost,
-        p_prompt: prompt || "",
-        p_garment_url: sareeUrls.join(","), // Concatenate garment URLs for database log
-        p_face_url: faceUrl || null,
-        p_output_url: upscaledUrl
+        p_prompt: `${mode.toUpperCase()}: Shoot: ${shootTitle} | Face: ${faceMode} | Bg: ${shootSetting || backgroundName}`,
+        p_garment_url: activeGarments.map(g => g.url).join(","),
+        p_face_url: customFaceUrl || modelFaceUrl || null,
+        p_output_url: generatedImageUrl
       }
     );
 
@@ -262,10 +370,22 @@ ${prompt || "A high-fashion editorial photograph of a model showcasing a premium
       throw new Error(`Transaction failed: ${rpcError.message}`);
     }
 
+    // 7. Non-blocking background archiving to Cloudinary (Does NOT delay user response)
+    if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+      cloudinary.uploader.upload(generatedImageUrl, {
+        folder: "florus-lookbooks",
+      }).then((uploadResult) => {
+        console.log("DEBUG: Background Cloudinary archiving complete:", uploadResult.secure_url);
+      }).catch((cloudErr) => {
+        console.warn("Background Cloudinary archiving notice:", cloudErr?.message || cloudErr);
+      });
+    }
+
+    // 8. Return native 4MP ultra-sharp lookbook immediately to the user
     return NextResponse.json({
       success: true,
-      outputUrl: upscaledUrl,
-      blurPlaceholderUrl: blurPlaceholderUrl,
+      outputUrl: generatedImageUrl,
+      blurPlaceholderUrl: generatedImageUrl,
       cost,
       newBalance: Number(newBalance),
       simulated: false

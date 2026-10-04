@@ -3,14 +3,13 @@
 import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { 
-  Sparkles, 
-  Layers, 
-  History, 
-  CreditCard, 
-  Settings, 
-  Wallet, 
-  Plus, 
+import {
+  Layers,
+  History,
+  CreditCard,
+  Settings,
+  Wallet,
+  Plus,
   LogOut,
   User,
   X,
@@ -36,7 +35,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
-  
+
   // UPI Form State
   const [topUpAmount, setTopUpAmount] = useState("1000");
   const [upiTxnId, setUpiTxnId] = useState("");
@@ -121,7 +120,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
       setProfile(prev => prev ? { ...prev, balance_inr: Number(newBalance) } : null);
       setTopUpSuccess(true);
       setUpiTxnId("");
-      
+
       // Dispatch update to let the GenerateWorkspace know about the new balance
       window.dispatchEvent(new Event("profile-updated"));
 
@@ -155,50 +154,50 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
     { id: "generate", label: "Generate Image", icon: Layers },
     { id: "history", label: "Catalog History", icon: History },
     { id: "billing", label: "Billing & Payments", icon: CreditCard },
-    { id: "settings", label: "Admin Settings", icon: Settings },
+    { id: "settings", label: "Settings", icon: Settings },
   ];
 
   return (
     <>
-      <aside className={`${isMobile ? "w-full" : "w-72"} bg-surface border-r border-muted-purple/40 flex flex-col justify-between z-10 shrink-0 select-none h-full`}>
-      
-      {/* Top: Branding Logo & Status */}
-      <div className="flex flex-col gap-6 p-6 border-b border-muted-purple/30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/images/florus_logo.png" alt="Florus Logo" className="h-9 w-9 object-contain" />
-            <span className="text-lg font-bold tracking-[0.2em] text-white">
-              FLORUS<span className="text-fuchsia-accent">.</span>PICS
-            </span>
+      <aside className={`${isMobile ? "w-full" : "w-72"} bg-surface border-r border-muted-purple flex flex-col justify-between z-10 shrink-0 select-none h-full`}>
+
+        {/* Top: Branding Logo & Status */}
+        <div className="flex flex-col gap-6 p-6 border-b border-muted-purple">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src="/images/florus_logo.png" alt="Florus Logo" className="h-9 w-9 object-contain" />
+              <span className="text-base font-bold tracking-[0.16em] text-ink">
+                FLORUS<span className="text-fuchsia-accent">.</span>PICS
+              </span>
+            </div>
+            {isMobile && (
+              <button
+                onClick={onClose}
+                className="p-1 text-ink-faint hover:text-ink cursor-pointer"
+                title="Close Drawer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
           </div>
-          {isMobile && (
-            <button 
-              onClick={onClose}
-              className="p-1 text-zinc-500 hover:text-white cursor-pointer"
-              title="Close Drawer"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          )}
-        </div>
-          
-          <div className="flex items-center gap-3 bg-void/50 border border-muted-purple/40 px-3 py-2 rounded-xl">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-r from-muted-purple to-surface border border-muted-purple flex items-center justify-center">
-              <User className="h-4 w-4 text-foreground-muted" />
+
+          <div className="flex items-center gap-3 bg-sand border border-muted-purple px-3 py-2.5 rounded-xl">
+            <div className="h-9 w-9 rounded-full bg-clay-soft border border-line flex items-center justify-center">
+              <User className="h-4 w-4 text-fuchsia-accent" />
             </div>
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-xs font-mono font-medium truncate text-white">
-                {profile?.email || "Loading partner..."}
+              <span className="text-xs font-medium truncate text-ink">
+                {profile?.email || "Loading account..."}
               </span>
-              <span className="text-[9px] uppercase tracking-wider font-bold text-fuchsia-accent">
-                B2B Brand Tier
+              <span className="text-[10px] font-semibold tracking-wide text-fuchsia-accent">
+                B2B Brand Account
               </span>
             </div>
           </div>
         </div>
 
         {/* Middle: Navigation Links */}
-        <nav className="flex-1 px-4 py-6 flex flex-col gap-2">
+        <nav className="flex-1 px-4 py-6 flex flex-col gap-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -207,14 +206,14 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                 key={item.id}
                 href={`/dashboard?tab=${item.id}`}
                 onClick={onClose}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group border-l-2 cursor-pointer ${
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group border-l-[3px] cursor-pointer ${
                   isActive
-                    ? "bg-gradient-to-r from-fuchsia-accent/10 to-transparent border-fuchsia-accent text-white"
-                    : "border-transparent text-foreground-muted hover:text-white hover:bg-void/30"
+                    ? "bg-clay-soft border-fuchsia-accent text-ink"
+                    : "border-transparent text-ink-soft hover:text-ink hover:bg-sand/70"
                 }`}
               >
-                <Icon className={`h-4.5 w-4.5 transition-colors ${
-                  isActive ? "text-fuchsia-accent" : "text-foreground-muted group-hover:text-white"
+                <Icon className={`h-[18px] w-[18px] transition-colors ${
+                  isActive ? "text-fuchsia-accent" : "text-ink-faint group-hover:text-ink-soft"
                 }`} />
                 <span>{item.label}</span>
               </Link>
@@ -223,19 +222,18 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
         </nav>
 
         {/* Bottom: Wallet Display Card & Action */}
-        <div className="p-6 border-t border-muted-purple/30 flex flex-col gap-4">
-          <div className="glassmorphic-card p-4 rounded-xl flex flex-col gap-3 relative overflow-hidden border border-muted-purple/50">
-            <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-purple-accent/10 to-transparent rounded-full blur-md" />
-            <div className="flex items-center gap-2 text-xs font-mono text-foreground-muted">
+        <div className="p-4 sm:p-6 border-t border-muted-purple flex flex-col gap-3 sm:gap-4">
+          <div className="card p-3.5 sm:p-4 flex flex-col gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2 text-xs font-medium text-ink-soft">
               <Wallet className="h-4 w-4 text-purple-accent" />
-              <span>Available Wallet</span>
+              <span>Wallet Balance</span>
             </div>
-            
+
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Balance (INR)</span>
-              <span className="text-2xl font-black text-white tracking-tight">
+              <span className="label-caps">Balance (INR)</span>
+              <span className="text-xl sm:text-2xl font-bold text-ink tracking-tight">
                 {loading ? (
-                  <span className="h-5 w-16 bg-zinc-800 rounded animate-pulse inline-block" />
+                  <span className="h-5 w-16 bg-sand rounded animate-pulse inline-block" />
                 ) : (
                   `₹${profile?.balance_inr.toFixed(2)}`
                 )}
@@ -244,7 +242,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
 
             <button
               onClick={() => setShowTopUpModal(true)}
-              className="w-full py-2 bg-gradient-to-r from-purple-accent/80 to-purple-accent text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all duration-300 glow-btn-purple cursor-pointer"
+              className="btn-primary w-full py-2 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Top Up Balance</span>
@@ -253,64 +251,64 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
 
           <button
             onClick={handleSignOut}
-            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-muted-purple/50 text-xs font-medium text-foreground-muted hover:text-white hover:bg-red-950/20 hover:border-red-900/40 transition-all cursor-pointer"
+            className="btn-secondary flex items-center justify-center gap-2 w-full py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium text-brick hover:bg-brick-soft hover:border-brick/30 hover:text-brick cursor-pointer"
           >
             <LogOut className="h-3.5 w-3.5" />
-            <span>Terminate Session</span>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
       {/* UPI Wallet Top Up Dialog Modal */}
       {showTopUpModal && (
-        <div className="fixed inset-0 bg-void/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-md glassmorphic-card rounded-2xl p-6 relative border border-muted-purple/60">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="card w-full max-w-md p-4 sm:p-6 relative">
             <button
               onClick={() => {
                 setShowTopUpModal(false);
                 setTopUpError(null);
               }}
-              className="absolute right-4 top-4 text-foreground-muted hover:text-white transition-colors cursor-pointer"
+              className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 text-ink-faint hover:text-ink transition-colors cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
 
             <div className="flex items-center gap-2 mb-4">
               <Wallet className="h-5 w-5 text-purple-accent" />
-              <h3 className="text-lg font-bold">Replenish via UPI</h3>
+              <h3 className="text-lg font-bold text-ink">Top Up via UPI</h3>
             </div>
 
             {topUpSuccess ? (
               <div className="py-8 flex flex-col items-center justify-center gap-3 text-center">
-                <CheckCircle2 className="h-16 w-16 text-emerald-500 animate-bounce" />
-                <h4 className="text-base font-bold text-white leading-snug">Transaction Submitted!</h4>
-                <p className="text-xs text-foreground-muted font-mono leading-relaxed max-w-[280px]">
-                  Transaction submitted successfully! Your payment is pending manual validation. Balance will be updated once approved by the administrator.
+                <CheckCircle2 className="h-16 w-16 text-sage" />
+                <h4 className="text-base font-bold text-ink leading-snug">Transaction Submitted</h4>
+                <p className="text-sm text-ink-soft leading-relaxed max-w-[280px]">
+                  Your payment is pending manual validation. Balance will update once approved by an administrator.
                 </p>
               </div>
             ) : (
               <form onSubmit={handleTopUpSubmit} className="flex flex-col gap-4">
-                <div className="bg-void/50 border border-muted-purple/60 rounded-xl p-3.5 flex flex-col gap-2">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase">Step 1: Scan / Transfer to UPI ID</span>
-                  
-                  <div className="flex items-center justify-between bg-surface border border-muted-purple/50 px-3 py-2 rounded-lg mt-1">
-                    <span className="text-xs text-white font-mono select-all truncate">{upiId}</span>
+                <div className="bg-sand border border-muted-purple rounded-xl p-4 flex flex-col gap-2">
+                  <span className="label-caps">Step 1 · Transfer to UPI ID</span>
+
+                  <div className="flex items-center justify-between bg-surface border border-muted-purple px-3 py-2 rounded-lg mt-1">
+                    <span className="text-sm text-ink font-medium select-all truncate">{upiId}</span>
                     <button
                       type="button"
                       onClick={copyUpiId}
-                      className="text-foreground-muted hover:text-white transition-colors p-1"
+                      className="text-ink-faint hover:text-ink transition-colors p-1"
                       title="Copy UPI ID"
                     >
-                      {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                      {copied ? <Check className="h-4 w-4 text-sage" /> : <Copy className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="text-[10px] text-zinc-500 mt-1 leading-normal">
-                    Complete the payment for the desired replenishment amount in your preferred UPI application.
+                  <p className="text-xs text-ink-faint mt-1 leading-normal">
+                    Complete the payment in your preferred UPI app for the desired amount.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-foreground-muted">Amount Transferred (INR)</label>
+                  <label className="label-caps">Amount Transferred (INR)</label>
                   <input
                     type="number"
                     min="1"
@@ -318,41 +316,41 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                     required
                     value={topUpAmount}
                     onChange={(e) => setTopUpAmount(e.target.value)}
-                    className="w-full bg-void/50 border border-muted-purple/60 px-3 py-2 rounded-lg text-sm text-white font-mono focus:border-purple-accent focus:outline-none"
+                    className="input-field"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-foreground-muted">UPI UTR / Transaction Ref ID</label>
+                  <label className="label-caps">UPI UTR / Transaction Ref ID</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. 12-digit transaction ID"
                     value={upiTxnId}
                     onChange={(e) => setUpiTxnId(e.target.value)}
-                    className="w-full bg-void/50 border border-muted-purple/60 px-3 py-2 rounded-lg text-sm text-white font-mono focus:border-purple-accent focus:outline-none"
+                    className="input-field"
                   />
                 </div>
 
                 {topUpError && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400">
+                  <div className="p-3 bg-brick-soft border border-brick/25 rounded-lg text-sm text-brick">
                     {topUpError}
                   </div>
                 )}
 
-                <div className="flex flex-col gap-1.5 border-t border-muted-purple/40 pt-4 mt-2">
-                  <span className="text-[9px] font-mono text-zinc-500 uppercase flex items-center gap-1">
-                    <Lock className="h-3 w-3 text-purple-accent" /> Payments credited to profiles atomically.
+                <div className="flex flex-col gap-1.5 border-t border-line pt-4 mt-1">
+                  <span className="text-xs text-ink-faint flex items-center gap-1">
+                    <Lock className="h-3 w-3 text-purple-accent" /> Payments are credited to your wallet after admin approval.
                   </span>
                 </div>
 
                 <button
                   type="submit"
                   disabled={topUpLoading}
-                  className="w-full py-2.5 mt-2 rounded-lg bg-gradient-to-r from-purple-accent to-fuchsia-accent text-white font-semibold text-xs transition-all duration-300 flex items-center justify-center gap-1.5 glow-btn-purple cursor-pointer"
+                  className="btn-primary w-full py-2.5 mt-1 rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5"
                 >
                   {topUpLoading ? (
-                    <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   ) : (
                     <span>Confirm UPI Transfer</span>
                   )}
@@ -432,37 +430,33 @@ export default function DashboardLayout({
 
   if (!authorized) {
     return (
-      <div className="min-h-screen w-full bg-void flex items-center justify-center text-foreground-muted font-mono text-xs">
+      <div className="min-h-screen w-full bg-void flex items-center justify-center text-ink-soft text-sm">
         <div className="flex flex-col items-center gap-3">
           <span className="h-5 w-5 border-2 border-fuchsia-accent/30 border-t-fuchsia-accent rounded-full animate-spin" />
-          <span>Verifying authorization session...</span>
+          <span>Verifying your session...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full flex bg-void text-white font-sans relative overflow-hidden">
-      
-      {/* Background Gradients */}
-      <div className="absolute top-0 right-0 w-[40vw] h-[40vw] rounded-full bg-purple-accent/5 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[40vw] h-[40vw] rounded-full bg-fuchsia-accent/5 blur-[120px] pointer-events-none" />
+    <div className="min-h-screen w-full flex bg-void text-ink font-sans relative overflow-hidden">
 
       {/* Sidebar Desktop View (Hidden on mobile/tablet) */}
-      <div className="hidden lg:flex w-72 shrink-0 border-r border-muted-purple/40 bg-surface">
-        <Suspense fallback={<div className="w-72 bg-surface border-r border-muted-purple/40 animate-pulse" />}>
+      <div className="hidden lg:flex w-72 shrink-0 border-r border-muted-purple bg-surface">
+        <Suspense fallback={<div className="w-72 bg-surface border-r border-muted-purple animate-pulse" />}>
           <Sidebar />
         </Suspense>
       </div>
 
       {/* Mobile Drawer Menu Drawer Overlay */}
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 z-50 flex lg:hidden bg-void/85 backdrop-blur-xs animate-fade-in"
+        <div
+          className="fixed inset-0 z-50 flex lg:hidden bg-black/50 backdrop-blur-sm animate-fade-in"
           onClick={() => setIsMobileMenuOpen(false)}
         >
-          <div 
-            className="w-72 h-full bg-surface flex flex-col justify-between select-none animate-slide-in"
+          <div
+            className="w-72 max-w-[85vw] h-full bg-surface flex flex-col justify-between select-none animate-slide-in shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <Suspense fallback={<div className="w-full h-full bg-surface animate-pulse" />}>
@@ -474,28 +468,69 @@ export default function DashboardLayout({
 
       {/* Main Canvas Scrollable Area */}
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto z-10 relative">
-        {/* Mobile top-bar navigation header */}
-        <header className="lg:hidden flex items-center justify-between px-5 py-4 bg-surface/50 border-b border-muted-purple/30 backdrop-blur-md sticky top-0 z-30">
+        {/* Desktop Top-Bar */}
+        <header className="hidden lg:flex items-center justify-between px-8 py-3.5 bg-surface border-b border-muted-purple sticky top-0 z-30">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 rounded-lg border border-muted-purple/50 bg-void/40 hover:bg-void/70 hover:border-purple-accent/60 transition-all text-white cursor-pointer"
-              title="Open Navigation Menu"
-            >
-              <Menu className="h-4.5 w-4.5" />
-            </button>
-            <span className="text-sm font-bold tracking-[0.2em] text-white">
-              FLORUS<span className="text-fuchsia-accent">.</span>PICS
+            <span className="text-sm font-bold tracking-[0.1em] text-ink">
+              FLORUS <span className="text-fuchsia-accent">AI STUDIO</span>
+            </span>
+            <span className="pill-neutral text-[10px] font-semibold tracking-wide px-2.5 py-0.5 rounded-full">
+              B2B
             </span>
           </div>
-          
-          <div className="flex items-center gap-2 bg-void/50 border border-muted-purple/40 px-3 py-1.5 rounded-xl text-xs font-mono">
-            <Wallet className="h-3.5 w-3.5 text-purple-accent animate-pulse" />
-            <span className="text-white font-semibold">₹{profileBalance !== null ? profileBalance.toFixed(2) : "0.00"}</span>
+
+          <div className="flex items-center gap-3">
+            {/* Wallet Balance */}
+            <div className="flex items-center gap-2 bg-sand border border-muted-purple px-3 py-1.5 rounded-lg text-sm">
+              <Wallet className="h-3.5 w-3.5 text-purple-accent" />
+              <span className="text-ink font-semibold">₹{profileBalance !== null ? profileBalance.toFixed(2) : "0.00"}</span>
+            </div>
+
+            {/* My Catalog */}
+            <Link
+              href="/dashboard?tab=history"
+              className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium"
+            >
+              <History className="h-3.5 w-3.5 text-fuchsia-accent" />
+              <span>My Catalog</span>
+            </Link>
+
+            {/* Logout */}
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push("/");
+              }}
+              className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-ink-soft"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </header>
 
-        <div className="flex-1 p-4 md:p-8 lg:p-12">
+        {/* Mobile top-bar navigation header */}
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 bg-surface border-b border-muted-purple sticky top-0 z-30">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="btn-secondary p-1.5 sm:p-2 rounded-lg cursor-pointer"
+              title="Open Navigation Menu"
+            >
+              <Menu className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+            </button>
+            <span className="text-xs sm:text-sm font-bold tracking-[0.16em] text-ink">
+              FLORUS<span className="text-fuchsia-accent">.</span>PICS
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 bg-sand border border-muted-purple px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-sm">
+            <Wallet className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-accent" />
+            <span className="text-ink font-semibold">₹{profileBalance !== null ? profileBalance.toFixed(2) : "0.00"}</span>
+          </div>
+        </header>
+
+        <div className="flex-1 p-3 sm:p-6 md:p-8 lg:p-10">
           {children}
         </div>
       </main>

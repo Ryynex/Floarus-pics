@@ -9,8 +9,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Florus.pics | High-End B2B AI Fashion Platform",
-  description: "The premier digital luxury fashion generative AI platform. Transform fashion designs, generate studio-grade model photoshoots, and power B2B digital catalogs with AI.",
+  title: "Florus.pics | AI Fashion Studio for Brands",
+  description: "Professional AI fashion photography for Indian ethnic wear brands. Turn fabric flat-lays into studio-grade model catalog images.",
   keywords: ["AI Fashion", "B2B SaaS", "Digital Luxury", "Generative AI", "Fashion Modeling", "Florus"],
 };
 
@@ -20,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} dark`}>
-      <body className="bg-void text-white antialiased min-h-screen selection:bg-fuchsia-accent selection:text-white">
+    <html lang="en" className={`${outfit.variable}`}>
+      <body className="bg-void text-ink antialiased min-h-screen selection:bg-clay-soft selection:text-ink">
         {children}
       </body>
     </html>
