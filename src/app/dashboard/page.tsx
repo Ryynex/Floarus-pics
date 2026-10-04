@@ -12,6 +12,8 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Download,
+  Loader2,
   FileText,
   Key,
   ShieldAlert,
@@ -60,6 +62,27 @@ function DashboardContent() {
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showApiToken, setShowApiToken] = useState(false);
+  const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
+
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      setDownloadingUrl(url);
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, "_blank");
+    } finally {
+      setDownloadingUrl(null);
+    }
+  };
 
   const handleCopyId = () => {
     if (profile?.id) {
@@ -217,14 +240,28 @@ function DashboardContent() {
                           alt="Generated Lookbook"
                           className="object-cover h-full w-full group-hover:scale-[1.03] transition-transform duration-500"
                         />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-2 sm:p-2.5">
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-2 sm:p-2.5 gap-1.5 z-10">
+                          <button
+                            type="button"
+                            onClick={() => downloadImage(row.output_url!, `florus-catalog-${i + 1}.png`)}
+                            disabled={downloadingUrl === row.output_url}
+                            className="btn-primary flex-1 text-center py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer shadow-md disabled:opacity-60"
+                            title="Direct download full size image"
+                          >
+                            {downloadingUrl === row.output_url ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Download className="h-3 w-3" />
+                            )}
+                            <span>{downloadingUrl === row.output_url ? "Saving..." : "Download"}</span>
+                          </button>
                           <a
                             href={row.output_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="btn-primary w-full text-center py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1"
+                            className="btn-secondary px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1 bg-surface/90 hover:bg-surface text-ink shrink-0"
+                            title="Open full size in new tab"
                           >
-                            <span>Open</span>
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         </div>
@@ -243,9 +280,27 @@ function DashboardContent() {
                   </div>
                   <div className="p-2 sm:p-3 flex flex-col gap-1 flex-1 justify-between">
                     <div>
-                      <span className="text-[9px] sm:text-[10px] text-ink-faint">
-                        {new Date(row.created_at).toLocaleDateString()}
-                      </span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[9px] sm:text-[10px] text-ink-faint">
+                          {new Date(row.created_at).toLocaleDateString()}
+                        </span>
+                        {row.output_url && (
+                          <button
+                            type="button"
+                            onClick={() => downloadImage(row.output_url!, `florus-catalog-${i + 1}.png`)}
+                            disabled={downloadingUrl === row.output_url}
+                            className="text-[10px] sm:text-xs font-semibold text-fuchsia-accent hover:text-fuchsia-accent/80 flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Direct download full size image"
+                          >
+                            {downloadingUrl === row.output_url ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            ) : (
+                              <Download className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                            )}
+                            <span className="text-[10px] sm:text-xs">Download</span>
+                          </button>
+                        )}
+                      </div>
                       <p className="text-[11px] sm:text-xs text-ink-soft line-clamp-2 leading-tight sm:leading-relaxed mt-0.5 sm:mt-1" title={row.prompt}>
                         {row.prompt || "Catalog generation"}
                       </p>
