@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       // Master photoshoot reference (Zero Hallucination Anchor)
       shootId = "shoot_10_garden_morning",
       shootTitle = "Morning Sun Botanical Garden",
-      shootImageUrl = "/reference_shoots/10_botanical_garden_morning_sun.jpg",
+      shootImageUrl = "/reference_shoots/garden_01_morning_sun.jpg",
       shootSetting = "Botanical Garden with Soft Greenery Bokeh & Natural Morning Flare",
       shootPose = "Relaxed natural standing pose with hand resting gently at waist",
       
