@@ -149,6 +149,7 @@ export async function POST(req: NextRequest) {
       // 3 Face Modes: "keep_original" | "custom_face" | "random_face"
       faceMode = "keep_original",
       customFaceUrl = null,
+      aspectRatio = "4:5",
 
       // Legacy fallbacks
       modelId = "indian_female_standard",
@@ -322,16 +323,30 @@ export async function POST(req: NextRequest) {
       ].filter(Boolean).join(" ");
     }
 
-    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${imageUrls.length})`);
+    // Strict 4MP (4 Megapixel) Target Dimension Calculations (Multiples of 16 for latent stability)
+    let dimensions = { width: 1792, height: 2240 }; // 4:5 Editorial Portrait (4,014,080 pixels = ~4.01 MP)
 
-    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline
+    if (aspectRatio === "3:4") {
+      dimensions = { width: 1728, height: 2304 }; // 3:4 Catalog Portrait (3,981,312 pixels = ~3.98 MP)
+    } else if (aspectRatio === "9:16") {
+      dimensions = { width: 1536, height: 2688 }; // 9:16 Full Length Runway (4,128,768 pixels = ~4.12 MP)
+    } else if (aspectRatio === "1:1") {
+      dimensions = { width: 2048, height: 2048 }; // 1:1 High-Res Square (4,194,304 pixels = ~4.19 MP)
+    }
+
+    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${imageUrls.length}, Target: ${dimensions.width}x${dimensions.height} ~4MP)`);
+
+    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 4MP Ultra-Sharp Asset)
     let falResult: any;
     try {
       falResult = await retryOperation(async () => {
         return await fal.run("fal-ai/flux-2-pro/edit", {
           input: {
             image_urls: imageUrls,
-            prompt: fluxPrompt
+            prompt: fluxPrompt,
+            image_size: dimensions,
+            output_format: "png",
+            safety_tolerance: "2"
           }
         });
       }, 2, 3000);
@@ -341,9 +356,9 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedFallbackUrl, `Fal API Error: ${errMsg}`);
     }
 
+    const imgObj = falResult?.data?.images?.[0] || falResult?.images?.[0];
     const generatedImageUrl = 
-      falResult?.data?.images?.[0]?.url || 
-      falResult?.images?.[0]?.url || 
+      imgObj?.url || 
       falResult?.data?.image?.url || 
       falResult?.image?.url;
 
@@ -352,7 +367,10 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedFallbackUrl, "No image returned by Fal engine");
     }
 
-    console.log("DEBUG: Fal.ai FLUX 2 Pro generation successful. Generated URL:", generatedImageUrl);
+    const actualWidth = imgObj?.width || dimensions.width;
+    const actualHeight = imgObj?.height || dimensions.height;
+    const actualMP = ((actualWidth * actualHeight) / 1000000).toFixed(2);
+    console.log(`DEBUG: Fal.ai FLUX 2 Pro generation successful. Resolution: ${actualWidth}x${actualHeight} (${actualMP} MP). URL: ${generatedImageUrl}`);
 
     // 6. Deduct balance and log generation atomically in Supabase (Immediate)
     const { data: newBalance, error: rpcError } = await supabase.rpc(

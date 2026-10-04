@@ -210,6 +210,7 @@ export function GenerateWorkspace() {
         body: JSON.stringify({
           mode: "sarees",
           outfitType,
+          aspectRatio: "4:5",
           
           // Master photoshoot reference (Anchors hands, pose, and ambient lighting)
           shootId: selectedShoot.id,
