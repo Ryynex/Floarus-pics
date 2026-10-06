@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Sparkles,
   UploadCloud,
@@ -42,6 +43,7 @@ interface UploadedGarment {
 }
 
 export function GenerateWorkspace() {
+  const router = useRouter();
   // 1. Master Photoshoot Reference Anchor (Pose, Hands & Environment)
   const [selectedShoot, setSelectedShoot] = useState<MasterShoot>(MASTER_SHOOTS[0]);
   const [isShootModalOpen, setIsShootModalOpen] = useState(false);
@@ -276,7 +278,28 @@ export function GenerateWorkspace() {
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
+    <div className="flex flex-col gap-5 w-full max-w-7xl mx-auto">
+      {/* Workflow Mode Quick Switcher Bar */}
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-sand border border-line w-fit">
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard?tab=generate")}
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-surface border border-line text-ink shadow-sm"
+        >
+          <Layers className="h-3.5 w-3.5 text-fuchsia-accent" />
+          <span>Studio Lookbooks (Wholesale Sarees)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard?tab=magic")}
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-ink-soft hover:text-ink hover:bg-surface/50"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
+          <span>Magic Mode</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-extrabold bg-fuchsia-accent/15 text-fuchsia-accent border border-fuchsia-accent/30">BETA</span>
+        </button>
+      </div>
 
       {/* Main 2-Column Studio Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 w-full">

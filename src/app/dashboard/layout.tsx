@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Layers,
+  Sparkles,
   History,
   CreditCard,
   Settings,
@@ -151,7 +152,8 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
 
   // Navigation Items
   const navItems = [
-    { id: "generate", label: "Generate Image", icon: Layers },
+    { id: "generate", label: "Studio Lookbooks", icon: Layers },
+    { id: "magic", label: "Magic Mode", icon: Sparkles, badge: "Beta" },
     { id: "history", label: "Catalog History", icon: History },
     { id: "billing", label: "Billing & Payments", icon: CreditCard },
     { id: "settings", label: "Settings", icon: Settings },
@@ -206,16 +208,23 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                 key={item.id}
                 href={`/dashboard?tab=${item.id}`}
                 onClick={onClose}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group border-l-[3px] cursor-pointer ${
+                className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all group border-l-[3px] cursor-pointer ${
                   isActive
                     ? "bg-clay-soft border-fuchsia-accent text-ink"
                     : "border-transparent text-ink-soft hover:text-ink hover:bg-sand/70"
                 }`}
               >
-                <Icon className={`h-[18px] w-[18px] transition-colors ${
-                  isActive ? "text-fuchsia-accent" : "text-ink-faint group-hover:text-ink-soft"
-                }`} />
-                <span>{item.label}</span>
+                <div className="flex items-center gap-3">
+                  <Icon className={`h-[18px] w-[18px] transition-colors ${
+                    isActive ? "text-fuchsia-accent" : "text-ink-faint group-hover:text-ink-soft"
+                  }`} />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span className="pill-neutral text-[9px] font-bold px-2 py-0.5 rounded-full bg-fuchsia-accent/15 text-fuchsia-accent border border-fuchsia-accent/30">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}

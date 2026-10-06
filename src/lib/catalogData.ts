@@ -196,92 +196,99 @@ export function deleteSavedCustomModel(id: string): CatalogModel[] {
 // 3. 25+ Comprehensive Catalog Poses (Clear & Approachable)
 // -------------------------------------------------------------
 export const PRESET_POSES: CatalogPose[] = [
-  // Standing
+  // Standing & Drape
   {
     id: "hand-on-hip",
     name: "Hand on hip — full length",
     category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/01_hand_on_hip_full_length.jpg",
     description: "Classic straight-to-camera stance showing full outfit height, hemline, and pallu drop."
   },
   {
     id: "holding-drape",
     name: "Holding the drape at waist",
     category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/02_holding_drape_at_waist.jpg",
     description: "Model gently lifts and holds the pallu border to present intricate zari work directly to camera."
-  },
-  {
-    id: "pallu-display",
-    name: "Front-facing elegant pallu display",
-    category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=600&q=80",
-    description: "Direct frontal posture giving 100% clarity on the front pleats and chest drape pattern."
-  },
-  {
-    id: "side-profile",
-    name: "Side profile, hand on waist",
-    category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=600&q=80",
-    description: "Highlights blouse back embroidery, waist curvature, and the full side fall of the garment."
   },
   {
     id: "leaning-pillar",
     name: "Leaning against pillar / wall",
     category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/03_leaning_against_wall.jpg",
     description: "Relaxed editorial pose showcasing side drape silhouette and architectural depth."
   },
   {
-    id: "cross-legged-standing",
-    name: "Cross-legged casual standing",
+    id: "side-profile",
+    name: "Side profile, hand on waist",
     category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=600&q=80",
-    description: "Modern relaxed posture showing how fabric gathers naturally around the feet."
+    imageUrl: "/reference_poses/04_side_profile_hand_on_waist.jpg",
+    description: "Highlights blouse back embroidery, waist curvature, and the full side fall of the garment."
   },
   {
     id: "hands-folded-front",
     name: "Both hands clasped gently in front",
     category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/11_hands_clasped_front.jpg",
     description: "Traditional modest posture optimal for showcasing bangles, rings, and clean front pleats."
   },
   {
     id: "one-hand-on-pallu",
     name: "One hand touching shoulder pallu",
     category: "standing",
-    imageUrl: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/12_one_hand_touching_shoulder.jpg",
     description: "Directs visual focus toward the shoulder pin, border tassels, and neckline embroidery."
   },
+  {
+    id: "standing-three-quarter",
+    name: "Standing, three-quarter turn",
+    category: "standing",
+    imageUrl: "/reference_poses/14_standing_three_quarter_turn.jpg",
+    description: "Classic 45-degree catalog posture showcasing garment silhouette and shoulder line."
+  },
+  {
+    id: "side-profile-90",
+    name: "Pure side profile, full length",
+    category: "standing",
+    imageUrl: "/reference_poses/24_side_profile_90_degree.jpg",
+    description: "Clean 90-degree lateral profile standing straight, showing full spine posture and hemline."
+  },
+  {
+    id: "pallu-display",
+    name: "Front-facing elegant pallu display",
+    category: "standing",
+    imageUrl: "/reference_poses/25_front_facing_pallu_display.jpg",
+    description: "Direct frontal posture giving 100% clarity on the front pleats and chest drape pattern."
+  },
 
-  // Motion
+  // Motion & Walking
   {
     id: "walking-motion",
     name: "Walking forward / windswept stride",
     category: "motion",
-    imageUrl: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/05_walking_windswept_motion.jpg",
     description: "Dynamic fluid stride capturing fabric flow, pleat flare, and authentic runway motion."
-  },
-  {
-    id: "turning-back",
-    name: "Turning around, looking over shoulder",
-    category: "motion",
-    imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
-    description: "Showcases the back blouse tie-up, back tassels (latkans), and trailing pallu length."
-  },
-  {
-    id: "twirl-flare",
-    name: "Gentle twirl / flared silhouette",
-    category: "motion",
-    imageUrl: "https://images.unsplash.com/photo-1502716119720-b23a93e5fe1b?auto=format&fit=crop&w=600&q=80",
-    description: "360-degree flare capturing maximum circumference of lehenga skirts or anarkali suits."
   },
   {
     id: "holding-parasol",
     name: "Holding decorative parasol",
     category: "motion",
-    imageUrl: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/09_holding_parasol.jpg",
     description: "Heritage outdoor accessory posture creating shade highlights and festive flair."
+  },
+  {
+    id: "dupatta-held-out",
+    name: "Dupatta held out with both hands",
+    category: "motion",
+    imageUrl: "/reference_poses/18_dupatta_held_out_wingspan.jpg",
+    description: "Expands sheer organza or bandhani dupatta to demonstrate full width and border craft."
+  },
+  {
+    id: "turning-back",
+    name: "Turning around, looking over shoulder",
+    category: "motion",
+    imageUrl: "/reference_poses/19_turning_around_back_shot.jpg",
+    description: "Showcases the back blouse tie-up, back tassels (latkans), and trailing pallu length."
   },
 
   // Seated & Regal
@@ -289,43 +296,50 @@ export const PRESET_POSES: CatalogPose[] = [
     id: "seated-steps",
     name: "Seated on steps, drape fanned",
     category: "seated",
-    imageUrl: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/06_seated_on_steps_drape_fanned.jpg",
     description: "Regal seated arrangement on palace steps with the saree pallu fanned across the floor."
   },
   {
     id: "seated-ledge",
     name: "Seated front-facing on a ledge",
     category: "seated",
-    imageUrl: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/07_seated_front_facing_ledge.jpg",
     description: "Commercial seated posture optimal for unstitched suits and flared kurtas."
-  },
-  {
-    id: "seated-royal-chair",
-    name: "Seated in ornate carved royal chair",
-    category: "regal",
-    imageUrl: "https://images.unsplash.com/photo-1540518614846-7ede433c4550?auto=format&fit=crop&w=600&q=80",
-    description: "Queenly posture resting arms on carved wooden armrests, ideal for royal heritage lookbooks."
   },
   {
     id: "seated-reading",
     name: "Seated reading a book",
     category: "seated",
-    imageUrl: "https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=600&q=80",
-    description: "Warm lifestyle posture reflecting quiet luxury, literary elegance, and home boutique vibe."
+    imageUrl: "/reference_poses/08_seated_reading_book.jpg",
+    description: "Warm lifestyle posture reflecting quiet luxury, literary elegance, and boutique vibe."
   },
   {
     id: "leaning-railing",
     name: "Leaning back on terrace railing",
     category: "seated",
-    imageUrl: "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/10_leaning_back_on_railing.jpg",
     description: "Balcony terrace posture with breezy lighting and relaxed royal demeanor."
   },
   {
-    id: "seated-floor-diwan",
-    name: "Seated on floor diwan with bolster",
+    id: "seated-royal-chair",
+    name: "Seated in ornate carved royal chair",
     category: "regal",
-    imageUrl: "https://images.unsplash.com/photo-1582650625119-3a31f8418b7d?auto=format&fit=crop&w=600&q=80",
-    description: "Traditional baithak posture with silk bolsters, showing off fabric drape puddling gracefully."
+    imageUrl: "/reference_poses/13_seated_royal_armchair.jpg",
+    description: "Queenly posture resting arms on carved wooden armrests, ideal for royal lookbooks."
+  },
+  {
+    id: "leaning-table",
+    name: "Leaning on a studio table",
+    category: "seated",
+    imageUrl: "/reference_poses/20_leaning_on_table.jpg",
+    description: "Contemporary catalog posture leaning forward slightly on a minimal studio table."
+  },
+  {
+    id: "seated-cross-legged",
+    name: "Seated cross-legged on low platform",
+    category: "regal",
+    imageUrl: "/reference_poses/21_seated_cross_legged_diwan.jpg",
+    description: "Traditional baithak posture showing off fabric drape puddling gracefully."
   },
 
   // Details & Close-ups
@@ -333,48 +347,41 @@ export const PRESET_POSES: CatalogPose[] = [
     id: "close-portrait",
     name: "Close-up 3/4 bust portrait",
     category: "details",
-    imageUrl: "https://images.unsplash.com/photo-1500917293891-ef795e70e1f6?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/15_close_up_bust_portrait.jpg",
     description: "Focused bust-up crop emphasizing blouse necklines, jewellery pairing, and collar border."
   },
   {
     id: "adjusting-earring",
     name: "Hand gently touching earring / jhumka",
     category: "details",
-    imageUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=600&q=80",
-    description: "Candid bridal gesture drawing natural attention to neckline, sleeve work, and jhumka ornaments."
+    imageUrl: "/reference_poses/16_adjusting_earring_gesture.jpg",
+    description: "Candid bridal gesture drawing natural attention to neckline, sleeve work, and ornaments."
   },
   {
     id: "hands-on-bangles",
     name: "Hands resting at waist adjusting bangles",
     category: "details",
-    imageUrl: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_poses/17_hands_at_waist_adjusting_bangles.jpg",
     description: "Perfect angle to show the waist tuck, pleat neatness, and sleeve embroidery."
   },
   {
-    id: "dupatta-held-out",
-    name: "Dupatta held out with both hands",
+    id: "high-angle-shot",
+    name: "High angle, looking up at camera",
     category: "details",
-    imageUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80",
-    description: "Expands sheer organza or bandhani dupatta to demonstrate full width and border craft."
+    imageUrl: "/reference_poses/22_high_angle_looking_up.jpg",
+    description: "Editorial high camera angle looking down softly as model looks up toward camera."
   },
   {
-    id: "mirror-reflection",
-    name: "Looking into ornate dressing mirror",
-    category: "regal",
-    imageUrl: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80",
-    description: "Artistic double perspective showing front and back of the outfit simultaneously."
-  },
-  {
-    id: "jharokha-framing",
-    name: "Framed in stone jharokha balcony",
-    category: "regal",
-    imageUrl: "https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=600&q=80",
-    description: "Traditional stone lattice window framing the model like an authentic royal miniature painting."
+    id: "shy-blush",
+    name: "Shy blush, hand near mouth",
+    category: "details",
+    imageUrl: "/reference_poses/23_shy_blush_hand_over_mouth.jpg",
+    description: "Candid soft gesture with right hand held delicately near mouth with a joyful gentle smile."
   }
 ];
 
 // -------------------------------------------------------------
-// 4. 30+ Curated Approachable Backgrounds
+// 4. 15 Curated Luxury Catalog Backgrounds
 // -------------------------------------------------------------
 export const PRESET_BACKGROUNDS: CatalogBackground[] = [
   // Heritage & Forts
@@ -382,43 +389,22 @@ export const PRESET_BACKGROUNDS: CatalogBackground[] = [
     id: "pastel-palace",
     name: "Pastel painted palace interior",
     category: "heritage",
-    imageUrl: "https://images.unsplash.com/photo-1582650625119-3a31f8418b7d?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/01_pastel_palace_interior.jpg",
     description: "Soft mint and blush fresco walls with heritage arched corridors and polished marble."
   },
   {
     id: "rajasthani-fort",
     name: "Rajasthani fort, golden hour",
     category: "heritage",
-    imageUrl: "https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/02_rajasthani_fort_golden_hour.jpg",
     description: "Sun-drenched sandstone courtyards bathed in warm sunset hues and dramatic historic stone."
   },
   {
     id: "jaipur-stepwell",
     name: "Jaipur stepwell / baoli",
     category: "heritage",
-    imageUrl: "https://images.unsplash.com/photo-1596178065887-1198b6148b2b?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/11_jaipur_stepwell_baoli.jpg",
     description: "Geometrical stone staircases of historic Rajasthan stepwells, dramatic and editorial."
-  },
-  {
-    id: "sheesh-mahal",
-    name: "Sheesh Mahal mirror hall",
-    category: "heritage",
-    imageUrl: "https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=600&q=80",
-    description: "Intricate mirror glass mosaic walls that sparkle softly under warm chandelier lighting."
-  },
-  {
-    id: "udaipur-lake-palace",
-    name: "Udaipur lake palace courtyard",
-    category: "heritage",
-    imageUrl: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80",
-    description: "Pristine white marble arches overlooking peaceful shimmering blue lake waters."
-  },
-  {
-    id: "chettinad-mansion",
-    name: "Chettinad heritage teak courtyard",
-    category: "heritage",
-    imageUrl: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80",
-    description: "Polished Burma teak pillars, Athangudi patterned handmade floor tiles, and open sky courtyard."
   },
 
   // Festive & Traditional Settings
@@ -426,59 +412,17 @@ export const PRESET_BACKGROUNDS: CatalogBackground[] = [
     id: "diya-courtyard",
     name: "Evening courtyard lit with brass diyas",
     category: "festive",
-    imageUrl: "https://images.unsplash.com/photo-1514517521153-1be72277b32f?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/13_diya_courtyard_twilight.jpg",
     description: "Magical twilight atmosphere with warm flickering brass oil lamps and soft golden glows."
   },
-  {
-    id: "marigold-festive",
-    name: "Marigold floral garland backdrop",
-    category: "festive",
-    imageUrl: "https://images.unsplash.com/photo-1533227268428-f9ed0900fb3b?auto=format&fit=crop&w=600&q=80",
-    description: "Vibrant yellow and orange fresh marigold floral curtains ideal for Haldi, Mehendi, and Diwali."
-  },
-  {
-    id: "temple-carved-pillar",
-    name: "Ancient carved stone temple corridor",
-    category: "festive",
-    imageUrl: "https://images.unsplash.com/photo-1580828343064-fde4fc206bc6?auto=format&fit=crop&w=600&q=80",
-    description: "Rich Dravidian sculptural stone pillars creating authentic temple silk photoshoot context."
-  },
-  {
-    id: "rangoli-veranda",
-    name: "Veranda with fresh petal rangoli",
-    category: "festive",
-    imageUrl: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=600&q=80",
-    description: "Traditional terracotta tiled porch adorned with floral rose petals and morning sunshine."
-  },
 
-  // Modern & Minimalist Studio (Clean & Approachable)
+  // Modern & Minimalist Studio
   {
     id: "studio-neutral",
     name: "Neutral studio backdrop (Warm Beige)",
     category: "studio",
-    imageUrl: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/10_neutral_studio_backdrop.jpg",
     description: "Clean warm beige cyclorama wall with soft commercial diffused studio light. 100% fabric focus."
-  },
-  {
-    id: "studio-soft-gray",
-    name: "Editorial soft gray seamless paper",
-    category: "studio",
-    imageUrl: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80",
-    description: "Contemporary neutral gray backdrop with high dynamic range and no distracting reflections."
-  },
-  {
-    id: "studio-warm-terracotta",
-    name: "Warm terracotta clay textured studio wall",
-    category: "studio",
-    imageUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80",
-    description: "Earthy artisanal plaster finish adding depth without overpowering garment patterns."
-  },
-  {
-    id: "studio-clean-white",
-    name: "High-key clean white Amazon catalog",
-    category: "studio",
-    imageUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80",
-    description: "Crisp white infinite background optimized for marketplace listing standards (Amazon, Myntra)."
   },
 
   // Gardens & Nature
@@ -486,42 +430,35 @@ export const PRESET_BACKGROUNDS: CatalogBackground[] = [
     id: "green-garden",
     name: "Lush green garden estate",
     category: "gardens",
-    imageUrl: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/05_lush_green_estate_garden.jpg",
     description: "Manicured estate lawn with blooming jasmine, tropical foliage, and natural daylight."
   },
   {
     id: "colonial-balcony",
     name: "Colonial garden balcony with bougainvillea",
     category: "gardens",
-    imageUrl: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/06_colonial_garden_balcony.jpg",
     description: "White balustrade balcony overflowing with magenta bougainvillea vines and morning sunlight."
   },
   {
     id: "sunlit-villa",
     name: "Sunlit villa garden, golden hour",
     category: "gardens",
-    imageUrl: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/07_sunlit_villa_garden.jpg",
     description: "Luxury villa stone courtyard bathed in rich amber evening backlight."
   },
   {
     id: "veranda-curtains",
     name: "Veranda with sheer breezy curtains",
     category: "gardens",
-    imageUrl: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/08_veranda_sheer_curtains.jpg",
     description: "Airy colonnade with translucent sheer white drapes moving softly in the gentle wind."
-  },
-  {
-    id: "royal-rose-garden",
-    name: "Royal Mughal rose garden with fountains",
-    category: "gardens",
-    imageUrl: "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?auto=format&fit=crop&w=600&q=80",
-    description: "Symmetrical water canals, red sandstone pathways, and blooming fragrant roses."
   },
   {
     id: "desert-sunset-dunes",
     name: "Golden Thar desert sand dunes",
     category: "gardens",
-    imageUrl: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/12_golden_thar_desert_dunes.jpg",
     description: "Dramatic rippled golden sand dunes under an amber and purple twilight sky."
   },
 
@@ -530,35 +467,35 @@ export const PRESET_BACKGROUNDS: CatalogBackground[] = [
     id: "baroque-hall",
     name: "Grand baroque marble hall",
     category: "luxury_interiors",
-    imageUrl: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/03_grand_baroque_marble_hall.jpg",
     description: "Opulent European and Indo-Saracenic grandeur with gilded pillars and reflective floors."
   },
   {
     id: "heritage-room",
     name: "Chandelier heritage room",
     category: "luxury_interiors",
-    imageUrl: "https://images.unsplash.com/photo-1540518614846-7ede433c4550?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/04_chandelier_heritage_room.jpg",
     description: "Intimate regal room featuring crystal chandeliers, warm teak furniture, and Persian rugs."
   },
   {
     id: "vintage-car",
     name: "Vintage car & heritage portico",
     category: "luxury_interiors",
-    imageUrl: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80",
-    description: "Cream classic Rolls-Royce / Ambassador parked under a grand heritage driveway arch."
+    imageUrl: "/reference_backgrounds/09_vintage_car_portico.jpg",
+    description: "Cream classic vintage car parked under a grand heritage mansion driveway arch."
   },
   {
     id: "warm-library",
     name: "Warm royal library with mahogany wood",
     category: "luxury_interiors",
-    imageUrl: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/14_warm_royal_library.jpg",
     description: "Rich mahogany bookshelves, vintage leather binding, and warm amber banker lamps."
   },
   {
     id: "penthouse-skyline",
     name: "Modern luxury penthouse city view",
     category: "luxury_interiors",
-    imageUrl: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80",
+    imageUrl: "/reference_backgrounds/15_modern_penthouse_skyline.jpg",
     description: "Floor-to-ceiling glass windows overlooking modern high-rise city lights at dusk."
   }
 ];

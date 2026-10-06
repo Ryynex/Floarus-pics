@@ -43,3 +43,8 @@ next-env.d.ts
 # local scratch & temporary scripts
 scratch/
 executeTryon.js
+*.mp4
+fetch_candidates.js
+find_candidates.js
+search_real_shoots.js
+batch_gen_poses.js

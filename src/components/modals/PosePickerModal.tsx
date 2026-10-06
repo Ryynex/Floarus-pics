@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, X, Check, Activity } from "lucide-react";
+import { Search, X, Check, Activity, Edit3, Sparkles } from "lucide-react";
 import { PRESET_POSES, CatalogPose } from "@/lib/catalogData";
 
 interface PosePickerModalProps {
@@ -19,6 +19,10 @@ export function PosePickerModal({
 }: PosePickerModalProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customPoseText, setCustomPoseText] = useState(
+    selectedPose.id === "custom" ? selectedPose.description : ""
+  );
 
   if (!isOpen) return null;
 
@@ -38,6 +42,19 @@ export function PosePickerModal({
       p.description.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  const handleApplyCustomPose = () => {
+    if (!customPoseText.trim()) return;
+    const customPose: CatalogPose = {
+      id: "custom",
+      name: `Custom: ${customPoseText.trim().substring(0, 30)}...`,
+      category: "standing",
+      imageUrl: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80",
+      description: customPoseText.trim()
+    };
+    onSelect(customPose);
+    onClose();
+  };
 
   return (
     <div
@@ -102,6 +119,7 @@ export function PosePickerModal({
                 <div
                   key={pose.id}
                   onClick={() => {
+                    setShowCustomInput(false);
                     onSelect(pose);
                     onClose();
                   }}
@@ -135,7 +153,71 @@ export function PosePickerModal({
                 </div>
               );
             })}
+
+            {/* Custom Pose Card matching video */}
+            <div
+              onClick={() => setShowCustomInput(true)}
+              className={`group rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col justify-between p-4 bg-surface ${
+                showCustomInput || selectedPose.id === "custom"
+                  ? "border-fuchsia-accent ring-2 ring-fuchsia-accent/20 bg-clay-soft"
+                  : "border-dashed border-line hover:border-fuchsia-accent/40 hover:bg-sand/40"
+              }`}
+            >
+              <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+                <div className="h-10 w-10 rounded-full bg-fuchsia-accent/15 border border-fuchsia-accent/30 flex items-center justify-center text-fuchsia-accent group-hover:scale-110 transition-transform">
+                  <Edit3 className="h-5 w-5" />
+                </div>
+                <span className="text-xs font-bold text-ink">
+                  Custom — describe it yourself
+                </span>
+                <span className="text-[11px] text-ink-faint">
+                  Write any posture or camera angle
+                </span>
+              </div>
+            </div>
           </div>
+
+          {/* Custom Pose Description Box (shown when clicked, matching video) */}
+          {showCustomInput && (
+            <div className="mt-6 p-4 rounded-xl border border-fuchsia-accent/30 bg-clay-soft/50 flex flex-col gap-3 animate-fade-in">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-bold text-ink flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
+                  Describe the pose you want
+                </label>
+                <span className="text-[11px] text-ink-faint">
+                  {customPoseText.length}/500
+                </span>
+              </div>
+
+              <textarea
+                rows={3}
+                value={customPoseText}
+                maxLength={500}
+                onChange={(e) => setCustomPoseText(e.target.value)}
+                placeholder="e.g. A back pose showing the back of the outfit, head turned slightly over one shoulder with left hand on waist..."
+                className="input-field text-xs resize-none w-full"
+              />
+
+              <div className="flex justify-end items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCustomPoseText("")}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-ink-soft hover:text-ink hover:bg-sand cursor-pointer transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyCustomPose}
+                  disabled={!customPoseText.trim()}
+                  className="btn-primary px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50"
+                >
+                  Use this description
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

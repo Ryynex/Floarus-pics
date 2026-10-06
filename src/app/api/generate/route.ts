@@ -151,19 +151,23 @@ export async function POST(req: NextRequest) {
       customFaceUrl = null,
       aspectRatio = "4:5",
 
-      // Legacy fallbacks
+      // Magic Mode parameters
       modelId = "indian_female_standard",
       modelName = "Indian Female Model",
       modelFaceUrl = null,
-      poseId = "hand-on-hip",
-      poseName = "Hand on hip — full length",
-      poseImageUrl = "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80",
-      backgroundId = "pastel-palace",
-      backgroundName = "Pastel painted palace interior",
-      backgroundUrl = "https://images.unsplash.com/photo-1582650625119-3a31f8418b7d?auto=format&fit=crop&w=600&q=80",
+      poseId = "01_hand_on_hip_full_length",
+      poseName = "Hand on Hip — Full Length",
+      poseImageUrl = "",
+      poseDescription = "",
+      backgroundId = "01_pastel_palace_interior",
+      backgroundName = "Pastel Painted Palace Interior",
+      backgroundUrl = "",
+      backgroundDescription = "",
       backgroundMode = "inspiration",
       hairstyle = "Default (as before)",
+      hairstyleDescription = "",
       jewellery = "Default (as before)",
+      jewelleryDescription = "",
       customNotes = "",
       garments = [],
       sareeUrls = []
@@ -216,12 +220,16 @@ export async function POST(req: NextRequest) {
       console.log(`Executing sandbox simulation fallback. Reason: ${reason}`);
       await new Promise((resolve) => setTimeout(resolve, 2500));
 
+      const logPrompt = mode === "magic"
+        ? `MAGIC: ${outfitType} | Pose: ${poseName} | Bg: ${backgroundName} (${reason})`
+        : `STUDIO: ${shootTitle} | Face: ${faceMode} (${reason})`;
+
       try {
         const { data: newBalance, error: rpcError } = await supabase.rpc(
           "deduct_balance_for_generation",
           {
             p_cost: cost,
-            p_prompt: `${mode.toUpperCase()}: ${outfitType} | Shoot: ${shootTitle} | Face: ${faceMode} (${reason})`,
+            p_prompt: logPrompt,
             p_garment_url: activeGarments.map(g => g.url).join(","),
             p_face_url: customFaceUrl || modelFaceUrl || null,
             p_output_url: outputUrl
@@ -252,10 +260,7 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedFallbackUrl, "missing or placeholder Fal API credentials");
     }
 
-    // 3. Resolve Public URLs for All Images (Ensures local /reference_shoots/... are uploaded to Fal CDN)
-    const rawShootUrl = shootImageUrl || poseImageUrl;
-    const publicShootUrl = await ensurePublicUrl(rawShootUrl);
-
+    // 3. Resolve Public URLs for All Images (Ensures local /reference_... are uploaded to Fal CDN)
     const publicGarmentUrls = await Promise.all(
       activeGarments.map(async (g) => await ensurePublicUrl(g.url))
     );
@@ -266,61 +271,221 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join("; ");
 
-    // 4. Formulate Multi-Image References and Prompt based on Face Mode
+    // 4. Formulate Multi-Image References and Professional FLUX 2 Pro Prompt
     let imageUrls: string[] = [];
     let fluxPrompt = "";
 
-    if (faceMode === "custom_face" && (customFaceUrl || modelFaceUrl)) {
-      // CUSTOM FACE MODE:
-      // Image 1: Brand Model Face
-      // Image 2: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
-      // Images 3+: Product Garment Fabrics
-      const publicFaceUrl = await ensurePublicUrl(customFaceUrl || modelFaceUrl);
-      imageUrls = [publicFaceUrl, publicShootUrl, ...publicGarmentUrls];
+    if (mode === "magic") {
+      // =========================================================================
+      // MAGIC MODE (BETA) PIPELINE
+      // Multi-Reference Mapping: [Pose Anchor, Face Anchor, Background Anchor, ...Garments] (Max 8)
+      // =========================================================================
+      interface RefEntry {
+        url: string;
+        type: "pose" | "face" | "background" | "garment";
+        index: number;
+      }
+      const refList: RefEntry[] = [];
 
-      fluxPrompt = [
-        `High-end luxury Indian fashion catalog editorial portrait photograph.`,
-        `Transfer the exact facial identity, features, and expression of the model in the first reference image onto the model in the second reference image.`,
-        `Preserve the exact body pose, natural hand anatomy, posture, lighting, and background setting from the second reference image (${shootTitle}: ${shootSetting || backgroundName}).`,
-        `Drape her in the authentic ethnic garment from the subsequent product reference images.`,
-        notesSummary ? `Product specifications: ${notesSummary}.` : "",
-        customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-        `Transfer the exact intricate embroidery, zari borders, fabric color, texture, and authentic pleats/pallu drape directly onto the outfit.`,
-        `Seamless skin tone matching, realistic human hand anatomy, perfect physical fabric drape, sharp editorial lighting, 8k resolution, photorealistic luxury lookbook.`
-      ].filter(Boolean).join(" ");
+      // Slot A: Pose Reference Image (if not custom text pose)
+      if (poseImageUrl && poseId !== "custom") {
+        const publicPose = await ensurePublicUrl(poseImageUrl);
+        if (publicPose) {
+          refList.push({ url: publicPose, type: "pose", index: refList.length + 1 });
+        }
+      }
 
-    } else if (faceMode === "random_face") {
-      // RANDOM DIVERSE INDIAN FACE MODE:
-      // Image 1: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
-      // Images 2+: Product Garment Fabrics
-      imageUrls = [publicShootUrl, ...publicGarmentUrls];
+      // Slot B: Brand Custom Model Face (if provided)
+      const rawFace = customFaceUrl || (faceMode === "custom_face" ? modelFaceUrl : null);
+      if (rawFace) {
+        const publicFace = await ensurePublicUrl(rawFace);
+        if (publicFace) {
+          refList.push({ url: publicFace, type: "face", index: refList.length + 1 });
+        }
+      }
 
-      fluxPrompt = [
-        `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural features and a warm confident expression.`,
-        `Preserve the exact body pose, posture, natural hand anatomy, and background setting from the first reference image: ${shootTitle} (${shootSetting || backgroundName}).`,
-        `Replace her outfit completely with the authentic ethnic garment from the subsequent product reference images.`,
-        notesSummary ? `Product specifications: ${notesSummary}.` : "",
-        customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-        `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and authentic drape directly onto her outfit.`,
-        `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
-      ].filter(Boolean).join(" ");
+      // Slot C: Background Reference Image (if provided and not custom text)
+      if (backgroundUrl && backgroundId !== "custom" && backgroundUrl !== poseImageUrl) {
+        const publicBg = await ensurePublicUrl(backgroundUrl);
+        if (publicBg) {
+          refList.push({ url: publicBg, type: "background", index: refList.length + 1 });
+        }
+      }
+
+      // Slot D: Product Garment Fabrics (Up to remaining slots, max 8 total)
+      const garmentIndices: number[] = [];
+      for (const gUrl of publicGarmentUrls) {
+        if (refList.length < 8 && gUrl) {
+          const idx = refList.length + 1;
+          refList.push({ url: gUrl, type: "garment", index: idx });
+          garmentIndices.push(idx);
+        }
+      }
+
+      imageUrls = refList.map(r => r.url);
+
+      const poseRef = refList.find(r => r.type === "pose");
+      const faceRef = refList.find(r => r.type === "face");
+      const bgRef = refList.find(r => r.type === "background");
+
+      const promptParts: string[] = [
+        `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${outfitType || "ethnic outfit"}.`
+      ];
+
+      // Model Face
+      if (faceRef) {
+        promptParts.push(
+          `Model Face Identity: Transfer the exact facial features, eye shape, radiant skin tone, and natural expression from Reference Image ${faceRef.index} onto the model.`
+        );
+      } else {
+        promptParts.push(
+          `Model Characteristics: Beautiful Indian woman with natural radiant skin, refined features, and a confident elegant catalog expression.`
+        );
+      }
+
+      // Pose
+      if (poseRef) {
+        promptParts.push(
+          `Pose & Body Posture: Replicate the exact full-body posture, limb angles, natural hand placement, and silhouette from Reference Image ${poseRef.index} (${poseName}${poseDescription ? `: ${poseDescription}` : ""}).`
+        );
+      } else if (poseDescription) {
+        promptParts.push(
+          `Pose & Posture: Direct the model in the custom pose: ${poseDescription}.`
+        );
+      } else {
+        promptParts.push(`Pose: Elegant natural standing pose with graceful hand placement.`);
+      }
+
+      // Background
+      if (bgRef) {
+        if (backgroundMode === "fixed") {
+          promptParts.push(
+            `Background & Environment (STRICT FIXED MODE): Place the model directly within the exact architectural backdrop, spatial perspective, horizon, and room geometry of Reference Image ${bgRef.index} (${backgroundName}${backgroundDescription ? `: ${backgroundDescription}` : ""}). Synchronize lighting direction and shadows seamlessly.`
+          );
+        } else {
+          promptParts.push(
+            `Background Atmosphere (INSPIRATION MODE): Draw the luxurious ambient aesthetic, warm color temperature, and setting mood from Reference Image ${bgRef.index} (${backgroundName}${backgroundDescription ? `: ${backgroundDescription}` : ""}). Harmonize depth of field with soft bokeh.`
+          );
+        }
+      } else if (backgroundDescription) {
+        promptParts.push(
+          `Background & Setting: High-end editorial environment: ${backgroundDescription}. Soft balanced ambient light.`
+        );
+      }
+
+      // Hairstyle & Jewellery
+      if (hairstyle && hairstyle !== "Default (as before)") {
+        promptParts.push(`Hairstyle: ${hairstyle}${hairstyleDescription ? ` (${hairstyleDescription})` : ""}, polished salon finish.`);
+      } else {
+        promptParts.push(`Hairstyle: Elegant signature catalog styling.`);
+      }
+
+      if (jewellery && jewellery !== "Default (as before)") {
+        promptParts.push(`Jewellery: Adorned with fine ${jewellery}${jewelleryDescription ? ` (${jewelleryDescription})` : ""}, catching ambient light highlights.`);
+      } else {
+        promptParts.push(`Jewellery: Harmonized fine ethnic gold bangles and delicate earrings.`);
+      }
+
+      // Garment & Draping
+      if (garmentIndices.length > 0) {
+        const garmentRangeStr = garmentIndices.length === 1 
+          ? `Reference Image ${garmentIndices[0]}` 
+          : `Reference Images ${garmentIndices[0]} to ${garmentIndices[garmentIndices.length - 1]}`;
+        promptParts.push(
+          `Product Garment Draping: Drape the authentic ethnic outfit from ${garmentRangeStr} directly onto the model.`
+        );
+      }
+
+      if (notesSummary) {
+        promptParts.push(`Product layer notes & specifications: ${notesSummary}.`);
+      }
+
+      if (customNotes) {
+        promptParts.push(`Styling & drape instructions: ${customNotes}.`);
+      }
+
+      // Quality & Physics
+      promptParts.push(
+        `Precision Details: Transfer all intricate zari embroidery, weave motifs, border highlights, fabric sheen, and authentic pleat/pallu falls with true physical gravity. Flawless human anatomy, realistic slender hands and five natural fingers, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+      );
+
+      fluxPrompt = promptParts.filter(Boolean).join(" ");
 
     } else {
-      // KEEP ORIGINAL SHOOT FACE (FLAGSHIP / ZERO HALLUCINATION):
-      // Image 1: Master Photoshoot Reference (Model Face + Pose + Hands + Lighting + Setting)
-      // Images 2+: Product Garment Fabrics
-      imageUrls = [publicShootUrl, ...publicGarmentUrls];
+      // =========================================================================
+      // STUDIO LOOKBOOKS (WHOLESALE SAREES / MASTER SHOOTS) PIPELINE
+      // Zero Hallucination Anchor: [Shoot Reference, Face Reference (opt), ...Garments]
+      // =========================================================================
+      const rawShootUrl = shootImageUrl || "/reference_shoots/garden_01_morning_sun.jpg";
+      const publicShootUrl = await ensurePublicUrl(rawShootUrl);
 
-      fluxPrompt = [
-        `High-end luxury Indian fashion catalog editorial photograph of the exact model from the first reference image wearing the authentic ethnic garment from the subsequent garment reference images.`,
-        `Crucial requirements: Preserve the exact model's facial features, facial identity, warm natural smile, skin tone, hair, natural hand anatomy, posture, pose, and background environment exactly as shown in the first image (${shootTitle}).`,
-        `Replace her outfit completely with the authentic ethnic garment shown in the product reference images.`,
-        notesSummary ? `Product specifications: ${notesSummary}.` : "",
-        customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-        `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and pallu drape directly onto the draped outfit.`,
-        `Harmonize natural ambient lighting, soft daylight highlights, and depth of field with the setting: ${shootSetting || backgroundName}.`,
-        `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape and pleat physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
-      ].filter(Boolean).join(" ");
+      if (faceMode === "custom_face" && (customFaceUrl || modelFaceUrl)) {
+        // CUSTOM FACE MODE:
+        // Image 1: Brand Model Face
+        // Image 2: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
+        // Images 3+: Product Garment Fabrics (Max 8 total)
+        const publicFaceUrl = await ensurePublicUrl(customFaceUrl || modelFaceUrl);
+        const gUrls = publicGarmentUrls.slice(0, 6); // 1 face + 1 shoot + 6 garments = 8
+        imageUrls = [publicFaceUrl, publicShootUrl, ...gUrls];
+
+        const garmentRange = gUrls.length === 1 
+          ? "Reference Image 3" 
+          : `Reference Images 3 to ${imageUrls.length}`;
+
+        fluxPrompt = [
+          `High-end luxury Indian fashion catalog editorial portrait photograph.`,
+          `Facial Identity Transfer: Transfer the exact facial identity, features, and expression of the model in Reference Image 1 onto the model in Reference Image 2.`,
+          `Preserve Pose & Setting: Preserve the exact body pose, natural hand anatomy, posture, lighting, and background setting from Reference Image 2 (${shootTitle}: ${shootSetting || backgroundName}).`,
+          `Garment Draping: Drape the model in the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
+          notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
+          customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
+          `Transfer the exact intricate embroidery, zari borders, fabric color, weave texture, and authentic pleats/pallu drape directly onto the outfit.`,
+          `Seamless skin tone matching, realistic human hand anatomy, perfect physical fabric drape, sharp editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+        ].filter(Boolean).join(" ");
+
+      } else if (faceMode === "random_face") {
+        // DIVERSE INDIAN FACE MODE:
+        // Image 1: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
+        // Images 2+: Product Garment Fabrics (Max 8 total)
+        const gUrls = publicGarmentUrls.slice(0, 7);
+        imageUrls = [publicShootUrl, ...gUrls];
+
+        const garmentRange = gUrls.length === 1 
+          ? "Reference Image 2" 
+          : `Reference Images 2 to ${imageUrls.length}`;
+
+        fluxPrompt = [
+          `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural features, radiant skin, and a warm confident expression.`,
+          `Preserve Pose & Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from Reference Image 1 (${shootTitle}: ${shootSetting || backgroundName}).`,
+          `Garment Draping: Replace her outfit completely with the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
+          notesSummary ? `Product specifications: ${notesSummary}.` : "",
+          customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
+          `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and authentic drape directly onto her outfit.`,
+          `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+        ].filter(Boolean).join(" ");
+
+      } else {
+        // KEEP ORIGINAL SHOOT FACE (FLAGSHIP ZERO HALLUCINATION):
+        // Image 1: Master Photoshoot Reference (Model Face + Pose + Hands + Lighting + Setting)
+        // Images 2+: Product Garment Fabrics (Max 8 total)
+        const gUrls = publicGarmentUrls.slice(0, 7);
+        imageUrls = [publicShootUrl, ...gUrls];
+
+        const garmentRange = gUrls.length === 1 
+          ? "Reference Image 2" 
+          : `Reference Images 2 to ${imageUrls.length}`;
+
+        fluxPrompt = [
+          `High-end luxury Indian fashion catalog editorial photograph of the exact model from Reference Image 1 wearing the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
+          `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, skin tone, hair, natural hand anatomy, posture, pose, and background environment exactly as shown in Reference Image 1 (${shootTitle}).`,
+          `Replace her outfit completely with the authentic ethnic garment shown in ${garmentRange}.`,
+          notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
+          customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
+          `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and pallu drape directly onto the draped outfit.`,
+          `Harmonize natural ambient lighting, soft daylight highlights, and depth of field with the setting: ${shootSetting || backgroundName}.`,
+          `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape and pleat physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+        ].filter(Boolean).join(" ");
+      }
     }
 
     // Strict 4MP (4 Megapixel) Target Dimension Calculations (Multiples of 16 for latent stability)
@@ -377,7 +542,9 @@ export async function POST(req: NextRequest) {
       "deduct_balance_for_generation",
       {
         p_cost: cost,
-        p_prompt: `${mode.toUpperCase()}: Shoot: ${shootTitle} | Face: ${faceMode} | Bg: ${shootSetting || backgroundName}`,
+        p_prompt: mode === "magic"
+          ? `MAGIC: ${outfitType} | Pose: ${poseName} | Setting: ${backgroundName}`
+          : `STUDIO: ${shootTitle} | Face: ${faceMode} | Setting: ${shootSetting || backgroundName}`,
         p_garment_url: activeGarments.map(g => g.url).join(","),
         p_face_url: customFaceUrl || modelFaceUrl || null,
         p_output_url: generatedImageUrl

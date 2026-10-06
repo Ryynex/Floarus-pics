@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { GenerateWorkspace } from "@/components/GenerateWorkspace";
+import { MagicModeWorkspace } from "@/components/MagicModeWorkspace";
 
 interface Profile {
   id: string;
@@ -199,6 +200,10 @@ function DashboardContent() {
       {/* Main Tab Routing Contents */}
       {currentTab === "generate" && (
         <GenerateWorkspace />
+      )}
+
+      {currentTab === "magic" && (
+        <MagicModeWorkspace />
       )}
 
       {currentTab === "history" && (
