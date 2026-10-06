@@ -285,7 +285,7 @@ export function MagicModeWorkspace() {
       }
       addToast(
         "success",
-        `Magic Lookbook generated! Deducted ₹${result.cost.toFixed(2)}. Balance: ₹${result.newBalance.toFixed(2)}.`
+        `Custom Lookbook generated! Deducted 1 Credit. Balance: ${result.remainingCredits || (result.newBalance / 49).toFixed(1)} Credits.`
       );
 
       window.dispatchEvent(new Event("profile-updated"));
@@ -681,8 +681,8 @@ export function MagicModeWorkspace() {
             <div className="pt-2 border-t border-line flex flex-col sm:flex-row justify-between items-center gap-3">
               <div className="flex items-center gap-2 text-xs text-ink-soft">
                 <span>Cost:</span>
-                <span className="font-bold text-ink">₹{costEstimation.toFixed(2)}</span>
-                <span className="text-[11px] text-ink-faint">(Flux 2 Pro Ultra-Sharp)</span>
+                <span className="font-bold text-ink">1 Credit</span>
+                <span className="text-[11px] text-ink-faint">(₹49.00 · FLUX 2 Pro)</span>
               </div>
 
               <button
@@ -699,7 +699,7 @@ export function MagicModeWorkspace() {
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    <span>Generate All</span>
+                    <span>Generate Lookbook (1 Credit)</span>
                   </>
                 )}
               </button>

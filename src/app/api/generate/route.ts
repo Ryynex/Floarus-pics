@@ -205,11 +205,12 @@ export async function POST(req: NextRequest) {
 
     const balance = Number(profile.balance_inr);
     const cost = 49.00;
+    const availableCredits = Number((balance / 49).toFixed(1));
 
-    // Check balance
+    // Check balance (1 credit = ₹49)
     if (balance < cost) {
       return NextResponse.json({
-        error: `Insufficient balance. Required: ₹${cost.toFixed(2)}, Available: ₹${balance.toFixed(2)}. Please recharge your wallet.`
+        error: `Insufficient credits. Required: 1.0 Credit (₹49.00), Available: ${availableCredits.toFixed(1)} Credits (₹${balance.toFixed(2)}). Please recharge your wallet.`
       }, { status: 403 });
     }
 
@@ -221,8 +222,8 @@ export async function POST(req: NextRequest) {
       await new Promise((resolve) => setTimeout(resolve, 2500));
 
       const logPrompt = mode === "magic"
-        ? `MAGIC: ${outfitType} | Pose: ${poseName} | Bg: ${backgroundName} (${reason})`
-        : `STUDIO: ${shootTitle} | Face: ${faceMode} (${reason})`;
+        ? `CUSTOM LOOKBOOK: ${outfitType} | Pose: ${poseName} | Setting: ${backgroundName} (${reason})`
+        : `STUDIO LOOKBOOK: ${shootTitle} | Face: ${faceMode} (${reason})`;
 
       try {
         const { data: newBalance, error: rpcError } = await supabase.rpc(
@@ -240,12 +241,17 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: rpcError.message }, { status: 400 });
         }
 
+        const newBalNum = Number(newBalance);
+        const remCredits = Number((newBalNum / 49).toFixed(1));
+
         return NextResponse.json({
           success: true,
           outputUrl,
           blurPlaceholderUrl: outputUrl,
           cost,
-          newBalance: Number(newBalance),
+          creditsCost: 1,
+          newBalance: newBalNum,
+          remainingCredits: remCredits,
           simulated: true,
           fallbackMessage: `Notice: Operating in sandbox simulation mode. (${reason})`
         });
@@ -543,8 +549,8 @@ export async function POST(req: NextRequest) {
       {
         p_cost: cost,
         p_prompt: mode === "magic"
-          ? `MAGIC: ${outfitType} | Pose: ${poseName} | Setting: ${backgroundName}`
-          : `STUDIO: ${shootTitle} | Face: ${faceMode} | Setting: ${shootSetting || backgroundName}`,
+          ? `CUSTOM LOOKBOOK: ${outfitType} | Pose: ${poseName} | Setting: ${backgroundName}`
+          : `STUDIO LOOKBOOK: ${shootTitle} | Face: ${faceMode} | Setting: ${shootSetting || backgroundName}`,
         p_garment_url: activeGarments.map(g => g.url).join(","),
         p_face_url: customFaceUrl || modelFaceUrl || null,
         p_output_url: generatedImageUrl
@@ -554,6 +560,9 @@ export async function POST(req: NextRequest) {
     if (rpcError) {
       throw new Error(`Transaction failed: ${rpcError.message}`);
     }
+
+    const newBalNum = Number(newBalance);
+    const remCredits = Number((newBalNum / 49).toFixed(1));
 
     // 7. Non-blocking background archiving to Cloudinary (Does NOT delay user response)
     if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
@@ -572,7 +581,9 @@ export async function POST(req: NextRequest) {
       outputUrl: generatedImageUrl,
       blurPlaceholderUrl: generatedImageUrl,
       cost,
-      newBalance: Number(newBalance),
+      creditsCost: 1,
+      newBalance: newBalNum,
+      remainingCredits: remCredits,
       simulated: false
     });
 

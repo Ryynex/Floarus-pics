@@ -245,7 +245,7 @@ export function GenerateWorkspace() {
       setBlurPlaceholderUrl(result.blurPlaceholderUrl);
       addToast(
         "success",
-        `Lookbook generated successfully! Deducted ₹${result.cost.toFixed(2)}. Balance: ₹${result.newBalance.toFixed(2)}.`
+        `Lookbook generated successfully! Deducted 1 Credit. Balance: ${result.remainingCredits || (result.newBalance / 49).toFixed(1)} Credits.`
       );
 
       window.dispatchEvent(new Event("profile-updated"));
@@ -614,7 +614,7 @@ export function GenerateWorkspace() {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4" />
-                  <span>Generate Editorial Lookbook (₹{costEstimation.toFixed(2)})</span>
+                  <span>Generate Editorial Lookbook (1 Credit)</span>
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
@@ -636,7 +636,7 @@ export function GenerateWorkspace() {
                 </span>
               </div>
               <span className="text-xs font-semibold text-fuchsia-accent">
-                ₹{costEstimation.toFixed(2)} / Look
+                1 Credit (₹49.00) / Look
               </span>
             </div>
 

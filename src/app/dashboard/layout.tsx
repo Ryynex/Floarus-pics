@@ -240,19 +240,29 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
         {/* Bottom: Wallet Display Card & Action */}
         <div className="p-4 sm:p-6 border-t border-muted-purple flex flex-col gap-3 sm:gap-4">
           <div className="card p-3.5 sm:p-4 flex flex-col gap-2.5 sm:gap-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-ink-soft">
-              <Wallet className="h-4 w-4 text-purple-accent" />
-              <span>Wallet Balance</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-medium text-ink-soft">
+                <Wallet className="h-4 w-4 text-purple-accent" />
+                <span>Available Credits</span>
+              </div>
+              <span className="pill-neutral text-[9px] font-bold px-1.5 py-0.5 rounded text-fuchsia-accent bg-fuchsia-accent/10 border border-fuchsia-accent/20">
+                FLUX 2 PRO
+              </span>
             </div>
 
             <div className="flex flex-col gap-0.5">
-              <span className="label-caps">Balance (INR)</span>
-              <span className="text-xl sm:text-2xl font-bold text-ink tracking-tight">
+              <span className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight flex items-baseline gap-1.5">
                 {loading ? (
-                  <span className="h-5 w-16 bg-sand rounded animate-pulse inline-block" />
+                  <span className="h-7 w-20 bg-sand rounded animate-pulse inline-block" />
                 ) : (
-                  `₹${profile?.balance_inr.toFixed(2)}`
+                  <>
+                    <span>{((profile?.balance_inr || 0) / 49).toFixed(1)}</span>
+                    <span className="text-xs font-semibold text-ink-soft">Credits</span>
+                  </>
                 )}
+              </span>
+              <span className="text-[11px] text-ink-faint">
+                ₹{profile?.balance_inr?.toFixed(2) || "0.00"} · 1 Credit = 1 Image
               </span>
             </div>
 
@@ -261,7 +271,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
               className="btn-primary w-full py-2 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Top Up Balance</span>
+              <span>Add Credits</span>
             </button>
           </div>
 
@@ -324,7 +334,12 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="label-caps">Amount Transferred (INR)</label>
+                  <div className="flex justify-between items-center">
+                    <label className="label-caps">Amount Transferred (INR)</label>
+                    <span className="text-[11px] font-bold text-fuchsia-accent">
+                      ≈ {(parseFloat(topUpAmount || "0") / 49).toFixed(1)} Credits
+                    </span>
+                  </div>
                   <input
                     type="number"
                     min="1"
@@ -334,6 +349,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                     onChange={(e) => setTopUpAmount(e.target.value)}
                     className="input-field"
                   />
+                  <span className="text-[10px] text-ink-faint">Rate: 1 Credit = ₹49.00 (FLUX 2 Pro 4MP Generation)</span>
                 </div>
 
                 <div className="flex flex-col gap-1.5">

@@ -276,8 +276,9 @@ function DashboardContent() {
                         No output
                       </div>
                     )}
-                    <span className="absolute bottom-1.5 left-1.5 sm:bottom-2 sm:left-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-surface/95 border border-line text-[9px] sm:text-[10px] text-ink font-semibold">
-                      ₹{Number(row.cost_inr).toFixed(2)}
+                    <span className="absolute bottom-1.5 left-1.5 sm:bottom-2 sm:left-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-surface/95 border border-line text-[9px] sm:text-[10px] text-ink font-semibold flex items-center gap-1">
+                      <Coins className="h-2.5 w-2.5 text-fuchsia-accent" />
+                      <span>1 Credit</span>
                     </span>
                     <span className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold capitalize ${statusPillClass(row.status)}`}>
                       {row.status}
@@ -330,10 +331,10 @@ function DashboardContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-5">
             <div className="bg-sand border border-muted-purple p-3.5 sm:p-4 rounded-xl flex flex-col gap-2">
               <span className="label-caps">Generation Rate</span>
-              <span className="text-xl sm:text-2xl font-bold text-ink flex items-baseline gap-1 mt-0.5 sm:mt-1">
-                ₹49.00 <span className="text-xs font-medium text-ink-faint">/ image</span>
+              <span className="text-xl sm:text-2xl font-bold text-ink flex items-baseline gap-1.5 mt-0.5 sm:mt-1">
+                1 Credit <span className="text-xs font-medium text-ink-faint">(₹49.00 / image)</span>
               </span>
-              <p className="text-xs text-ink-soft leading-relaxed">Flat rate per catalog image generated through the Florus engine.</p>
+              <p className="text-xs text-ink-soft leading-relaxed">Flat 1 Credit rate per 4MP lookbook generated through the FLUX 2 Pro engine.</p>
             </div>
 
             <div className="bg-sand border border-muted-purple p-3.5 sm:p-4 rounded-xl flex flex-col gap-2">
@@ -409,7 +410,14 @@ function DashboardContent() {
                               <span className="text-[10px] text-ink-faint mt-0.5">{new Date(pay.created_at).toLocaleDateString()}</span>
                             </div>
                           </td>
-                          <td className="text-ink font-semibold whitespace-nowrap">+₹{Number(pay.amount).toFixed(2)}</td>
+                          <td className="text-ink font-semibold whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span>+₹{Number(pay.amount).toFixed(2)}</span>
+                              <span className="text-[10px] text-fuchsia-accent font-medium">
+                                +{(Number(pay.amount) / 49).toFixed(1)} Credits
+                              </span>
+                            </div>
+                          </td>
                           <td className="text-right">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusPillClass(pay.status)}`}>
                               {pay.status}
