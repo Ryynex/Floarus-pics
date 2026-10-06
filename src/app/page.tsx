@@ -31,7 +31,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Interactive Product Showcase State: Real Mannequin to FLUX 2 Pro Model
+  // Interactive Product Showcase State: Real Mannequin to Florus AI Model
   const [showcaseView, setShowcaseView] = useState<"split" | "after" | "before">("split");
 
   // Policy Modals State
@@ -136,7 +136,7 @@ export default function Home() {
                 <span className="text-xs font-bold text-ink">Real Transformation Showcase</span>
               </div>
               <span className="pill-success px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold tracking-wide">
-                FLUX.2 [pro] Powered
+                Florus AI Powered
               </span>
             </div>
 
@@ -159,18 +159,18 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Right: FLUX 2 Pro Model Output */}
+                  {/* Right: Florus AI Model Output */}
                   <div className="relative h-full overflow-hidden group">
                     <Image
                       src="/images/output_flux2_pro.jpg"
-                      alt="FLUX 2 Pro Editorial Model (Output)"
+                      alt="Florus AI Editorial Model (Output)"
                       fill
                       sizes="(max-width: 768px) 50vw, 280px"
                       className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       priority
                     />
                     <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 bg-fuchsia-accent/90 backdrop-blur-md px-2 sm:px-2.5 py-0.5 rounded-full shadow-lg">
-                      <span className="text-[9px] sm:text-[10px] font-bold tracking-wide text-white">OUTPUT · FLUX 2 Pro</span>
+                      <span className="text-[9px] sm:text-[10px] font-bold tracking-wide text-white">OUTPUT · Florus AI</span>
                     </div>
                   </div>
                 </div>
@@ -192,14 +192,14 @@ export default function Home() {
                 <div className="relative h-full w-full group">
                   <Image
                     src="/images/output_flux2_pro.jpg"
-                    alt="FLUX 2 Pro Editorial Indian Model"
+                    alt="Florus AI Editorial Indian Model"
                     fill
                     sizes="(max-width: 768px) 100vw, 576px"
                     className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
                     priority
                   />
                   <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-fuchsia-accent/90 backdrop-blur-md px-2.5 sm:px-3 py-1 rounded-full shadow-lg">
-                    <span className="text-[11px] sm:text-xs font-semibold text-white">OUTPUT: FLUX 2 Pro Editorial Model</span>
+                    <span className="text-[11px] sm:text-xs font-semibold text-white">OUTPUT: Florus AI Editorial Model</span>
                   </div>
                 </div>
               )}

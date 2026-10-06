@@ -246,7 +246,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                 <span>Available Credits</span>
               </div>
               <span className="pill-neutral text-[9px] font-bold px-1.5 py-0.5 rounded text-fuchsia-accent bg-fuchsia-accent/10 border border-fuchsia-accent/20">
-                FLUX 2 PRO
+                FLORUS AI
               </span>
             </div>
 
@@ -349,7 +349,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                     onChange={(e) => setTopUpAmount(e.target.value)}
                     className="input-field"
                   />
-                  <span className="text-[10px] text-ink-faint">Rate: 1 Credit = ₹49.00 (FLUX 2 Pro 4MP Generation)</span>
+                  <span className="text-[10px] text-ink-faint">1 Credit = 1 Florus AI 4MP Generation</span>
                 </div>
 
                 <div className="flex flex-col gap-1.5">

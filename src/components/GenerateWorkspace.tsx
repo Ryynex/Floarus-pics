@@ -185,7 +185,7 @@ export function GenerateWorkspace() {
     }
   };
 
-  // Generate Catalog Lookbook via FLUX 2 Pro Multi-Image Engine
+  // Generate Catalog Lookbook via Florus AI Multi-Image Engine
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (garments.length === 0) {
@@ -630,7 +630,7 @@ export function GenerateWorkspace() {
             {/* Header */}
             <div className="flex justify-between items-center text-sm border-b border-line pb-3">
               <div className="flex items-center gap-2">
-                <span className="text-ink font-bold text-xs sm:text-sm">FLUX 2 Pro Output</span>
+                <span className="text-ink font-bold text-xs sm:text-sm">Florus AI Output</span>
                 <span className="pill-success text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
                   4MP Resolution
                 </span>
@@ -662,7 +662,7 @@ export function GenerateWorkspace() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-line pb-2">
-                    <span className="text-[11px] sm:text-xs">3. FLUX 2 Pro Try-On</span>
+                    <span className="text-[11px] sm:text-xs">3. Florus AI Try-On</span>
                     <span className="text-fuchsia-accent font-semibold text-[11px] sm:text-xs animate-pulse">Synthesizing...</span>
                   </div>
                   <div className="flex items-center justify-between pb-1">
@@ -674,7 +674,7 @@ export function GenerateWorkspace() {
                 <div className="text-center flex flex-col gap-1 mt-1 sm:mt-2">
                   <span className="text-xs sm:text-sm font-bold text-ink uppercase tracking-wide">Synthesizing Lookbook</span>
                   <p className="text-[11px] sm:text-xs text-ink-soft max-w-[260px] leading-relaxed">
-                    This typically takes 8–14 seconds on Fal.ai GPU cluster.
+                    This typically takes 8–14 seconds on Florus AI GPU cluster.
                   </p>
                 </div>
               </div>
@@ -752,9 +752,9 @@ export function GenerateWorkspace() {
 
             {/* Footer Engine Guarantee */}
             <div className="border-t border-line pt-3 sm:pt-4 flex justify-between items-center text-[11px] sm:text-xs text-ink-faint">
-              <span className="truncate mr-2">FLUX 2 Pro Multi-Reference</span>
+              <span className="truncate mr-2">Florus AI Multi-Reference Engine</span>
               <span className="text-sage font-semibold flex items-center gap-1 shrink-0">
-                <span className="h-1.5 w-1.5 rounded-full bg-sage" /> GPU Online
+                <span className="h-1.5 w-1.5 rounded-full bg-sage" /> Engine Online
               </span>
             </div>
 

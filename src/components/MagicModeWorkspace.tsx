@@ -682,7 +682,7 @@ export function MagicModeWorkspace() {
               <div className="flex items-center gap-2 text-xs text-ink-soft">
                 <span>Cost:</span>
                 <span className="font-bold text-ink">1 Credit</span>
-                <span className="text-[11px] text-ink-faint">(FLUX 2 Pro 4MP)</span>
+                <span className="text-[11px] text-ink-faint">(Florus AI Ultra-Sharp 4MP)</span>
               </div>
 
               <button

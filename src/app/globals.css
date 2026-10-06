@@ -1,33 +1,37 @@
 @import "tailwindcss";
 
 @theme {
-  /* Warm dark palette — same token names so the UI flips cleanly */
-  --color-void: #14100c;
-  --color-surface: #1f1a15;
-  --color-fuchsia-accent: #d4784a;
-  --color-purple-accent: #d4a84b;
-  --color-muted-purple: #3a322a;
-  --color-foreground-muted: #b5a898;
+  /* Ultra-luxury Obsidian & Warm Copper Palette */
+  --font-sans: var(--font-sans), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-serif), Georgia, serif;
 
-  /* Extended warm tokens */
-  --color-ink: #f3ebe0;
-  --color-ink-soft: #b5a898;
-  --color-ink-faint: #8a7d6e;
-  --color-line: #3a322a;
-  --color-sand: #2a241c;
-  --color-clay-soft: #3d2e24;
-  --color-gold-soft: #3a3020;
+  --color-void: #0d0b09;
+  --color-surface: #17130f;
+  --color-fuchsia-accent: #d4784a;
+  --color-fuchsia-hover: #e0885c;
+  --color-purple-accent: #d4a84b;
+  --color-muted-purple: #302820;
+  --color-foreground-muted: #b8aba0;
+
+  /* Extended editorial tokens */
+  --color-ink: #f5eee6;
+  --color-ink-soft: #b8aba0;
+  --color-ink-faint: #7a6e62;
+  --color-line: #2e261f;
+  --color-sand: #1f1a14;
+  --color-clay-soft: #382b20;
+  --color-gold-soft: #362c1a;
   --color-sage: #8fb575;
-  --color-sage-soft: #24301c;
+  --color-sage-soft: #1d2b15;
   --color-brick: #d47a6e;
-  --color-brick-soft: #3a2220;
+  --color-brick-soft: #381d1b;
   --color-amber-warm: #d4a04a;
-  --color-amber-soft: #3a2e18;
+  --color-amber-soft: #382a14;
 }
 
 :root {
-  --background: #14100c;
-  --foreground: #f3ebe0;
+  --background: #0d0b09;
+  --foreground: #f5eee6;
 }
 
 html {
@@ -37,7 +41,7 @@ html {
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-outfit), "Outfit", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
