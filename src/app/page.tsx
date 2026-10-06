@@ -23,6 +23,7 @@ export default function Home() {
   const router = useRouter();
 
   // Authentication Form State
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,6 +31,41 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Check for active session on initial load and auto-redirect to dashboard
+  React.useEffect(() => {
+    let isMounted = true;
+
+    async function checkSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          router.replace("/dashboard");
+          return;
+        }
+      } catch (err) {
+        console.warn("Session verification note:", err);
+      } finally {
+        if (isMounted) {
+          setCheckingAuth(false);
+        }
+      }
+    }
+
+    checkSession();
+
+    // Subscribe to auth state changes for immediate redirection upon login
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+        router.replace("/dashboard");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [router]);
 
   // Interactive Product Showcase State: Real Mannequin to Florus AI Model
   const [showcaseView, setShowcaseView] = useState<"split" | "after" | "before">("split");
@@ -44,36 +80,52 @@ export default function Home() {
     setLoading(true);
     setMessage(null);
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!normalizedEmail || !cleanPassword) {
+      setMessage({ type: "error", text: "Please provide both email and password." });
+      setLoading(false);
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
+      setMessage({ type: "error", text: "Password must be at least 6 characters long." });
+      setLoading(false);
+      return;
+    }
+
     try {
       if (authMode === "login") {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: normalizedEmail,
+          password: cleanPassword,
         });
         if (error) throw error;
         setMessage({
           type: "success",
-          text: `Signed in as ${data.user?.email}. Redirecting to your studio...`,
+          text: `Verified! Redirecting to Florus Studio...`,
         });
-        setTimeout(() => {
-          router.push("/dashboard");
-        }, 1000);
+        router.replace("/dashboard");
       } else {
         // Sign up with additional metadata
         const { error } = await supabase.auth.signUp({
-          email,
-          password,
+          email: normalizedEmail,
+          password: cleanPassword,
           options: {
             data: {
-              company_name: company,
+              company_name: company.trim() || "Brand Client",
             },
           },
         });
         if (error) throw error;
         setMessage({
           type: "success",
-          text: "Registration started! Check your email for the verification link.",
+          text: "Account registered! If confirmation is required, please check your inbox.",
         });
+        setTimeout(() => {
+          router.replace("/dashboard");
+        }, 1500);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred. Please try again.";
@@ -85,6 +137,23 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen w-full bg-void flex flex-col items-center justify-center gap-4 text-ink">
+        <div className="flex items-center gap-3">
+          <img src="/images/florus_logo.png" alt="Florus Logo" className="h-9 w-9 object-contain animate-pulse" />
+          <span className="text-base font-bold tracking-[0.18em] text-ink">
+            FLORUS<span className="text-fuchsia-accent">.</span>PICS
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-ink-soft">
+          <span className="h-4 w-4 border-2 border-fuchsia-accent/30 border-t-fuchsia-accent rounded-full animate-spin" />
+          <span>Verifying security session...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen w-full flex flex-col justify-between overflow-x-hidden bg-void">
