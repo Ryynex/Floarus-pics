@@ -262,7 +262,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                 )}
               </span>
               <span className="text-[11px] text-ink-faint">
-                ₹{profile?.balance_inr?.toFixed(2) || "0.00"} · 1 Credit = 1 Image
+                1 Credit = 1 Lookbook Generation
               </span>
             </div>
 
@@ -515,7 +515,9 @@ export default function DashboardLayout({
             {/* Wallet Balance */}
             <div className="flex items-center gap-2 bg-sand border border-muted-purple px-3 py-1.5 rounded-lg text-sm">
               <Wallet className="h-3.5 w-3.5 text-purple-accent" />
-              <span className="text-ink font-semibold">₹{profileBalance !== null ? profileBalance.toFixed(2) : "0.00"}</span>
+              <span className="text-ink font-semibold">
+                {profileBalance !== null ? `${(profileBalance / 49).toFixed(1)} Credits` : "0.0 Credits"}
+              </span>
             </div>
 
             {/* My Catalog */}
@@ -558,7 +560,9 @@ export default function DashboardLayout({
 
           <div className="flex items-center gap-2 bg-sand border border-muted-purple px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-sm">
             <Wallet className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-accent" />
-            <span className="text-ink font-semibold">₹{profileBalance !== null ? profileBalance.toFixed(2) : "0.00"}</span>
+            <span className="text-ink font-semibold">
+              {profileBalance !== null ? `${(profileBalance / 49).toFixed(1)} Credits` : "0.0 Credits"}
+            </span>
           </div>
         </header>
 

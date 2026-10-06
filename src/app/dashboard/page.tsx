@@ -332,7 +332,7 @@ function DashboardContent() {
             <div className="bg-sand border border-muted-purple p-3.5 sm:p-4 rounded-xl flex flex-col gap-2">
               <span className="label-caps">Generation Rate</span>
               <span className="text-xl sm:text-2xl font-bold text-ink flex items-baseline gap-1.5 mt-0.5 sm:mt-1">
-                1 Credit <span className="text-xs font-medium text-ink-faint">(₹49.00 / image)</span>
+                1 Credit <span className="text-xs font-medium text-ink-faint">/ lookbook</span>
               </span>
               <p className="text-xs text-ink-soft leading-relaxed">Flat 1 Credit rate per 4MP lookbook generated through the FLUX 2 Pro engine.</p>
             </div>
@@ -411,12 +411,9 @@ function DashboardContent() {
                             </div>
                           </td>
                           <td className="text-ink font-semibold whitespace-nowrap">
-                            <div className="flex flex-col">
-                              <span>+₹{Number(pay.amount).toFixed(2)}</span>
-                              <span className="text-[10px] text-fuchsia-accent font-medium">
-                                +{(Number(pay.amount) / 49).toFixed(1)} Credits
-                              </span>
-                            </div>
+                            <span className="text-sm font-bold text-fuchsia-accent">
+                              +{(Number(pay.amount) / 49).toFixed(1)} Credits
+                            </span>
                           </td>
                           <td className="text-right">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusPillClass(pay.status)}`}>

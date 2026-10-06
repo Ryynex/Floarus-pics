@@ -207,10 +207,10 @@ export async function POST(req: NextRequest) {
     const cost = 49.00;
     const availableCredits = Number((balance / 49).toFixed(1));
 
-    // Check balance (1 credit = ₹49)
+    // Check balance (1 credit = 1 generation)
     if (balance < cost) {
       return NextResponse.json({
-        error: `Insufficient credits. Required: 1.0 Credit (₹49.00), Available: ${availableCredits.toFixed(1)} Credits (₹${balance.toFixed(2)}). Please recharge your wallet.`
+        error: `Insufficient credits. Required: 1.0 Credit, Available: ${availableCredits.toFixed(1)} Credits. Please add credits to your account.`
       }, { status: 403 });
     }
 

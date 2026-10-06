@@ -636,7 +636,7 @@ export function GenerateWorkspace() {
                 </span>
               </div>
               <span className="text-xs font-semibold text-fuchsia-accent">
-                1 Credit (₹49.00) / Look
+                1 Credit / Look
               </span>
             </div>
 
