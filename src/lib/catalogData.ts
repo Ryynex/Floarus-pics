@@ -71,10 +71,9 @@ export const WORKFLOW_MODES: WorkflowMode[] = [
   },
   {
     id: "magic",
-    title: "Magic Mode",
-    badge: "Beta",
+    title: "Custom Lookbooks",
     iconName: "Sparkles",
-    description: "Upload any outfit + notes — AI detects the type and drapes it on a model",
+    description: "Upload any outfit + notes — AI drapes it on your chosen model, pose & setting",
     outfitTypeDefault: "Generic ethnic outfit",
     instructions: "Upload photos of any outfit — saree, lehenga, kurta, suit — add a note per photo, and the AI drapes it on a beautiful model."
   },

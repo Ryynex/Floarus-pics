@@ -296,8 +296,7 @@ export function GenerateWorkspace() {
           className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-ink-soft hover:text-ink hover:bg-surface/50"
         >
           <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
-          <span>Magic Mode</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-extrabold bg-fuchsia-accent/15 text-fuchsia-accent border border-fuchsia-accent/30">BETA</span>
+          <span>Custom Lookbooks</span>
         </button>
       </div>
 

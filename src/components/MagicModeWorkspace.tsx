@@ -336,8 +336,7 @@ export function MagicModeWorkspace() {
           className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-fuchsia-accent text-[#1F1A15] shadow-sm"
         >
           <Sparkles className="h-3.5 w-3.5" />
-          <span>Magic Mode</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-extrabold bg-[#1F1A15]/10">BETA</span>
+          <span>Custom Lookbooks</span>
         </button>
       </div>
 
@@ -367,7 +366,7 @@ export function MagicModeWorkspace() {
         {/* Left Column: Configuration & Uploader */}
         <section className="lg:col-span-7 flex flex-col gap-5 sm:gap-6">
           <div className="card p-4 sm:p-6 md:p-7 flex flex-col gap-5 sm:gap-6 shadow-xl">
-            {/* Header with Title & Badge matching video */}
+            {/* Header with Title & Badge */}
             <div className="flex flex-col gap-2 border-b border-line pb-4 sm:pb-5">
               <div className="flex justify-between items-start gap-2">
                 <div className="flex flex-col gap-1">
@@ -376,7 +375,7 @@ export function MagicModeWorkspace() {
                       Create a new batch
                     </h2>
                     <span className="pill-neutral text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 bg-fuchsia-accent/15 border border-fuchsia-accent/30 text-fuchsia-accent">
-                      <Sparkles className="h-3 w-3" /> Magic Mode (Beta)
+                      <Sparkles className="h-3 w-3" /> Custom Lookbooks
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-ink-soft">
@@ -385,11 +384,11 @@ export function MagicModeWorkspace() {
                 </div>
               </div>
 
-              {/* Informational Guidance Box matching video */}
+              {/* Informational Guidance Box */}
               <div className="p-3.5 sm:p-4 rounded-xl bg-sand/80 border border-line flex flex-col gap-1.5 mt-1">
                 <div className="flex items-center gap-2 text-xs font-bold text-ink">
                   <span className="h-2 w-2 rounded-full bg-fuchsia-accent animate-pulse" />
-                  <span>Magic Mode (Beta)</span>
+                  <span>Custom Lookbooks</span>
                 </div>
                 <p className="text-xs text-ink-soft leading-relaxed">
                   Upload photos of any outfit — saree, lehenga, kurta, suit — add a note per photo, and the AI drapes it on a beautiful model.

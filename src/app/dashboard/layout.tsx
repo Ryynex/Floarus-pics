@@ -151,9 +151,16 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
   };
 
   // Navigation Items
-  const navItems = [
+  interface NavItem {
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: string;
+  }
+
+  const navItems: NavItem[] = [
     { id: "generate", label: "Studio Lookbooks", icon: Layers },
-    { id: "magic", label: "Magic Mode", icon: Sparkles, badge: "Beta" },
+    { id: "magic", label: "Custom Lookbooks", icon: Sparkles },
     { id: "history", label: "Catalog History", icon: History },
     { id: "billing", label: "Billing & Payments", icon: CreditCard },
     { id: "settings", label: "Settings", icon: Settings },
