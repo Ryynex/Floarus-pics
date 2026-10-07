@@ -223,7 +223,7 @@ export function MagicModeWorkspace() {
 
       // Progress animation steps
       setTimeout(() => setLoadingStage("Mapping fabric pleats, zari & textures..."), 1200);
-      setTimeout(() => setLoadingStage("Rendering 4MP photorealistic editorial lookbook..."), 2600);
+      setTimeout(() => setLoadingStage("Rendering 5MP photorealistic editorial lookbook..."), 2600);
 
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -682,7 +682,7 @@ export function MagicModeWorkspace() {
               <div className="flex items-center gap-2 text-xs text-ink-soft">
                 <span>Cost:</span>
                 <span className="font-bold text-ink">1 Credit</span>
-                <span className="text-[11px] text-ink-faint">(Florus AI Ultra-Sharp 4MP)</span>
+                <span className="text-[11px] text-ink-faint">(Florus AI Ultra-Sharp 5MP)</span>
               </div>
 
               <button
@@ -760,7 +760,7 @@ export function MagicModeWorkspace() {
                       className="btn-primary w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg"
                     >
                       <Download className="h-4 w-4" />
-                      Download Lossless 4MP Image
+                      Download Lossless 5MP Image
                     </button>
                     <button
                       type="button"
@@ -845,7 +845,7 @@ export function MagicModeWorkspace() {
               onClick={() => downloadImage(outputUrl, `florus-magic-${Date.now()}.png`)}
               className="btn-primary px-6 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg"
             >
-              <Download className="h-4 w-4" /> Download Lossless 4MP Image
+              <Download className="h-4 w-4" /> Download Lossless 5MP Image
             </button>
           </div>
         </div>

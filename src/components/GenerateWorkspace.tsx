@@ -632,7 +632,7 @@ export function GenerateWorkspace() {
               <div className="flex items-center gap-2">
                 <span className="text-ink font-bold text-xs sm:text-sm">Florus AI Output</span>
                 <span className="pill-success text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
-                  4MP Resolution
+                  5MP Ultra-Resolution
                 </span>
               </div>
               <span className="text-xs font-semibold text-fuchsia-accent">
@@ -789,10 +789,10 @@ export function GenerateWorkspace() {
             </div>
 
             <div className="w-full flex flex-col sm:flex-row justify-between items-center gap-2 mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-white/10 text-sm text-white">
-              <span className="text-[11px] sm:text-xs text-zinc-400">Photorealistic 4MP Uncompressed Asset</span>
+              <span className="text-[11px] sm:text-xs text-zinc-400">Photorealistic 5MP Uncompressed Asset</span>
               <button
                 type="button"
-                onClick={() => downloadImage(outputUrl, `florus-4k.png`)}
+                onClick={() => downloadImage(outputUrl, `florus-5k.png`)}
                 className="btn-primary w-full sm:w-auto px-4 py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-xs uppercase tracking-wide cursor-pointer shadow-md"
               >
                 <Download className="h-4 w-4" /> Save PNG

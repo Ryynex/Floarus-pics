@@ -410,9 +410,9 @@ export async function POST(req: NextRequest) {
         promptParts.push(`Styling & drape instructions: ${customNotes}.`);
       }
 
-      // Quality & Physics
+      // Quality, Skin Realism & Fabric Physics
       promptParts.push(
-        `Precision Details: Transfer all intricate zari embroidery, weave motifs, border highlights, fabric sheen, and authentic pleat/pallu falls with true physical gravity. Flawless human anatomy, realistic slender hands and five natural fingers, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+        `Hyper-realistic raw photography aesthetic: authentic non-glossy human skin texture, visible natural micro-pores and subtle fine skin grain, soft matte finish without artificial plastic smoothness or waxy glow. Authentic tactile textile realism: crisp woven fabric texture, distinct warp and weft thread grain, tactile yarn slubs, genuine zari embroidery relief, and realistic fabric gravity drape. Natural human anatomy, slender hands with five natural fingers, Hasselblad editorial studio lighting, 8k resolution, photorealistic master lookbook.`
       );
 
       fluxPrompt = promptParts.filter(Boolean).join(" ");
@@ -445,8 +445,8 @@ export async function POST(req: NextRequest) {
           `Garment Draping: Drape the model in the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-          `Transfer the exact intricate embroidery, zari borders, fabric color, weave texture, and authentic pleats/pallu drape directly onto the outfit.`,
-          `Seamless skin tone matching, realistic human hand anatomy, perfect physical fabric drape, sharp editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+          `Transfer the exact intricate embroidery, zari borders, fabric color, tactile weave texture, and authentic pleats/pallu drape directly onto the outfit.`,
+          `Hyper-realistic natural skin micro-pores, matte non-glossy skin finish, un-airbrushed raw texture, realistic slender hand anatomy, tactile garment weave grain with true physical drape gravity, sharp editorial lighting, 8k resolution master lookbook.`
         ].filter(Boolean).join(" ");
 
       } else if (faceMode === "random_face") {
@@ -461,13 +461,13 @@ export async function POST(req: NextRequest) {
           : `Reference Images 2 to ${imageUrls.length}`;
 
         fluxPrompt = [
-          `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural features, radiant skin, and a warm confident expression.`,
+          `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural authentic features, non-glossy matte skin, and a warm confident expression.`,
           `Preserve Pose & Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from Reference Image 1 (${shootTitle}: ${shootSetting || backgroundName}).`,
           `Garment Draping: Replace her outfit completely with the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
           notesSummary ? `Product specifications: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-          `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and authentic drape directly onto her outfit.`,
-          `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+          `Transfer the exact intricate embroidery, zari borders, fabric color, yarn weave texture, and authentic drape directly onto her outfit.`,
+          `Hyper-realistic human skin with visible fine pores and subtle natural grain (no waxy or plastic airbrushing), realistic slender hands and fingers with gold bangles, tactile textile weave with authentic physical drape physics, sharp studio editorial lighting, 8k resolution master lookbook.`
         ].filter(Boolean).join(" ");
 
       } else {
@@ -483,31 +483,31 @@ export async function POST(req: NextRequest) {
 
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial photograph of the exact model from Reference Image 1 wearing the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
-          `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, skin tone, hair, natural hand anatomy, posture, pose, and background environment exactly as shown in Reference Image 1 (${shootTitle}).`,
+          `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and background environment exactly as shown in Reference Image 1 (${shootTitle}).`,
           `Replace her outfit completely with the authentic ethnic garment shown in ${garmentRange}.`,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-          `Transfer the exact intricate embroidery, zari borders, fabric color, weave, texture, and pallu drape directly onto the draped outfit.`,
+          `Transfer the exact intricate embroidery, zari borders, fabric color, tactile thread weave texture, and pallu drape directly onto the draped outfit.`,
           `Harmonize natural ambient lighting, soft daylight highlights, and depth of field with the setting: ${shootSetting || backgroundName}.`,
-          `Flawless human anatomy, realistic slender hands and fingers with gold bangles, perfect authentic fabric drape and pleat physics, sharp studio editorial lighting, 8k resolution, photorealistic luxury lookbook.`
+          `Hyper-realistic natural skin with subtle pores and matte finish (non-glossy, non-waxy, raw photographic realism), realistic slender hands and fingers, tangible fabric thread grain with physical drape and pleat gravity, sharp studio editorial lighting, 8k resolution master lookbook.`
         ].filter(Boolean).join(" ");
       }
     }
 
-    // Strict 4MP (4 Megapixel) Target Dimension Calculations (Multiples of 16 for latent stability)
-    let dimensions = { width: 1792, height: 2240 }; // 4:5 Editorial Portrait (4,014,080 pixels = ~4.01 MP)
+    // Strict 5MP (5 Megapixel) Target Dimension Calculations (Multiples of 16 for latent stability)
+    let dimensions = { width: 2048, height: 2560 }; // 4:5 Editorial Portrait (5,242,880 pixels = ~5.24 MP)
 
     if (aspectRatio === "3:4") {
-      dimensions = { width: 1728, height: 2304 }; // 3:4 Catalog Portrait (3,981,312 pixels = ~3.98 MP)
+      dimensions = { width: 1968, height: 2624 }; // 3:4 Catalog Portrait (5,164,032 pixels = ~5.16 MP)
     } else if (aspectRatio === "9:16") {
-      dimensions = { width: 1536, height: 2688 }; // 9:16 Full Length Runway (4,128,768 pixels = ~4.12 MP)
+      dimensions = { width: 1728, height: 3072 }; // 9:16 Full Length Runway (5,308,416 pixels = ~5.31 MP)
     } else if (aspectRatio === "1:1") {
-      dimensions = { width: 2048, height: 2048 }; // 1:1 High-Res Square (4,194,304 pixels = ~4.19 MP)
+      dimensions = { width: 2304, height: 2304 }; // 1:1 High-Res Square (5,308,416 pixels = ~5.31 MP)
     }
 
-    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${imageUrls.length}, Target: ${dimensions.width}x${dimensions.height} ~4MP)`);
+    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${imageUrls.length}, Target: ${dimensions.width}x${dimensions.height} ~5MP)`);
 
-    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 4MP Ultra-Sharp Asset)
+    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 5MP Ultra-Sharp Asset)
     let falResult: any;
     try {
       falResult = await retryOperation(async () => {

@@ -349,7 +349,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                     onChange={(e) => setTopUpAmount(e.target.value)}
                     className="input-field"
                   />
-                  <span className="text-[10px] text-ink-faint">1 Credit = 1 Florus AI 4MP Generation</span>
+                  <span className="text-[10px] text-ink-faint">1 Credit = 1 Florus AI 5MP Generation</span>
                 </div>
 
                 <div className="flex flex-col gap-1.5">

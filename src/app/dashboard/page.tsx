@@ -334,7 +334,7 @@ function DashboardContent() {
               <span className="text-xl sm:text-2xl font-bold text-ink flex items-baseline gap-1.5 mt-0.5 sm:mt-1">
                 1 Credit <span className="text-xs font-medium text-ink-faint">/ lookbook</span>
               </span>
-              <p className="text-xs text-ink-soft leading-relaxed">Flat 1 Credit rate per 4MP lookbook generated through the Florus AI engine.</p>
+              <p className="text-xs text-ink-soft leading-relaxed">Flat 1 Credit rate per 5MP lookbook generated through the Florus AI engine.</p>
             </div>
 
             <div className="bg-sand border border-muted-purple p-3.5 sm:p-4 rounded-xl flex flex-col gap-2">
