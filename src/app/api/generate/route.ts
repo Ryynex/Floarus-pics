@@ -4,6 +4,7 @@ import { v2 as cloudinary } from "cloudinary";
 import { fal } from "@fal-ai/client";
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
@@ -23,6 +24,89 @@ if (falKey) {
 
 // In-memory cache for uploaded local assets so they are only uploaded to Fal storage once
 const publicUrlCache = new Map<string, string>();
+
+/**
+ * Helper to fetch image buffer from remote URL or read from local disk
+ */
+async function fetchImageBuffer(urlOrPath: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  const trimmed = urlOrPath.trim();
+
+  // If base64 data URL
+  if (trimmed.startsWith("data:")) {
+    const matches = trimmed.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (matches && matches.length === 3) {
+      return {
+        mimeType: matches[1],
+        buffer: Buffer.from(matches[2], "base64"),
+      };
+    }
+  }
+
+  // If remote HTTP(S) URL
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    const res = await fetch(trimmed);
+    if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${trimmed}`);
+    const arrayBuffer = await res.arrayBuffer();
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      mimeType: contentType,
+    };
+  }
+
+  // Local file relative to public folder
+  let localRelative = trimmed;
+  if (localRelative.startsWith("/")) localRelative = localRelative.slice(1);
+  const filePath = path.join(process.cwd(), "public", localRelative);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File does not exist on disk: ${filePath}`);
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+  return {
+    buffer: fs.readFileSync(filePath),
+    mimeType,
+  };
+}
+
+/**
+ * Automatically downsizes and prepares any input image (local or remote) for Fal.ai
+ * to strictly prevent exceeding Fal's 9 Megapixel total area budget.
+ */
+async function prepareOptimizedFalUrl(urlOrPath: string, maxDim: number): Promise<string> {
+  if (!urlOrPath) return "";
+  const trimmed = urlOrPath.trim();
+  const cacheKey = `${trimmed}_dim_${maxDim}`;
+  if (publicUrlCache.has(cacheKey)) {
+    return publicUrlCache.get(cacheKey)!;
+  }
+
+  try {
+    const { buffer: inputBuffer } = await fetchImageBuffer(trimmed);
+    const optimizedBuffer = await sharp(inputBuffer)
+      .resize({
+        width: maxDim,
+        height: maxDim,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 86, mozjpeg: true })
+      .toBuffer();
+
+    const blob = new Blob([new Uint8Array(optimizedBuffer)], { type: "image/jpeg" });
+    const uploadedUrl = await fal.storage.upload(blob);
+    if (uploadedUrl) {
+      publicUrlCache.set(cacheKey, uploadedUrl);
+      console.log(`DEBUG: Auto-downsized input image '${trimmed.slice(0, 40)}' (maxDim ${maxDim}px) uploaded to Fal: ${uploadedUrl}`);
+      return uploadedUrl;
+    }
+  } catch (err) {
+    console.warn(`Warning: Failed to optimize input image '${trimmed.slice(0, 40)}':`, err);
+  }
+
+  // Fallback to ensurePublicUrl if optimization failed
+  return await ensurePublicUrl(trimmed);
+}
 
 /**
  * Ensures any image URL (local file path or remote) is accessible via a public HTTPS URL for Fal.ai.
@@ -69,7 +153,7 @@ async function ensurePublicUrl(urlOrPath: string): Promise<string> {
       const fileBuffer = fs.readFileSync(filePath);
       const ext = path.extname(filePath).toLowerCase();
       const mimeType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
-      const blob = new Blob([fileBuffer], { type: mimeType });
+      const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
       const uploadedUrl = await fal.storage.upload(blob);
       if (uploadedUrl) {
         publicUrlCache.set(trimmed, uploadedUrl);
@@ -494,26 +578,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Strict 5MP (5 Megapixel) Target Dimension Calculations (Multiples of 16 for latent stability)
-    let dimensions = { width: 2048, height: 2560 }; // 4:5 Editorial Portrait (5,242,880 pixels = ~5.24 MP)
+    // Strict Native 4.5 MP - 5.0 MP Target Dimension Calculations (Multiples of 16 for latent stability)
+    let dimensions = { width: 1920, height: 2400 }; // 4:5 Editorial Portrait (4,608,000 pixels = ~4.61 MP)
 
     if (aspectRatio === "3:4") {
-      dimensions = { width: 1968, height: 2624 }; // 3:4 Catalog Portrait (5,164,032 pixels = ~5.16 MP)
+      dimensions = { width: 1872, height: 2496 }; // 3:4 Catalog Portrait (4,672,512 pixels = ~4.67 MP)
     } else if (aspectRatio === "9:16") {
-      dimensions = { width: 1728, height: 3072 }; // 9:16 Full Length Runway (5,308,416 pixels = ~5.31 MP)
+      dimensions = { width: 1632, height: 2896 }; // 9:16 Full Length Runway (4,726,272 pixels = ~4.73 MP)
     } else if (aspectRatio === "1:1") {
-      dimensions = { width: 2304, height: 2304 }; // 1:1 High-Res Square (5,308,416 pixels = ~5.31 MP)
+      dimensions = { width: 2160, height: 2160 }; // 1:1 High-Res Square (4,665,600 pixels = ~4.67 MP)
     }
 
-    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${imageUrls.length}, Target: ${dimensions.width}x${dimensions.height} ~5MP)`);
+    // Automatically downsize all input images to guarantee total input area <= 3.8 MP
+    // so that Output (~4.6-4.7 MP) + Inputs (<= 3.8 MP) <= 8.5 MP < Fal's 9.0 MP hard limit!
+    const totalInputImages = imageUrls.length;
+    const allowedAreaPerImage = Math.floor(3800000 / Math.max(1, totalInputImages));
+    const maxInputDim = Math.min(1024, Math.floor(Math.sqrt(allowedAreaPerImage)));
 
-    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 5MP Ultra-Sharp Asset)
+    console.log(`DEBUG: Auto-downsizing ${totalInputImages} input image(s) to max dimension ${maxInputDim}px (~${(allowedAreaPerImage / 1e6).toFixed(2)} MP each) to protect Fal 9MP budget.`);
+
+    const optimizedInputUrls = await Promise.all(
+      imageUrls.map(async (u) => await prepareOptimizedFalUrl(u, maxInputDim))
+    );
+
+    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${optimizedInputUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP)`);
+
+    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 4.5MP-5.0MP Ultra-Sharp Asset)
     let falResult: any;
     try {
       falResult = await retryOperation(async () => {
         return await fal.run("fal-ai/flux-2-pro/edit", {
           input: {
-            image_urls: imageUrls,
+            image_urls: optimizedInputUrls,
             prompt: fluxPrompt,
             image_size: dimensions,
             output_format: "png",
