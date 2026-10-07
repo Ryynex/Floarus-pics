@@ -31,7 +31,9 @@ import {
   PRESET_MODELS,
   getSavedCustomModels,
   getSavedGarments,
-  saveGarmentsToStorage
+  saveGarmentsToStorage,
+  getSavedStudioPreferences,
+  saveStudioPreferences
 } from "@/lib/catalogData";
 import { MasterShootPickerModal } from "./modals/MasterShootPickerModal";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
@@ -70,16 +72,31 @@ export function GenerateWorkspace() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
 
-  // Load custom saved models and permanent garments on mount
+  const isLoadedRef = useRef(false);
+
+  // Load custom saved models, permanent garments, and user preferences on mount
   useEffect(() => {
-    const savedModels = getSavedCustomModels();
-    if (savedModels.length > 0) {
-      setSelectedModel(savedModels[0]);
+    // 1. Load permanent user workspace preferences
+    const savedPrefs = getSavedStudioPreferences();
+    if (savedPrefs) {
+      if (savedPrefs.selectedShoot) setSelectedShoot(savedPrefs.selectedShoot);
+      if (savedPrefs.faceMode) setFaceMode(savedPrefs.faceMode);
+      if (savedPrefs.selectedModel) setSelectedModel(savedPrefs.selectedModel);
+      if (savedPrefs.outfitType) setOutfitType(savedPrefs.outfitType);
+      if (savedPrefs.customStylingNotes !== undefined) setCustomStylingNotes(savedPrefs.customStylingNotes);
+      if (savedPrefs.outputUrl) setOutputUrl(savedPrefs.outputUrl);
+    } else {
+      const savedModels = getSavedCustomModels();
+      if (savedModels.length > 0) {
+        setSelectedModel(savedModels[0]);
+      }
     }
+
+    // 2. Load permanent uploaded outfit fabric photos
     const savedGarments = getSavedGarments();
     if (savedGarments.length > 0) {
       setGarments(
-        savedGarments.map((g, idx) => ({
+        savedGarments.slice(0, 5).map((g, idx) => ({
           id: g.id,
           url: g.url,
           note: g.note || "",
@@ -87,7 +104,29 @@ export function GenerateWorkspace() {
         }))
       );
     }
+
+    isLoadedRef.current = true;
   }, []);
+
+  // Automatically save all user choices locally whenever any option changes
+  useEffect(() => {
+    if (!isLoadedRef.current) return;
+    saveStudioPreferences({
+      selectedShoot,
+      faceMode,
+      selectedModel,
+      outfitType,
+      customStylingNotes,
+      outputUrl
+    });
+  }, [
+    selectedShoot,
+    faceMode,
+    selectedModel,
+    outfitType,
+    customStylingNotes,
+    outputUrl
+  ]);
 
   // Toast Notifications
   interface Toast {
@@ -558,7 +597,10 @@ export function GenerateWorkspace() {
                 {garments.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setGarments([])}
+                    onClick={() => {
+                      setGarments([]);
+                      saveGarmentsToStorage([]);
+                    }}
                     className="text-[11px] sm:text-xs font-medium text-ink-faint hover:text-brick uppercase cursor-pointer"
                   >
                     Clear All

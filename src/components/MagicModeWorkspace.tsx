@@ -42,7 +42,9 @@ import {
   PRESET_JEWELLERY,
   getSavedCustomModels,
   getSavedGarments,
-  saveGarmentsToStorage
+  saveGarmentsToStorage,
+  getSavedMagicPreferences,
+  saveMagicPreferences
 } from "@/lib/catalogData";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
 import { PosePickerModal } from "./modals/PosePickerModal";
@@ -89,16 +91,37 @@ export function MagicModeWorkspace() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [recentGenerations, setRecentGenerations] = useState<string[]>([]);
 
-  // Load custom saved models and permanent garments on mount
+  const isLoadedRef = useRef(false);
+
+  // Load custom saved models, permanent garments, and all user selected options on mount
   useEffect(() => {
-    const savedModels = getSavedCustomModels();
-    if (savedModels.length > 0) {
-      setSelectedModel(savedModels[0]);
+    // 1. Load permanent user workspace preferences
+    const savedPrefs = getSavedMagicPreferences();
+    if (savedPrefs) {
+      if (savedPrefs.selectedModel) setSelectedModel(savedPrefs.selectedModel);
+      if (savedPrefs.selectedPose) setSelectedPose(savedPrefs.selectedPose);
+      if (savedPrefs.selectedBackground) setSelectedBackground(savedPrefs.selectedBackground);
+      if (savedPrefs.backgroundMode) setBackgroundMode(savedPrefs.backgroundMode);
+      if (savedPrefs.selectedHairstyle) setSelectedHairstyle(savedPrefs.selectedHairstyle);
+      if (savedPrefs.selectedJewellery) setSelectedJewellery(savedPrefs.selectedJewellery);
+      if (savedPrefs.outfitType) setOutfitType(savedPrefs.outfitType);
+      if (savedPrefs.customStylingNotes !== undefined) setCustomStylingNotes(savedPrefs.customStylingNotes);
+      if (savedPrefs.outputUrl) setOutputUrl(savedPrefs.outputUrl);
+      if (savedPrefs.recentGenerations && savedPrefs.recentGenerations.length > 0) {
+        setRecentGenerations(savedPrefs.recentGenerations);
+      }
+    } else {
+      const savedModels = getSavedCustomModels();
+      if (savedModels.length > 0) {
+        setSelectedModel(savedModels[0]);
+      }
     }
+
+    // 2. Load permanent uploaded outfit photos
     const savedGarments = getSavedGarments();
     if (savedGarments.length > 0) {
       setPhotos(
-        savedGarments.map((g) => ({
+        savedGarments.slice(0, 5).map((g) => ({
           id: g.id,
           url: g.url,
           note: g.note || "",
@@ -106,7 +129,37 @@ export function MagicModeWorkspace() {
         }))
       );
     }
+
+    isLoadedRef.current = true;
   }, []);
+
+  // Automatically save all user choices locally whenever any option changes
+  useEffect(() => {
+    if (!isLoadedRef.current) return;
+    saveMagicPreferences({
+      selectedModel,
+      selectedPose,
+      selectedBackground,
+      backgroundMode,
+      selectedHairstyle,
+      selectedJewellery,
+      outfitType,
+      customStylingNotes,
+      outputUrl,
+      recentGenerations
+    });
+  }, [
+    selectedModel,
+    selectedPose,
+    selectedBackground,
+    backgroundMode,
+    selectedHairstyle,
+    selectedJewellery,
+    outfitType,
+    customStylingNotes,
+    outputUrl,
+    recentGenerations
+  ]);
 
   // Toast Notifications
   interface Toast {
@@ -632,9 +685,23 @@ export function MagicModeWorkspace() {
                     Upload up to 5 photos of your outfit. A note box appears under each photo (optional) so you can tell the AI what it is or how to drape it.
                   </p>
                 </div>
-                <span className="pill-neutral text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
-                  {photos.length} / 5
-                </span>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  {photos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotos([]);
+                        saveGarmentsToStorage([]);
+                      }}
+                      className="text-[11px] font-medium text-ink-faint hover:text-rose-500 uppercase cursor-pointer transition-colors"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                  <span className="pill-neutral text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {photos.length} / 5
+                  </span>
+                </div>
               </div>
 
               {/* Uploaded Photos Grid + Add Photo Button */}

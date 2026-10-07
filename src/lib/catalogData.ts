@@ -225,6 +225,75 @@ export function saveGarmentsToStorage(garments: SavedGarment[]): void {
 }
 
 // -------------------------------------------------------------
+// LocalStorage Helpers for User Selected Workspace Options & Preferences
+// -------------------------------------------------------------
+export interface SavedMagicPreferences {
+  selectedModel?: CatalogModel;
+  selectedPose?: CatalogPose;
+  selectedBackground?: CatalogBackground;
+  backgroundMode?: "fixed" | "inspiration";
+  selectedHairstyle?: CatalogHairstyle;
+  selectedJewellery?: CatalogJewellery;
+  outfitType?: string;
+  customStylingNotes?: string;
+  outputUrl?: string | null;
+  recentGenerations?: string[];
+}
+
+const MAGIC_PREFERENCES_KEY = "florus_saved_magic_preferences";
+
+export function getSavedMagicPreferences(): SavedMagicPreferences | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(MAGIC_PREFERENCES_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.error("Failed to load magic workspace preferences:", e);
+    return null;
+  }
+}
+
+export function saveMagicPreferences(prefs: SavedMagicPreferences): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MAGIC_PREFERENCES_KEY, JSON.stringify(prefs));
+  } catch (e) {
+    console.error("Failed to save magic workspace preferences:", e);
+  }
+}
+
+export interface SavedStudioPreferences {
+  selectedShoot?: MasterShoot;
+  faceMode?: "keep_original" | "custom_face" | "random_face";
+  selectedModel?: CatalogModel;
+  outfitType?: string;
+  customStylingNotes?: string;
+  outputUrl?: string | null;
+}
+
+const STUDIO_PREFERENCES_KEY = "florus_saved_studio_preferences";
+
+export function getSavedStudioPreferences(): SavedStudioPreferences | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STUDIO_PREFERENCES_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.error("Failed to load studio workspace preferences:", e);
+    return null;
+  }
+}
+
+export function saveStudioPreferences(prefs: SavedStudioPreferences): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STUDIO_PREFERENCES_KEY, JSON.stringify(prefs));
+  } catch (e) {
+    console.error("Failed to save studio workspace preferences:", e);
+  }
+}
+
+// -------------------------------------------------------------
 // 3. 25+ Comprehensive Catalog Poses (Clear & Approachable)
 // -------------------------------------------------------------
 export const PRESET_POSES: CatalogPose[] = [
