@@ -49,6 +49,7 @@ import { PosePickerModal } from "./modals/PosePickerModal";
 import { BackgroundPickerModal } from "./modals/BackgroundPickerModal";
 import { HairstylePickerModal } from "./modals/HairstylePickerModal";
 import { JewelleryPickerModal } from "./modals/JewelleryPickerModal";
+import { compressImageClient } from "@/lib/imageCompression";
 
 interface UploadedPhoto {
   id: string;
@@ -132,11 +133,12 @@ export function MagicModeWorkspace() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return null;
       const folder = session.user.id;
-      const fileName = `${folder}/models/custom-model-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+      const compressedFile = await compressImageClient(file, 1000, 0.85);
+      const fileName = `${folder}/models/custom-model-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
       const { error } = await supabase.storage
         .from("generated-lookbooks")
-        .upload(fileName, file, { contentType: file.type, upsert: true });
+        .upload(fileName, compressedFile, { contentType: compressedFile.type, upsert: true });
 
       if (error) throw error;
 
@@ -151,14 +153,21 @@ export function MagicModeWorkspace() {
     }
   };
 
-  // Upload Garment Photos to Supabase Storage
+  // Upload Garment Photos to Supabase Storage with Automatic Client-Side Compression (Max 5 Garments)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (photos.length + files.length > 5) {
-      addToast("error", "You can upload up to 5 photos max for this outfit batch.");
+    const remainingSlots = Math.max(0, 5 - photos.length);
+    if (remainingSlots <= 0) {
+      addToast("error", "Maximum 5 garment photos reached. Please remove a photo to upload another.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
+    }
+
+    const filesToUpload = Array.from(files).slice(0, remainingSlots);
+    if (files.length > remainingSlots) {
+      addToast("info", `Uploading ${remainingSlots} photo(s) to respect the maximum limit of 5 garments.`);
     }
 
     setIsUploading(true);
@@ -170,14 +179,16 @@ export function MagicModeWorkspace() {
 
       const newPhotos: UploadedPhoto[] = [];
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = `${folder}/uploads/magic-${Date.now()}-${i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const rawFile = filesToUpload[i];
+        // Automatically compress garment photo client-side before upload
+        const compressedFile = await compressImageClient(rawFile, 1000, 0.85);
+        const fileName = `${folder}/uploads/magic-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
         const { error } = await supabase.storage
           .from("generated-lookbooks")
-          .upload(fileName, file, {
-            contentType: file.type,
+          .upload(fileName, compressedFile, {
+            contentType: compressedFile.type,
             upsert: true
           });
 
@@ -191,12 +202,12 @@ export function MagicModeWorkspace() {
           id: `photo-${Date.now()}-${i}`,
           url: publicUrl,
           note: "",
-          name: file.name
+          name: compressedFile.name
         });
       }
 
       setPhotos((prev) => {
-        const updated = [...prev, ...newPhotos];
+        const updated = [...prev, ...newPhotos].slice(0, 5);
         saveGarmentsToStorage(
           updated.map((p) => ({
             id: p.id,
@@ -207,7 +218,7 @@ export function MagicModeWorkspace() {
         );
         return updated;
       });
-      addToast("success", `Uploaded ${files.length} photo(s). Saved permanently to your account!`);
+      addToast("success", `Compressed & saved ${newPhotos.length} garment photo(s) permanently!`);
     } catch (err) {
       console.error("Upload error:", err);
       const errMsg = err instanceof Error ? err.message : "Upload failed";
@@ -306,9 +317,9 @@ export function MagicModeWorkspace() {
           jewellery: selectedJewellery.name,
           jewelleryDescription: selectedJewellery.description,
 
-          // 5. Custom Notes & Product Photos
+          // 5. Custom Notes & Product Photos (Strictly Max 5 Garments)
           customNotes: customStylingNotes,
-          garments: photos.map((p, idx) => ({
+          garments: photos.slice(0, 5).map((p, idx) => ({
             url: p.url,
             note: p.note,
             slotId: `layer-${idx + 1}`,

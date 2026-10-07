@@ -10,6 +10,8 @@ import {
   deleteSavedCustomModel
 } from "@/lib/catalogData";
 
+import { compressImageClient } from "@/lib/imageCompression";
+
 interface ModelPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -60,13 +62,14 @@ export function ModelPickerModal({
     if (!pendingFile) return;
     setUploading(true);
     try {
+      const compressedFile = await compressImageClient(pendingFile, 1000, 0.85);
       let url = "";
       if (onCustomUpload) {
-        const uploadedUrl = await onCustomUpload(pendingFile);
+        const uploadedUrl = await onCustomUpload(compressedFile);
         if (uploadedUrl) url = uploadedUrl;
       }
       if (!url) {
-        url = pendingPreview || URL.createObjectURL(pendingFile);
+        url = pendingPreview || URL.createObjectURL(compressedFile);
       }
 
       const newModel: CatalogModel = {

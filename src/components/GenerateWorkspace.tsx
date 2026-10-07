@@ -35,6 +35,7 @@ import {
 } from "@/lib/catalogData";
 import { MasterShootPickerModal } from "./modals/MasterShootPickerModal";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
+import { compressImageClient } from "@/lib/imageCompression";
 
 interface UploadedGarment {
   id: string;
@@ -107,14 +108,21 @@ export function GenerateWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const costEstimation = 49.00;
 
-  // Upload Garment Photos to Supabase Storage
+  // Upload Garment Photos to Supabase Storage with Client Compression (Max 5 Garments)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (garments.length + files.length > 5) {
-      addToast("error", "You can upload up to 5 reference photos max.");
+    const remainingSlots = Math.max(0, 5 - garments.length);
+    if (remainingSlots <= 0) {
+      addToast("error", "Maximum 5 garment reference photos reached. Please remove a photo to upload another.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
+    }
+
+    const filesToUpload = Array.from(files).slice(0, remainingSlots);
+    if (files.length > remainingSlots) {
+      addToast("info", `Uploading ${remainingSlots} photo(s) to respect the maximum limit of 5 garments.`);
     }
 
     setIsUploading(true);
@@ -126,14 +134,16 @@ export function GenerateWorkspace() {
 
       const newGarments: UploadedGarment[] = [];
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = `${folder}/uploads/garment-${Date.now()}-${i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const rawFile = filesToUpload[i];
+        // Automatically compress garment photo client-side before upload
+        const compressedFile = await compressImageClient(rawFile, 1000, 0.85);
+        const fileName = `${folder}/uploads/garment-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
         const { error } = await supabase.storage
           .from("generated-lookbooks")
-          .upload(fileName, file, {
-            contentType: file.type,
+          .upload(fileName, compressedFile, {
+            contentType: compressedFile.type,
             upsert: true
           });
 
@@ -152,7 +162,7 @@ export function GenerateWorkspace() {
       }
 
       setGarments((prev) => {
-        const updated = [...prev, ...newGarments];
+        const updated = [...prev, ...newGarments].slice(0, 5);
         saveGarmentsToStorage(
           updated.map((g) => ({
             id: g.id,
@@ -163,7 +173,7 @@ export function GenerateWorkspace() {
         );
         return updated;
       });
-      addToast("success", `Uploaded ${files.length} fabric photo(s). Saved permanently to your account!`);
+      addToast("success", `Compressed & saved ${newGarments.length} fabric photo(s) permanently!`);
     } catch (err) {
       console.error("Upload error:", err);
       const errMsg = err instanceof Error ? err.message : "Upload failed";
@@ -210,11 +220,12 @@ export function GenerateWorkspace() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return null;
       const folder = session.user.id;
-      const fileName = `${folder}/models/custom-model-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+      const compressedFile = await compressImageClient(file, 1000, 0.85);
+      const fileName = `${folder}/models/custom-model-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
       const { error } = await supabase.storage
         .from("generated-lookbooks")
-        .upload(fileName, file, { contentType: file.type, upsert: true });
+        .upload(fileName, compressedFile, { contentType: compressedFile.type, upsert: true });
 
       if (error) throw error;
 
@@ -270,7 +281,8 @@ export function GenerateWorkspace() {
           customFaceUrl: faceMode === "custom_face" ? (selectedModel.imageUrl || null) : null,
 
           customNotes: customStylingNotes,
-          garments: garments.map((g) => ({
+          // Strictly limit to 5 garments max
+          garments: garments.slice(0, 5).map((g) => ({
             url: g.url,
             note: g.note,
             slotId: g.slotId,

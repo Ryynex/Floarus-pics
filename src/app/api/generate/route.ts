@@ -26,145 +26,88 @@ if (falKey) {
 const publicUrlCache = new Map<string, string>();
 
 /**
- * Helper to fetch image buffer from remote URL or read from local disk
+ * Resolves, downsizes, and compresses ANY input image (local file, base64 data URI, or remote URL)
+ * to a maximum dimension of 720px before uploading to Fal CDN storage.
+ *
+ * Why 720px?
+ * - At 720px max dimension, a 3:4 or 4:5 portrait reference is ~0.39 - 0.41 Megapixels.
+ * - Even with up to 8 input references (1 pose + 1 face + 1 bg + 5 garments):
+ *   Total input area is ~3.28 Megapixels.
+ * - Combined with the native ~4.61 - 4.73 Megapixel catalog output (e.g. 1920x2400):
+ *   Total area is ~7.89 Megapixels, safely under Fal's 9.0 Megapixel limit!
+ * - This guarantees that Fal.ai flux-2-pro/edit will NEVER throw the 422 "Requested area too large" error.
  */
-async function fetchImageBuffer(urlOrPath: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const trimmed = urlOrPath.trim();
-
-  // If base64 data URL
-  if (trimmed.startsWith("data:")) {
-    const matches = trimmed.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (matches && matches.length === 3) {
-      return {
-        mimeType: matches[1],
-        buffer: Buffer.from(matches[2], "base64"),
-      };
-    }
-  }
-
-  // If remote HTTP(S) URL
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    const res = await fetch(trimmed);
-    if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${trimmed}`);
-    const arrayBuffer = await res.arrayBuffer();
-    const contentType = res.headers.get("content-type") || "image/jpeg";
-    return {
-      buffer: Buffer.from(arrayBuffer),
-      mimeType: contentType,
-    };
-  }
-
-  // Local file relative to public folder
-  let localRelative = trimmed;
-  if (localRelative.startsWith("/")) localRelative = localRelative.slice(1);
-  const filePath = path.join(process.cwd(), "public", localRelative);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`File does not exist on disk: ${filePath}`);
-  }
-  const ext = path.extname(filePath).toLowerCase();
-  const mimeType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
-  return {
-    buffer: fs.readFileSync(filePath),
-    mimeType,
-  };
-}
-
-/**
- * Automatically downsizes and prepares any input image (local or remote) for Fal.ai
- * to strictly prevent exceeding Fal's 9 Megapixel total area budget.
- */
-async function prepareOptimizedFalUrl(urlOrPath: string, maxDim: number): Promise<string> {
+async function getCompressedFalUrl(urlOrPath: string, maxDim = 720): Promise<string> {
   if (!urlOrPath) return "";
   const trimmed = urlOrPath.trim();
-  const cacheKey = `${trimmed}_dim_${maxDim}`;
+  const cacheKey = `${trimmed}_c_${maxDim}`;
   if (publicUrlCache.has(cacheKey)) {
     return publicUrlCache.get(cacheKey)!;
   }
 
   try {
-    const { buffer: inputBuffer } = await fetchImageBuffer(trimmed);
-    const optimizedBuffer = await sharp(inputBuffer)
-      .resize({
-        width: maxDim,
-        height: maxDim,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 86, mozjpeg: true })
-      .toBuffer();
+    let inputBuffer: Buffer | null = null;
 
-    const blob = new Blob([new Uint8Array(optimizedBuffer)], { type: "image/jpeg" });
-    const uploadedUrl = await fal.storage.upload(blob);
-    if (uploadedUrl) {
-      publicUrlCache.set(cacheKey, uploadedUrl);
-      console.log(`DEBUG: Auto-downsized input image '${trimmed.slice(0, 40)}' (maxDim ${maxDim}px) uploaded to Fal: ${uploadedUrl}`);
-      return uploadedUrl;
+    if (trimmed.startsWith("data:")) {
+      const matches = trimmed.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches[2]) {
+        inputBuffer = Buffer.from(matches[2], "base64");
+      }
+    } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      const res = await fetch(trimmed, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FlorusLookbook/1.0",
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        inputBuffer = Buffer.from(arrayBuffer);
+      } else {
+        console.warn(`Fetch returned status ${res.status} for ${trimmed}`);
+      }
+    } else {
+      let localRelative = trimmed;
+      if (localRelative.startsWith("/")) localRelative = localRelative.slice(1);
+      const filePath = path.join(process.cwd(), "public", localRelative);
+      if (fs.existsSync(filePath)) {
+        inputBuffer = fs.readFileSync(filePath);
+      } else {
+        console.warn(`File does not exist on disk: ${filePath}`);
+      }
+    }
+
+    if (inputBuffer && inputBuffer.length > 0) {
+      const optimizedBuffer = await sharp(inputBuffer)
+        .resize({
+          width: maxDim,
+          height: maxDim,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 82, mozjpeg: true })
+        .toBuffer();
+
+      const blob = new Blob([new Uint8Array(optimizedBuffer)], { type: "image/jpeg" });
+      const uploadedUrl = await fal.storage.upload(blob);
+
+      if (uploadedUrl) {
+        publicUrlCache.set(cacheKey, uploadedUrl);
+        console.log(`DEBUG: Successfully compressed & uploaded '${trimmed.slice(0, 45)}' (maxDim ${maxDim}px) to Fal: ${uploadedUrl}`);
+        return uploadedUrl;
+      }
     }
   } catch (err) {
-    console.warn(`Warning: Failed to optimize input image '${trimmed.slice(0, 40)}':`, err);
+    console.warn(`Warning: Failed to compress and upload image '${trimmed.slice(0, 50)}':`, err);
   }
 
-  // Fallback to ensurePublicUrl if optimization failed
-  return await ensurePublicUrl(trimmed);
-}
-
-/**
- * Ensures any image URL (local file path or remote) is accessible via a public HTTPS URL for Fal.ai.
- * If given a local path like "/reference_shoots/01_heritage_haveli_doorway.jpg", it reads the file
- * from disk and uploads it to Fal's high-speed CDN storage.
- */
-async function ensurePublicUrl(urlOrPath: string): Promise<string> {
-  if (!urlOrPath) return "";
-  const trimmed = urlOrPath.trim();
-
-  // If already a remote public URL (and not localhost)
+  // Fallback: If it's already a public URL (and not localhost), return it
   if (
     (trimmed.startsWith("http://") || trimmed.startsWith("https://")) &&
     !trimmed.includes("localhost") &&
     !trimmed.includes("127.0.0.1")
   ) {
     return trimmed;
-  }
-
-  // Check cache
-  if (publicUrlCache.has(trimmed)) {
-    return publicUrlCache.get(trimmed)!;
-  }
-
-  // Extract relative path from public folder
-  let localRelative = trimmed;
-  if (localRelative.startsWith("http")) {
-    try {
-      const parsed = new URL(localRelative);
-      localRelative = parsed.pathname;
-    } catch {
-      // continue
-    }
-  }
-
-  if (localRelative.startsWith("/")) {
-    localRelative = localRelative.slice(1);
-  }
-
-  const filePath = path.join(process.cwd(), "public", localRelative);
-
-  if (fs.existsSync(filePath)) {
-    try {
-      const fileBuffer = fs.readFileSync(filePath);
-      const ext = path.extname(filePath).toLowerCase();
-      const mimeType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
-      const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
-      const uploadedUrl = await fal.storage.upload(blob);
-      if (uploadedUrl) {
-        publicUrlCache.set(trimmed, uploadedUrl);
-        console.log(`DEBUG: Uploaded local asset '${trimmed}' to Fal storage: ${uploadedUrl}`);
-        return uploadedUrl;
-      }
-    } catch (uploadErr) {
-      console.warn(`Failed to upload local image '${trimmed}' to Fal storage:`, uploadErr);
-    }
-  } else {
-    console.warn(`Local file path does not exist on disk: ${filePath}`);
   }
 
   return trimmed;
@@ -265,11 +208,16 @@ export async function POST(req: NextRequest) {
       slotLabel?: string;
     }
 
-    const activeGarments: GarmentItem[] = garments.length > 0 
+    const rawGarments: GarmentItem[] = garments.length > 0 
       ? garments 
       : sareeUrls.map((url: string) => ({ url, note: "" }));
 
-    if (activeGarments.length === 0 || !activeGarments[0]?.url) {
+    // Strictly enforce maximum 5 garments as requested
+    const activeGarments: GarmentItem[] = rawGarments
+      .filter((g: GarmentItem) => Boolean(g && g.url))
+      .slice(0, 5);
+
+    if (activeGarments.length === 0) {
       return NextResponse.json({ error: "At least one product fabric reference image is required" }, { status: 400 });
     }
 
@@ -350,9 +298,9 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedFallbackUrl, "missing or placeholder Fal API credentials");
     }
 
-    // 3. Resolve Public URLs for All Images (Ensures local /reference_... are uploaded to Fal CDN)
-    const publicGarmentUrls = await Promise.all(
-      activeGarments.map(async (g) => await ensurePublicUrl(g.url))
+    // 3. Compress All Garment Reference Images Directly (Strictly Max 5 Garments, <= 720px)
+    const compressedGarmentUrls = await Promise.all(
+      activeGarments.map(async (g) => await getCompressedFalUrl(g.url, 720))
     );
 
     // Formulate per-layer fabric notes
@@ -368,7 +316,7 @@ export async function POST(req: NextRequest) {
     if (mode === "magic") {
       // =========================================================================
       // MAGIC MODE (BETA) PIPELINE
-      // Multi-Reference Mapping: [Pose Anchor, Face Anchor, Background Anchor, ...Garments] (Max 8)
+      // Multi-Reference Mapping: [Pose Anchor, Face Anchor, Background Anchor, ...Garments] (Max 8 total)
       // =========================================================================
       interface RefEntry {
         url: string;
@@ -379,32 +327,32 @@ export async function POST(req: NextRequest) {
 
       // Slot A: Pose Reference Image (if not custom text pose)
       if (poseImageUrl && poseId !== "custom") {
-        const publicPose = await ensurePublicUrl(poseImageUrl);
-        if (publicPose) {
-          refList.push({ url: publicPose, type: "pose", index: refList.length + 1 });
+        const compressedPose = await getCompressedFalUrl(poseImageUrl, 720);
+        if (compressedPose) {
+          refList.push({ url: compressedPose, type: "pose", index: refList.length + 1 });
         }
       }
 
       // Slot B: Brand Custom Model Face (if provided)
       const rawFace = customFaceUrl || (faceMode === "custom_face" ? modelFaceUrl : null);
       if (rawFace) {
-        const publicFace = await ensurePublicUrl(rawFace);
-        if (publicFace) {
-          refList.push({ url: publicFace, type: "face", index: refList.length + 1 });
+        const compressedFace = await getCompressedFalUrl(rawFace, 720);
+        if (compressedFace) {
+          refList.push({ url: compressedFace, type: "face", index: refList.length + 1 });
         }
       }
 
       // Slot C: Background Reference Image (if provided and not custom text)
       if (backgroundUrl && backgroundId !== "custom" && backgroundUrl !== poseImageUrl) {
-        const publicBg = await ensurePublicUrl(backgroundUrl);
-        if (publicBg) {
-          refList.push({ url: publicBg, type: "background", index: refList.length + 1 });
+        const compressedBg = await getCompressedFalUrl(backgroundUrl, 720);
+        if (compressedBg) {
+          refList.push({ url: compressedBg, type: "background", index: refList.length + 1 });
         }
       }
 
-      // Slot D: Product Garment Fabrics (Up to remaining slots, max 8 total)
+      // Slot D: Product Garment Fabrics (Strictly up to 5 garments, within max 8 total references)
       const garmentIndices: number[] = [];
-      for (const gUrl of publicGarmentUrls) {
+      for (const gUrl of compressedGarmentUrls) {
         if (refList.length < 8 && gUrl) {
           const idx = refList.length + 1;
           refList.push({ url: gUrl, type: "garment", index: idx });
@@ -504,19 +452,19 @@ export async function POST(req: NextRequest) {
     } else {
       // =========================================================================
       // STUDIO LOOKBOOKS (WHOLESALE SAREES / MASTER SHOOTS) PIPELINE
-      // Zero Hallucination Anchor: [Shoot Reference, Face Reference (opt), ...Garments]
+      // Zero Hallucination Anchor: [Shoot Reference, Face Reference (opt), ...Garments (Max 5)]
       // =========================================================================
       const rawShootUrl = shootImageUrl || "/reference_shoots/garden_01_morning_sun.jpg";
-      const publicShootUrl = await ensurePublicUrl(rawShootUrl);
+      const compressedShootUrl = await getCompressedFalUrl(rawShootUrl, 720);
 
       if (faceMode === "custom_face" && (customFaceUrl || modelFaceUrl)) {
         // CUSTOM FACE MODE:
         // Image 1: Brand Model Face
         // Image 2: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
-        // Images 3+: Product Garment Fabrics (Max 8 total)
-        const publicFaceUrl = await ensurePublicUrl(customFaceUrl || modelFaceUrl);
-        const gUrls = publicGarmentUrls.slice(0, 6); // 1 face + 1 shoot + 6 garments = 8
-        imageUrls = [publicFaceUrl, publicShootUrl, ...gUrls];
+        // Images 3+: Product Garment Fabrics (Strictly max 5 garments)
+        const compressedFaceUrl = await getCompressedFalUrl(customFaceUrl || modelFaceUrl, 720);
+        const gUrls = compressedGarmentUrls.slice(0, 5);
+        imageUrls = [compressedFaceUrl, compressedShootUrl, ...gUrls];
 
         const garmentRange = gUrls.length === 1 
           ? "Reference Image 3" 
@@ -536,9 +484,9 @@ export async function POST(req: NextRequest) {
       } else if (faceMode === "random_face") {
         // DIVERSE INDIAN FACE MODE:
         // Image 1: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
-        // Images 2+: Product Garment Fabrics (Max 8 total)
-        const gUrls = publicGarmentUrls.slice(0, 7);
-        imageUrls = [publicShootUrl, ...gUrls];
+        // Images 2+: Product Garment Fabrics (Strictly max 5 garments)
+        const gUrls = compressedGarmentUrls.slice(0, 5);
+        imageUrls = [compressedShootUrl, ...gUrls];
 
         const garmentRange = gUrls.length === 1 
           ? "Reference Image 2" 
@@ -557,9 +505,9 @@ export async function POST(req: NextRequest) {
       } else {
         // KEEP ORIGINAL SHOOT FACE (FLAGSHIP ZERO HALLUCINATION):
         // Image 1: Master Photoshoot Reference (Model Face + Pose + Hands + Lighting + Setting)
-        // Images 2+: Product Garment Fabrics (Max 8 total)
-        const gUrls = publicGarmentUrls.slice(0, 7);
-        imageUrls = [publicShootUrl, ...gUrls];
+        // Images 2+: Product Garment Fabrics (Strictly max 5 garments)
+        const gUrls = compressedGarmentUrls.slice(0, 5);
+        imageUrls = [compressedShootUrl, ...gUrls];
 
         const garmentRange = gUrls.length === 1 
           ? "Reference Image 2" 
@@ -589,19 +537,7 @@ export async function POST(req: NextRequest) {
       dimensions = { width: 2160, height: 2160 }; // 1:1 High-Res Square (4,665,600 pixels = ~4.67 MP)
     }
 
-    // Automatically downsize all input images to guarantee total input area <= 3.8 MP
-    // so that Output (~4.6-4.7 MP) + Inputs (<= 3.8 MP) <= 8.5 MP < Fal's 9.0 MP hard limit!
-    const totalInputImages = imageUrls.length;
-    const allowedAreaPerImage = Math.floor(3800000 / Math.max(1, totalInputImages));
-    const maxInputDim = Math.min(1024, Math.floor(Math.sqrt(allowedAreaPerImage)));
-
-    console.log(`DEBUG: Auto-downsizing ${totalInputImages} input image(s) to max dimension ${maxInputDim}px (~${(allowedAreaPerImage / 1e6).toFixed(2)} MP each) to protect Fal 9MP budget.`);
-
-    const optimizedInputUrls = await Promise.all(
-      imageUrls.map(async (u) => await prepareOptimizedFalUrl(u, maxInputDim))
-    );
-
-    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, Images: ${optimizedInputUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP)`);
+    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, References: ${imageUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP)`);
 
     // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 4.5MP-5.0MP Ultra-Sharp Asset)
     let falResult: any;
@@ -609,7 +545,7 @@ export async function POST(req: NextRequest) {
       falResult = await retryOperation(async () => {
         return await fal.run("fal-ai/flux-2-pro/edit", {
           input: {
-            image_urls: optimizedInputUrls,
+            image_urls: imageUrls,
             prompt: fluxPrompt,
             image_size: dimensions,
             output_format: "png",

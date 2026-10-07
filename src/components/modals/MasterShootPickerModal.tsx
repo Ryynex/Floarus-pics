@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Search, X, Check, Upload, Sparkles, Camera, MapPin, Sun } from "lucide-react";
 import { MASTER_SHOOTS, MasterShoot, getSavedCustomShoots, saveCustomShoot } from "@/lib/catalogData";
 import { supabase } from "@/lib/supabaseClient";
+import { compressImageClient } from "@/lib/imageCompression";
 
 interface MasterShootPickerModalProps {
   isOpen: boolean;
@@ -64,13 +65,13 @@ export function MasterShootPickerModal({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || "anonymous";
-      const fileExt = file.name.split(".").pop();
-      const fileName = `shoot-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const compressedFile = await compressImageClient(file, 1000, 0.85);
+      const fileName = `shoot-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
       const filePath = `${userId}/custom-shoots/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from("garments")
-        .upload(filePath, file, { cacheControl: "3600", upsert: true });
+        .upload(filePath, compressedFile, { cacheControl: "3600", upsert: true });
 
       if (uploadError) throw uploadError;
 
@@ -80,7 +81,7 @@ export function MasterShootPickerModal({
 
       const customShoot: MasterShoot = {
         id: `custom_shoot_${Date.now()}`,
-        title: file.name.replace(/\.[^/.]+$/, "").substring(0, 30) || "Custom Brand Shoot",
+        title: compressedFile.name.replace(/\.[^/.]+$/, "").substring(0, 30) || "Custom Brand Shoot",
         category: "custom",
         imageUrl: publicUrl,
         modelPersona: "Custom model reference photo uploaded by brand",
