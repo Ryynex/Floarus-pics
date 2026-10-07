@@ -25,6 +25,7 @@ import {
   MASTER_SHOOTS,
   MasterShoot,
   CatalogModel,
+  MAX_GARMENT_REFERENCES,
   PRESET_MODELS,
   getSavedCustomModels,
   getSavedGarments,
@@ -75,7 +76,7 @@ export function GenerateWorkspace() {
     initialPrefs?.outfitType ?? "Wholesale Saree (6-Yard)"
   );
   const [garments, setGarments] = useState<UploadedGarment[]>(() =>
-    initialGarments.slice(0, 5).map((g, idx) => ({
+    initialGarments.slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
       id: g.id,
       url: g.url,
       note: g.note || "",
@@ -132,21 +133,21 @@ export function GenerateWorkspace() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Upload Garment Photos to Supabase Storage with Client Compression (Max 5 Garments)
+  // Upload Garment Photos to Supabase Storage with Client Compression (Max MAX_GARMENT_REFERENCES)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const remainingSlots = Math.max(0, 5 - garments.length);
+    const remainingSlots = Math.max(0, MAX_GARMENT_REFERENCES - garments.length);
     if (remainingSlots <= 0) {
-      addToast("error", "Maximum 5 garment reference photos reached. Please remove a photo to upload another.");
+      addToast("error", `Maximum ${MAX_GARMENT_REFERENCES} garment reference photos reached. Please remove a photo to upload another.`);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
     const filesToUpload = Array.from(files).slice(0, remainingSlots);
     if (files.length > remainingSlots) {
-      addToast("info", `Uploading ${remainingSlots} photo(s) to respect the maximum limit of 5 garments.`);
+      addToast("info", `Uploading ${remainingSlots} photo(s) to respect the maximum limit of ${MAX_GARMENT_REFERENCES} garments.`);
     }
 
     setIsUploading(true);
@@ -186,7 +187,7 @@ export function GenerateWorkspace() {
       }
 
       setGarments((prev) => {
-        const updated = [...prev, ...newGarments].slice(0, 5);
+        const updated = [...prev, ...newGarments].slice(0, MAX_GARMENT_REFERENCES);
         saveGarmentsToStorage(
           updated.map((g) => ({
             id: g.id,
@@ -305,8 +306,8 @@ export function GenerateWorkspace() {
           customFaceUrl: faceMode === "custom_face" ? (selectedModel.imageUrl || null) : null,
 
           customNotes: customStylingNotes,
-          // Strictly limit to 5 garments max
-          garments: garments.slice(0, 5).map((g) => ({
+          // Strictly limit to the maximum garment reference count
+          garments: garments.slice(0, MAX_GARMENT_REFERENCES).map((g) => ({
             url: g.url,
             note: g.note,
             slotId: g.slotId,
@@ -656,7 +657,7 @@ export function GenerateWorkspace() {
                         {garments.length === 0 ? "Upload Product Fabric Photos" : "+ Add Another Fabric Angle"}
                       </span>
                       <span className="text-[10px] sm:text-xs text-ink-faint mt-0.5">
-                        Upload mannequin photo, folded saree, or flat-lay. Up to 5 photos.
+                        Upload mannequin photo, folded saree, or flat-lay. Up to {MAX_GARMENT_REFERENCES} photos.
                       </span>
                     </div>
                   </div>

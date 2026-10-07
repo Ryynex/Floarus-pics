@@ -202,6 +202,19 @@ export interface SavedGarment {
   slotLabel?: string;
 }
 
+/**
+ * Hard maximum number of garment/fabric reference images accepted per generation.
+ *
+ * Enforced in three places that must stay in sync:
+ *  - client upload slots + payload (`GenerateWorkspace`, `MagicModeWorkspace`)
+ *  - server-side input clamp in `/api/generate`
+ *  - the magic-mode reference list cap (pose + face + background + garments)
+ *
+ * Lowering this reduces Fal input megapixels and reference-competition between
+ * fabrics, which sharpens garment fidelity at the cost of coverage.
+ */
+export const MAX_GARMENT_REFERENCES = 3;
+
 const SAVED_GARMENTS_STORAGE_KEY = "florus_permanent_saved_garments";
 
 export function getSavedGarments(): SavedGarment[] {

@@ -5,6 +5,7 @@ import { fal } from "@fal-ai/client";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
+import { MAX_GARMENT_REFERENCES } from "@/lib/catalogData";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
@@ -57,6 +58,12 @@ class ClientSafeError extends Error {
   }
 }
 
+/**
+ * Hard ceiling on total reference images sent to Fal in magic mode:
+ * 1 pose + 1 face + 1 background + MAX_GARMENT_REFERENCES garments.
+ */
+const MAX_TOTAL_REFERENCES = 3 + MAX_GARMENT_REFERENCES;
+
 /** Client-safe label for a reference source, with no filesystem paths or raw upstream text. */
 function describeRefSource(urlOrPath: string): string {
   const trimmed = urlOrPath.trim();
@@ -78,8 +85,8 @@ function describeRefSource(urlOrPath: string): string {
  *
  * Why 640px?
  * - At 640px max dimension, a 3:4 or 4:5 portrait reference is ~0.31 - 0.33 Megapixels.
- * - Even with up to 8 input references (1 pose + 1 face + 1 bg + 5 garments):
- *   Total input area is ~2.6 Megapixels.
+ * - With up to 6 input references (1 pose + 1 face + 1 bg + 3 garments):
+ *   Total input area is ~1.9 Megapixels.
  * - Combined with the native ~4.61 - 4.73 Megapixel catalog output (e.g. 1920x2400):
  *   Total area is ~7.3 Megapixels, safely under Fal's 9.0 Megapixel limit!
  * - This guarantees that Fal.ai flux-2-pro/edit will NEVER throw the 422 "Requested area too large" error.
@@ -295,13 +302,19 @@ export async function POST(req: NextRequest) {
       ? garments 
       : sareeUrls.map((url: string) => ({ url, note: "" }));
 
-    // Strictly enforce maximum 5 garments as requested
+    // Strictly enforce the garment reference ceiling
     const activeGarments: GarmentItem[] = rawGarments
       .filter((g: GarmentItem) => Boolean(g && g.url))
-      .slice(0, 5);
+      .slice(0, MAX_GARMENT_REFERENCES);
 
     if (activeGarments.length === 0) {
       return NextResponse.json({ error: "At least one product fabric reference image is required" }, { status: 400 });
+    }
+
+    if (rawGarments.filter((g: GarmentItem) => Boolean(g && g.url)).length > MAX_GARMENT_REFERENCES) {
+      console.warn(
+        `Request sent ${rawGarments.length} garment references; using the first ${MAX_GARMENT_REFERENCES}.`
+      );
     }
 
     // Fetch profile balance from database
@@ -384,7 +397,7 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedFallbackUrl, "missing or placeholder Fal API credentials");
     }
 
-    // 3. Compress All Garment Reference Images Directly (Strictly Max 5 Garments, <= 640px)
+    // 3. Compress All Garment Reference Images Directly (Max MAX_GARMENT_REFERENCES, <= 640px)
     // Per-item fault tolerance: one unreachable garment must not abort the whole
     // generation. Transient failures get retried; a permanent failure drops that
     // garment and is reported back so the client knows what was skipped.
@@ -435,7 +448,8 @@ export async function POST(req: NextRequest) {
     if (mode === "magic") {
       // =========================================================================
       // MAGIC MODE (BETA) PIPELINE
-      // Multi-Reference Mapping: [Pose Anchor, Face Anchor, Background Anchor, ...Garments] (Max 8 total)
+      // Multi-Reference Mapping: [Pose Anchor, Face Anchor, Background Anchor, ...Garments]
+      // (Max MAX_TOTAL_REFERENCES overall, MAX_GARMENT_REFERENCES garments)
       // =========================================================================
       interface RefEntry {
         url: string;
@@ -469,10 +483,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Slot D: Product Garment Fabrics (Strictly up to 5 garments, within max 8 total references)
+      // Slot D: Product Garment Fabrics (up to MAX_GARMENT_REFERENCES, within MAX_TOTAL_REFERENCES total)
       const garmentIndices: number[] = [];
       for (const gUrl of compressedGarmentUrls) {
-        if (refList.length < 8 && gUrl) {
+        if (refList.length < MAX_TOTAL_REFERENCES && gUrl) {
           const idx = refList.length + 1;
           refList.push({ url: gUrl, type: "garment", index: idx });
           garmentIndices.push(idx);
@@ -571,7 +585,7 @@ export async function POST(req: NextRequest) {
     } else {
       // =========================================================================
       // STUDIO LOOKBOOKS (WHOLESALE SAREES / MASTER SHOOTS) PIPELINE
-      // Zero Hallucination Anchor: [Shoot Reference, Face Reference (opt), ...Garments (Max 5)]
+      // Zero Hallucination Anchor: [Shoot Reference, Face Reference (opt), ...Garments]
       // =========================================================================
       const rawShootUrl = shootImageUrl || "/reference_shoots/garden_01_morning_sun.jpg";
       const compressedShootUrl = await getCompressedFalUrl(rawShootUrl, 640);
@@ -580,9 +594,9 @@ export async function POST(req: NextRequest) {
         // CUSTOM FACE MODE:
         // Image 1: Brand Model Face
         // Image 2: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
-        // Images 3+: Product Garment Fabrics (Strictly max 5 garments)
+        // Images 3+: Product Garment Fabrics
         const compressedFaceUrl = await getCompressedFalUrl(customFaceUrl || modelFaceUrl, 640);
-        const gUrls = compressedGarmentUrls.slice(0, 5);
+        const gUrls = compressedGarmentUrls.slice(0, MAX_GARMENT_REFERENCES);
         imageUrls = [compressedFaceUrl, compressedShootUrl, ...gUrls];
 
         const garmentRange = gUrls.length === 1 
@@ -603,8 +617,8 @@ export async function POST(req: NextRequest) {
       } else if (faceMode === "random_face") {
         // DIVERSE INDIAN FACE MODE:
         // Image 1: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
-        // Images 2+: Product Garment Fabrics (Strictly max 5 garments)
-        const gUrls = compressedGarmentUrls.slice(0, 5);
+        // Images 2+: Product Garment Fabrics
+        const gUrls = compressedGarmentUrls.slice(0, MAX_GARMENT_REFERENCES);
         imageUrls = [compressedShootUrl, ...gUrls];
 
         const garmentRange = gUrls.length === 1 
@@ -624,8 +638,8 @@ export async function POST(req: NextRequest) {
       } else {
         // KEEP ORIGINAL SHOOT FACE (FLAGSHIP ZERO HALLUCINATION):
         // Image 1: Master Photoshoot Reference (Model Face + Pose + Hands + Lighting + Setting)
-        // Images 2+: Product Garment Fabrics (Strictly max 5 garments)
-        const gUrls = compressedGarmentUrls.slice(0, 5);
+        // Images 2+: Product Garment Fabrics
+        const gUrls = compressedGarmentUrls.slice(0, MAX_GARMENT_REFERENCES);
         imageUrls = [compressedShootUrl, ...gUrls];
 
         const garmentRange = gUrls.length === 1 

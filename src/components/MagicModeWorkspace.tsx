@@ -34,6 +34,7 @@ import {
   PRESET_BACKGROUNDS,
   PRESET_HAIRSTYLES,
   PRESET_JEWELLERY,
+  MAX_GARMENT_REFERENCES,
   getSavedCustomModels,
   getSavedGarments,
   saveGarmentsToStorage,
@@ -96,7 +97,7 @@ export function MagicModeWorkspace() {
     initialPrefs?.outfitType ?? "Generic outfit"
   );
   const [photos, setPhotos] = useState<UploadedPhoto[]>(() =>
-    initialGarments.slice(0, 5).map((g) => ({
+    initialGarments.slice(0, MAX_GARMENT_REFERENCES).map((g) => ({
       id: g.id,
       url: g.url,
       note: g.note || "",
@@ -188,21 +189,21 @@ export function MagicModeWorkspace() {
     }
   };
 
-  // Upload Garment Photos to Supabase Storage with Automatic Client-Side Compression (Max 5 Garments)
+  // Upload Garment Photos to Supabase Storage with Automatic Client-Side Compression (Max MAX_GARMENT_REFERENCES)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const remainingSlots = Math.max(0, 5 - photos.length);
+    const remainingSlots = Math.max(0, MAX_GARMENT_REFERENCES - photos.length);
     if (remainingSlots <= 0) {
-      addToast("error", "Maximum 5 garment photos reached. Please remove a photo to upload another.");
+      addToast("error", `Maximum ${MAX_GARMENT_REFERENCES} garment photos reached. Please remove a photo to upload another.`);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
     const filesToUpload = Array.from(files).slice(0, remainingSlots);
     if (files.length > remainingSlots) {
-      addToast("info", `Uploading ${remainingSlots} photo(s) to respect the maximum limit of 5 garments.`);
+      addToast("info", `Uploading ${remainingSlots} photo(s) to respect the maximum limit of ${MAX_GARMENT_REFERENCES} garments.`);
     }
 
     setIsUploading(true);
@@ -242,7 +243,7 @@ export function MagicModeWorkspace() {
       }
 
       setPhotos((prev) => {
-        const updated = [...prev, ...newPhotos].slice(0, 5);
+        const updated = [...prev, ...newPhotos].slice(0, MAX_GARMENT_REFERENCES);
         saveGarmentsToStorage(
           updated.map((p) => ({
             id: p.id,
@@ -351,9 +352,9 @@ export function MagicModeWorkspace() {
           jewellery: selectedJewellery.name,
           jewelleryDescription: selectedJewellery.description,
 
-          // 5. Custom Notes & Product Photos (Strictly Max 5 Garments)
+          // 5. Custom Notes & Product Photos (Max MAX_GARMENT_REFERENCES)
           customNotes: customStylingNotes,
-          garments: photos.slice(0, 5).map((p, idx) => ({
+          garments: photos.slice(0, MAX_GARMENT_REFERENCES).map((p, idx) => ({
             url: p.url,
             note: p.note,
             slotId: `layer-${idx + 1}`,
@@ -663,7 +664,7 @@ export function MagicModeWorkspace() {
                     Upload outfit photos
                   </label>
                   <p className="text-[11px] text-ink-faint">
-                    Upload up to 5 photos of your outfit. A note box appears under each photo (optional) so you can tell the AI what it is or how to drape it.
+                    Upload up to {MAX_GARMENT_REFERENCES} photos of your outfit. A note box appears under each photo (optional) so you can tell the AI what it is or how to drape it.
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
