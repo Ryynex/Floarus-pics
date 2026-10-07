@@ -40,7 +40,9 @@ import {
   PRESET_BACKGROUNDS,
   PRESET_HAIRSTYLES,
   PRESET_JEWELLERY,
-  getSavedCustomModels
+  getSavedCustomModels,
+  getSavedGarments,
+  saveGarmentsToStorage
 } from "@/lib/catalogData";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
 import { PosePickerModal } from "./modals/PosePickerModal";
@@ -86,11 +88,22 @@ export function MagicModeWorkspace() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [recentGenerations, setRecentGenerations] = useState<string[]>([]);
 
-  // Load custom saved models on mount
+  // Load custom saved models and permanent garments on mount
   useEffect(() => {
     const savedModels = getSavedCustomModels();
     if (savedModels.length > 0) {
       setSelectedModel(savedModels[0]);
+    }
+    const savedGarments = getSavedGarments();
+    if (savedGarments.length > 0) {
+      setPhotos(
+        savedGarments.map((g) => ({
+          id: g.id,
+          url: g.url,
+          note: g.note || "",
+          name: g.name || "Saved Outfit Fabric"
+        }))
+      );
     }
   }, []);
 
@@ -182,8 +195,19 @@ export function MagicModeWorkspace() {
         });
       }
 
-      setPhotos((prev) => [...prev, ...newPhotos]);
-      addToast("success", `Uploaded ${files.length} photo(s). Add notes underneath for precision draping!`);
+      setPhotos((prev) => {
+        const updated = [...prev, ...newPhotos];
+        saveGarmentsToStorage(
+          updated.map((p) => ({
+            id: p.id,
+            url: p.url,
+            note: p.note,
+            name: p.name
+          }))
+        );
+        return updated;
+      });
+      addToast("success", `Uploaded ${files.length} photo(s). Saved permanently to your account!`);
     } catch (err) {
       console.error("Upload error:", err);
       const errMsg = err instanceof Error ? err.message : "Upload failed";
@@ -195,13 +219,33 @@ export function MagicModeWorkspace() {
   };
 
   const handleUpdateNote = (id: string, note: string) => {
-    setPhotos((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, note } : p))
-    );
+    setPhotos((prev) => {
+      const updated = prev.map((p) => (p.id === id ? { ...p, note } : p));
+      saveGarmentsToStorage(
+        updated.map((p) => ({
+          id: p.id,
+          url: p.url,
+          note: p.note,
+          name: p.name
+        }))
+      );
+      return updated;
+    });
   };
 
   const handleRemovePhoto = (id: string) => {
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    setPhotos((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      saveGarmentsToStorage(
+        updated.map((p) => ({
+          id: p.id,
+          url: p.url,
+          note: p.note,
+          name: p.name
+        }))
+      );
+      return updated;
+    });
   };
 
   // Generate All / Magic Mode Lookbook

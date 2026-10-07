@@ -29,7 +29,9 @@ import {
   MasterShoot,
   CatalogModel,
   PRESET_MODELS,
-  getSavedCustomModels
+  getSavedCustomModels,
+  getSavedGarments,
+  saveGarmentsToStorage
 } from "@/lib/catalogData";
 import { MasterShootPickerModal } from "./modals/MasterShootPickerModal";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
@@ -67,11 +69,22 @@ export function GenerateWorkspace() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
 
-  // Load custom saved models on mount
+  // Load custom saved models and permanent garments on mount
   useEffect(() => {
     const savedModels = getSavedCustomModels();
     if (savedModels.length > 0) {
       setSelectedModel(savedModels[0]);
+    }
+    const savedGarments = getSavedGarments();
+    if (savedGarments.length > 0) {
+      setGarments(
+        savedGarments.map((g, idx) => ({
+          id: g.id,
+          url: g.url,
+          note: g.note || "",
+          slotLabel: g.slotLabel || `Fabric Angle ${idx + 1}`
+        }))
+      );
     }
   }, []);
 
@@ -138,8 +151,19 @@ export function GenerateWorkspace() {
         });
       }
 
-      setGarments((prev) => [...prev, ...newGarments]);
-      addToast("success", `Uploaded ${files.length} fabric photo(s). Add notes underneath for precision draping!`);
+      setGarments((prev) => {
+        const updated = [...prev, ...newGarments];
+        saveGarmentsToStorage(
+          updated.map((g) => ({
+            id: g.id,
+            url: g.url,
+            note: g.note,
+            slotLabel: g.slotLabel
+          }))
+        );
+        return updated;
+      });
+      addToast("success", `Uploaded ${files.length} fabric photo(s). Saved permanently to your account!`);
     } catch (err) {
       console.error("Upload error:", err);
       const errMsg = err instanceof Error ? err.message : "Upload failed";
@@ -151,13 +175,33 @@ export function GenerateWorkspace() {
   };
 
   const handleUpdateNote = (id: string, note: string) => {
-    setGarments((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, note } : g))
-    );
+    setGarments((prev) => {
+      const updated = prev.map((g) => (g.id === id ? { ...g, note } : g));
+      saveGarmentsToStorage(
+        updated.map((g) => ({
+          id: g.id,
+          url: g.url,
+          note: g.note,
+          slotLabel: g.slotLabel
+        }))
+      );
+      return updated;
+    });
   };
 
   const handleRemoveGarment = (id: string) => {
-    setGarments((prev) => prev.filter((g) => g.id !== id));
+    setGarments((prev) => {
+      const updated = prev.filter((g) => g.id !== id);
+      saveGarmentsToStorage(
+        updated.map((g) => ({
+          id: g.id,
+          url: g.url,
+          note: g.note,
+          slotLabel: g.slotLabel
+        }))
+      );
+      return updated;
+    });
   };
 
   // Custom Model Upload Handler (passed to ModelPickerModal)

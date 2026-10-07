@@ -28,52 +28,76 @@ export function ModelPickerModal({
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
   const [customModels, setCustomModels] = useState<CatalogModel[]>([]);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [modelNameInput, setModelNameInput] = useState<string>("");
 
   // Load permanent custom models from localStorage on mount and when modal opens
   useEffect(() => {
     if (isOpen) {
       setCustomModels(getSavedCustomModels());
+      setPendingFile(null);
+      setPendingPreview(null);
+      setModelNameInput("");
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
+    setPendingPreview(URL.createObjectURL(file));
+    const cleanDefaultName = file.name
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[-_]/g, " ")
+      .slice(0, 24);
+    setModelNameInput(cleanDefaultName || "My Brand Model");
+  };
+
+  const handleSaveCustomModel = async () => {
+    if (!pendingFile) return;
     setUploading(true);
     try {
       let url = "";
       if (onCustomUpload) {
-        const uploadedUrl = await onCustomUpload(file);
+        const uploadedUrl = await onCustomUpload(pendingFile);
         if (uploadedUrl) url = uploadedUrl;
       }
       if (!url) {
-        url = URL.createObjectURL(file);
+        url = pendingPreview || URL.createObjectURL(pendingFile);
       }
 
-      const modelName = file.name.replace(/\.[^/.]+$/, "").substring(0, 18);
       const newModel: CatalogModel = {
         id: `custom-${Date.now()}`,
-        name: modelName || "My Custom Model",
+        name: modelNameInput.trim() || "My Custom Model",
         category: "custom",
         imageUrl: url,
         subtitle: "Saved Permanent Model Profile",
         description: "Your permanent model face and identity reference."
       };
 
-      // Save permanently
+      // Save permanently to localStorage
       const updated = saveCustomModel(newModel);
       setCustomModels(updated);
 
       // Immediately select as the permanent active model
       onSelect(newModel);
+      setPendingFile(null);
+      setPendingPreview(null);
       onClose();
     } catch (err) {
       console.error("Custom model upload failed:", err);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleCancelPending = () => {
+    setPendingFile(null);
+    setPendingPreview(null);
+    setModelNameInput("");
   };
 
   const handleDeleteCustomModel = (e: React.MouseEvent, id: string) => {
@@ -144,35 +168,91 @@ export function ModelPickerModal({
                 <span>Upload Brand Model (Saved Permanently)</span>
               </span>
               <span className="text-[10px] sm:text-xs text-ink-faint hidden sm:inline">
-                Uploaded models stay saved to your account
+                Uploaded models stay saved to your account permanently until removed
               </span>
             </div>
 
-            <label className={`w-full p-3 sm:p-4 rounded-xl border border-dashed border-fuchsia-accent/50 bg-clay-soft/40 hover:bg-clay-soft/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 cursor-pointer transition-all group ${uploading ? "animate-pulse" : ""}`}>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-                disabled={uploading}
-              />
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-surface border border-fuchsia-accent/30 flex items-center justify-center text-fuchsia-accent group-hover:scale-105 transition-transform shrink-0">
-                  <UploadCloud className="h-5 w-5" />
+            {pendingFile && pendingPreview ? (
+              /* Inline Form: Set Model Name & Save */
+              <div className="p-4 rounded-xl border border-fuchsia-accent/50 bg-clay-soft/50 flex flex-col sm:flex-row items-center gap-4 animate-fade-in shadow-md">
+                <div className="relative h-20 w-20 rounded-xl overflow-hidden border border-fuchsia-accent/40 shrink-0 shadow-sm">
+                  <img
+                    src={pendingPreview}
+                    alt="Pending Model"
+                    className="h-full w-full object-cover"
+                  />
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs sm:text-sm font-bold text-ink group-hover:text-fuchsia-accent transition-colors">
-                    {uploading ? "Uploading model photo..." : "+ Upload New Model Face Photo"}
-                  </span>
-                  <span className="text-[11px] sm:text-xs text-ink-soft mt-0.5">
-                    Upload your contracted model or brand face. It will be permanently stored.
-                  </span>
+                <div className="flex-1 flex flex-col gap-1.5 w-full">
+                  <label className="text-xs font-bold text-ink flex items-center justify-between">
+                    <span>Model Name</span>
+                    <span className="text-[10px] font-normal text-ink-faint">Visible in lookbook recipes</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={modelNameInput}
+                    onChange={(e) => setModelNameInput(e.target.value)}
+                    placeholder="e.g. Priya — Summer Silk Model"
+                    className="input-field text-xs py-2 w-full font-semibold"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={handleCancelPending}
+                    disabled={uploading}
+                    className="btn-secondary py-2 px-3 rounded-xl text-xs font-medium cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveCustomModel}
+                    disabled={uploading || !modelNameInput.trim()}
+                    className="btn-primary py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+                  >
+                    {uploading ? (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Save & Select Model</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-              <span className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 self-end sm:self-center">
-                Select Photo
-              </span>
-            </label>
+            ) : (
+              /* Dropzone: Pick Image */
+              <label className={`w-full p-3 sm:p-4 rounded-xl border border-dashed border-fuchsia-accent/50 bg-clay-soft/40 hover:bg-clay-soft/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 cursor-pointer transition-all group ${uploading ? "animate-pulse" : ""}`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelected}
+                  className="hidden"
+                  disabled={uploading}
+                />
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-surface border border-fuchsia-accent/30 flex items-center justify-center text-fuchsia-accent group-hover:scale-105 transition-transform shrink-0">
+                    <UploadCloud className="h-5 w-5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs sm:text-sm font-bold text-ink group-hover:text-fuchsia-accent transition-colors">
+                      + Upload New Model Face Photo
+                    </span>
+                    <span className="text-[11px] sm:text-xs text-ink-soft mt-0.5">
+                      Upload your contracted model or brand face with custom name. Permanently stored.
+                    </span>
+                  </div>
+                </div>
+                <span className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 self-end sm:self-center">
+                  Select Photo
+                </span>
+              </label>
+            )}
           </div>
 
           {/* Section 2: Permanent Uploaded Models Gallery (If any exist) */}

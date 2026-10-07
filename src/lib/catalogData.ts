@@ -192,6 +192,39 @@ export function deleteSavedCustomModel(id: string): CatalogModel[] {
 }
 
 // -------------------------------------------------------------
+// LocalStorage Helper for Permanent Garment / Outfit Uploads
+// -------------------------------------------------------------
+export interface SavedGarment {
+  id: string;
+  url: string;
+  note: string;
+  name?: string;
+  slotLabel?: string;
+}
+
+const SAVED_GARMENTS_STORAGE_KEY = "florus_permanent_saved_garments";
+
+export function getSavedGarments(): SavedGarment[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(SAVED_GARMENTS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error("Failed to load saved garments from localStorage:", e);
+    return [];
+  }
+}
+
+export function saveGarmentsToStorage(garments: SavedGarment[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SAVED_GARMENTS_STORAGE_KEY, JSON.stringify(garments));
+  } catch (e) {
+    console.error("Failed to save garments to localStorage:", e);
+  }
+}
+
+// -------------------------------------------------------------
 // 3. 25+ Comprehensive Catalog Poses (Clear & Approachable)
 // -------------------------------------------------------------
 export const PRESET_POSES: CatalogPose[] = [
