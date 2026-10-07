@@ -37,7 +37,7 @@ const publicUrlCache = new Map<string, string>();
  *   Total area is ~7.89 Megapixels, safely under Fal's 9.0 Megapixel limit!
  * - This guarantees that Fal.ai flux-2-pro/edit will NEVER throw the 422 "Requested area too large" error.
  */
-async function getCompressedFalUrl(urlOrPath: string, maxDim = 720): Promise<string> {
+async function getCompressedFalUrl(urlOrPath: string, maxDim = 640): Promise<string> {
   if (!urlOrPath) return "";
   const trimmed = urlOrPath.trim();
   const cacheKey = `${trimmed}_c_${maxDim}`;
@@ -45,72 +45,78 @@ async function getCompressedFalUrl(urlOrPath: string, maxDim = 720): Promise<str
     return publicUrlCache.get(cacheKey)!;
   }
 
-  try {
-    let inputBuffer: Buffer | null = null;
+  let inputBuffer: Buffer | null = null;
 
-    if (trimmed.startsWith("data:")) {
-      const matches = trimmed.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (matches && matches[2]) {
-        inputBuffer = Buffer.from(matches[2], "base64");
+  if (trimmed.startsWith("data:")) {
+    const matches = trimmed.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (matches && matches[2]) {
+      inputBuffer = Buffer.from(matches[2], "base64");
+    }
+  } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    // Retry fetching remote URL up to 3 times with exponential backoff
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(trimmed, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FlorusLookbook/1.0",
+            "Accept": "image/*,*/*;q=0.8"
+          },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          inputBuffer = Buffer.from(arrayBuffer);
+          break;
+        } else {
+          lastError = new Error(`HTTP ${res.status} fetching remote image`);
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
+        }
       }
-    } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      const res = await fetch(trimmed, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FlorusLookbook/1.0",
-        },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (res.ok) {
-        const arrayBuffer = await res.arrayBuffer();
-        inputBuffer = Buffer.from(arrayBuffer);
-      } else {
-        console.warn(`Fetch returned status ${res.status} for ${trimmed}`);
-      }
+    }
+    if (!inputBuffer && lastError) {
+      throw lastError;
+    }
+  } else {
+    let localRelative = trimmed;
+    if (localRelative.startsWith("/")) localRelative = localRelative.slice(1);
+    const filePath = path.join(process.cwd(), "public", localRelative);
+    if (fs.existsSync(filePath)) {
+      inputBuffer = fs.readFileSync(filePath);
     } else {
-      let localRelative = trimmed;
-      if (localRelative.startsWith("/")) localRelative = localRelative.slice(1);
-      const filePath = path.join(process.cwd(), "public", localRelative);
-      if (fs.existsSync(filePath)) {
-        inputBuffer = fs.readFileSync(filePath);
-      } else {
-        console.warn(`File does not exist on disk: ${filePath}`);
-      }
+      throw new Error(`Local file not found on disk: ${filePath}`);
     }
-
-    if (inputBuffer && inputBuffer.length > 0) {
-      const optimizedBuffer = await sharp(inputBuffer)
-        .resize({
-          width: maxDim,
-          height: maxDim,
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 82, mozjpeg: true })
-        .toBuffer();
-
-      const blob = new Blob([new Uint8Array(optimizedBuffer)], { type: "image/jpeg" });
-      const uploadedUrl = await fal.storage.upload(blob);
-
-      if (uploadedUrl) {
-        publicUrlCache.set(cacheKey, uploadedUrl);
-        console.log(`DEBUG: Successfully compressed & uploaded '${trimmed.slice(0, 45)}' (maxDim ${maxDim}px) to Fal: ${uploadedUrl}`);
-        return uploadedUrl;
-      }
-    }
-  } catch (err) {
-    console.warn(`Warning: Failed to compress and upload image '${trimmed.slice(0, 50)}':`, err);
   }
 
-  // Fallback: If it's already a public URL (and not localhost), return it
-  if (
-    (trimmed.startsWith("http://") || trimmed.startsWith("https://")) &&
-    !trimmed.includes("localhost") &&
-    !trimmed.includes("127.0.0.1")
-  ) {
-    return trimmed;
+  if (!inputBuffer || inputBuffer.length === 0) {
+    throw new Error(`Empty image buffer for '${trimmed.slice(0, 50)}'`);
   }
 
-  return trimmed;
+  // Compress to maxDim (640px) with sharp
+  const optimizedBuffer = await sharp(inputBuffer)
+    .resize({
+      width: maxDim,
+      height: maxDim,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: 80, mozjpeg: true })
+    .toBuffer();
+
+  const blob = new Blob([new Uint8Array(optimizedBuffer)], { type: "image/jpeg" });
+  const uploadedUrl = await fal.storage.upload(blob);
+
+  if (!uploadedUrl) {
+    throw new Error(`Fal storage upload returned null for compressed buffer of '${trimmed.slice(0, 40)}'`);
+  }
+
+  publicUrlCache.set(cacheKey, uploadedUrl);
+  console.log(`DEBUG: Successfully compressed & uploaded '${trimmed.slice(0, 45)}' (maxDim ${maxDim}px) to Fal: ${uploadedUrl}`);
+  return uploadedUrl;
 }
 
 // Helper function to retry asynchronous operations with exponential backoff
@@ -298,9 +304,9 @@ export async function POST(req: NextRequest) {
       return executeSandboxFallback(simulatedFallbackUrl, "missing or placeholder Fal API credentials");
     }
 
-    // 3. Compress All Garment Reference Images Directly (Strictly Max 5 Garments, <= 720px)
+    // 3. Compress All Garment Reference Images Directly (Strictly Max 5 Garments, <= 640px)
     const compressedGarmentUrls = await Promise.all(
-      activeGarments.map(async (g) => await getCompressedFalUrl(g.url, 720))
+      activeGarments.map(async (g) => await getCompressedFalUrl(g.url, 640))
     );
 
     // Formulate per-layer fabric notes
@@ -327,7 +333,7 @@ export async function POST(req: NextRequest) {
 
       // Slot A: Pose Reference Image (if not custom text pose)
       if (poseImageUrl && poseId !== "custom") {
-        const compressedPose = await getCompressedFalUrl(poseImageUrl, 720);
+        const compressedPose = await getCompressedFalUrl(poseImageUrl, 640);
         if (compressedPose) {
           refList.push({ url: compressedPose, type: "pose", index: refList.length + 1 });
         }
@@ -336,7 +342,7 @@ export async function POST(req: NextRequest) {
       // Slot B: Brand Custom Model Face (if provided)
       const rawFace = customFaceUrl || (faceMode === "custom_face" ? modelFaceUrl : null);
       if (rawFace) {
-        const compressedFace = await getCompressedFalUrl(rawFace, 720);
+        const compressedFace = await getCompressedFalUrl(rawFace, 640);
         if (compressedFace) {
           refList.push({ url: compressedFace, type: "face", index: refList.length + 1 });
         }
@@ -344,7 +350,7 @@ export async function POST(req: NextRequest) {
 
       // Slot C: Background Reference Image (if provided and not custom text)
       if (backgroundUrl && backgroundId !== "custom" && backgroundUrl !== poseImageUrl) {
-        const compressedBg = await getCompressedFalUrl(backgroundUrl, 720);
+        const compressedBg = await getCompressedFalUrl(backgroundUrl, 640);
         if (compressedBg) {
           refList.push({ url: compressedBg, type: "background", index: refList.length + 1 });
         }
@@ -455,14 +461,14 @@ export async function POST(req: NextRequest) {
       // Zero Hallucination Anchor: [Shoot Reference, Face Reference (opt), ...Garments (Max 5)]
       // =========================================================================
       const rawShootUrl = shootImageUrl || "/reference_shoots/garden_01_morning_sun.jpg";
-      const compressedShootUrl = await getCompressedFalUrl(rawShootUrl, 720);
+      const compressedShootUrl = await getCompressedFalUrl(rawShootUrl, 640);
 
       if (faceMode === "custom_face" && (customFaceUrl || modelFaceUrl)) {
         // CUSTOM FACE MODE:
         // Image 1: Brand Model Face
         // Image 2: Master Photoshoot Reference (Pose, Hands, Lighting, Setting)
         // Images 3+: Product Garment Fabrics (Strictly max 5 garments)
-        const compressedFaceUrl = await getCompressedFalUrl(customFaceUrl || modelFaceUrl, 720);
+        const compressedFaceUrl = await getCompressedFalUrl(customFaceUrl || modelFaceUrl, 640);
         const gUrls = compressedGarmentUrls.slice(0, 5);
         imageUrls = [compressedFaceUrl, compressedShootUrl, ...gUrls];
 

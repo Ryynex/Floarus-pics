@@ -6,7 +6,7 @@
  */
 export async function compressImageClient(
   file: File,
-  maxDimension: number = 1000,
+  maxDimension: number = 640,
   quality: number = 0.85
 ): Promise<File> {
   if (!file.type.startsWith("image/")) {
