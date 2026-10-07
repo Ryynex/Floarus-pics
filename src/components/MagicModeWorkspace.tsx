@@ -6,26 +6,20 @@ import {
   Sparkles,
   UploadCloud,
   RefreshCw,
-  ArrowRight,
   ShieldCheck,
-  ImageIcon,
   Download,
   AlertCircle,
   X,
   User,
   ChevronRight,
-  ChevronDown,
   Shirt,
   Camera,
   MapPin,
-  Sun,
-  Check,
   Layers,
   Scissors,
   Eye,
   Copy,
   Info,
-  Sliders,
   Maximize2
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -62,13 +56,33 @@ interface UploadedPhoto {
 
 export function MagicModeWorkspace() {
   const router = useRouter();
+
+  // Hydrate from localStorage during the initial render (lazy useState initializers)
+  // rather than in a mount effect. This avoids a cascading re-render on every load
+  // and means the save-on-change effect never has to guard against "not loaded yet".
+  const initialPrefs = getSavedMagicPreferences();
+  const initialModels = getSavedCustomModels();
+  const initialGarments = getSavedGarments();
+
   // 1. Five Magic Mode Selectors
-  const [selectedModel, setSelectedModel] = useState<CatalogModel>(PRESET_MODELS[0]);
-  const [selectedPose, setSelectedPose] = useState<CatalogPose>(PRESET_POSES[0]);
-  const [selectedBackground, setSelectedBackground] = useState<CatalogBackground>(PRESET_BACKGROUNDS[0]);
-  const [backgroundMode, setBackgroundMode] = useState<"fixed" | "inspiration">("inspiration");
-  const [selectedHairstyle, setSelectedHairstyle] = useState<CatalogHairstyle>(PRESET_HAIRSTYLES[0]);
-  const [selectedJewellery, setSelectedJewellery] = useState<CatalogJewellery>(PRESET_JEWELLERY[0]);
+  const [selectedModel, setSelectedModel] = useState<CatalogModel>(
+    initialPrefs?.selectedModel ?? (initialModels.length > 0 ? initialModels[0] : PRESET_MODELS[0])
+  );
+  const [selectedPose, setSelectedPose] = useState<CatalogPose>(
+    initialPrefs?.selectedPose ?? PRESET_POSES[0]
+  );
+  const [selectedBackground, setSelectedBackground] = useState<CatalogBackground>(
+    initialPrefs?.selectedBackground ?? PRESET_BACKGROUNDS[0]
+  );
+  const [backgroundMode, setBackgroundMode] = useState<"fixed" | "inspiration">(
+    initialPrefs?.backgroundMode ?? "inspiration"
+  );
+  const [selectedHairstyle, setSelectedHairstyle] = useState<CatalogHairstyle>(
+    initialPrefs?.selectedHairstyle ?? PRESET_HAIRSTYLES[0]
+  );
+  const [selectedJewellery, setSelectedJewellery] = useState<CatalogJewellery>(
+    initialPrefs?.selectedJewellery ?? PRESET_JEWELLERY[0]
+  );
 
   // Modal Visibility States
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -78,64 +92,33 @@ export function MagicModeWorkspace() {
   const [isJewelModalOpen, setIsJewelModalOpen] = useState(false);
 
   // 2. Outfit Type & Garment Uploads
-  const [outfitType, setOutfitType] = useState<string>("Generic outfit");
-  const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
-  const [customStylingNotes, setCustomStylingNotes] = useState<string>("");
+  const [outfitType, setOutfitType] = useState<string>(
+    initialPrefs?.outfitType ?? "Generic outfit"
+  );
+  const [photos, setPhotos] = useState<UploadedPhoto[]>(() =>
+    initialGarments.slice(0, 5).map((g) => ({
+      id: g.id,
+      url: g.url,
+      note: g.note || "",
+      name: g.name || "Saved Outfit Fabric"
+    }))
+  );
+  const [customStylingNotes, setCustomStylingNotes] = useState<string>(
+    initialPrefs?.customStylingNotes ?? ""
+  );
   const [isUploading, setIsUploading] = useState(false);
 
   // 3. Execution & Output States
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState("");
-  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(initialPrefs?.outputUrl ?? null);
   const [showLightbox, setShowLightbox] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [recentGenerations, setRecentGenerations] = useState<string[]>([]);
-
-  const isLoadedRef = useRef(false);
-
-  // Load custom saved models, permanent garments, and all user selected options on mount
-  useEffect(() => {
-    // 1. Load permanent user workspace preferences
-    const savedPrefs = getSavedMagicPreferences();
-    if (savedPrefs) {
-      if (savedPrefs.selectedModel) setSelectedModel(savedPrefs.selectedModel);
-      if (savedPrefs.selectedPose) setSelectedPose(savedPrefs.selectedPose);
-      if (savedPrefs.selectedBackground) setSelectedBackground(savedPrefs.selectedBackground);
-      if (savedPrefs.backgroundMode) setBackgroundMode(savedPrefs.backgroundMode);
-      if (savedPrefs.selectedHairstyle) setSelectedHairstyle(savedPrefs.selectedHairstyle);
-      if (savedPrefs.selectedJewellery) setSelectedJewellery(savedPrefs.selectedJewellery);
-      if (savedPrefs.outfitType) setOutfitType(savedPrefs.outfitType);
-      if (savedPrefs.customStylingNotes !== undefined) setCustomStylingNotes(savedPrefs.customStylingNotes);
-      if (savedPrefs.outputUrl) setOutputUrl(savedPrefs.outputUrl);
-      if (savedPrefs.recentGenerations && savedPrefs.recentGenerations.length > 0) {
-        setRecentGenerations(savedPrefs.recentGenerations);
-      }
-    } else {
-      const savedModels = getSavedCustomModels();
-      if (savedModels.length > 0) {
-        setSelectedModel(savedModels[0]);
-      }
-    }
-
-    // 2. Load permanent uploaded outfit photos
-    const savedGarments = getSavedGarments();
-    if (savedGarments.length > 0) {
-      setPhotos(
-        savedGarments.slice(0, 5).map((g) => ({
-          id: g.id,
-          url: g.url,
-          note: g.note || "",
-          name: g.name || "Saved Outfit Fabric"
-        }))
-      );
-    }
-
-    isLoadedRef.current = true;
-  }, []);
+  const [recentGenerations, setRecentGenerations] = useState<string[]>(
+    initialPrefs?.recentGenerations ?? []
+  );
 
   // Automatically save all user choices locally whenever any option changes
   useEffect(() => {
-    if (!isLoadedRef.current) return;
     saveMagicPreferences({
       selectedModel,
       selectedPose,
@@ -178,7 +161,6 @@ export function MagicModeWorkspace() {
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const costEstimation = 49.00;
 
   // Custom Model Upload Handler (passed to ModelPickerModal)
   const handleCustomModelUpload = async (file: File): Promise<string | null> => {
@@ -186,7 +168,7 @@ export function MagicModeWorkspace() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return null;
       const folder = session.user.id;
-      const compressedFile = await compressImageClient(file, 1000, 0.85);
+      const compressedFile = await compressImageClient(file, 640, 0.85);
       const fileName = `${folder}/models/custom-model-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
       const { error } = await supabase.storage
@@ -235,7 +217,7 @@ export function MagicModeWorkspace() {
       for (let i = 0; i < filesToUpload.length; i++) {
         const rawFile = filesToUpload[i];
         // Automatically compress garment photo client-side before upload
-        const compressedFile = await compressImageClient(rawFile, 1000, 0.85);
+        const compressedFile = await compressImageClient(rawFile, 640, 0.85);
         const fileName = `${folder}/uploads/magic-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
         const { error } = await supabase.storage
@@ -323,7 +305,6 @@ export function MagicModeWorkspace() {
     setLoading(true);
     setLoadingStage("Analyzing outfit & configuring AI drape pipeline...");
     setOutputUrl(null);
-    setImageLoaded(false);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -870,7 +851,6 @@ export function MagicModeWorkspace() {
                   <img
                     src={outputUrl}
                     alt="Generated Magic Lookbook"
-                    onLoad={() => setImageLoaded(true)}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
 

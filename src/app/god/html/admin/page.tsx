@@ -86,7 +86,6 @@ export default function AdminPage() {
   const [editGenOutputUrl, setEditGenOutputUrl] = useState<string>("");
 
   const [editPayment, setEditPayment] = useState<PaymentRecord | null>(null);
-  const [editPaymentStatus, setEditPaymentStatus] = useState<string>("");
 
   const [createPaymentUser, setCreatePaymentUser] = useState<Profile | null>(null);
   const [createPaymentAmount, setCreatePaymentAmount] = useState<string>("");
@@ -98,43 +97,13 @@ export default function AdminPage() {
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submittingAction, setSubmittingAction] = useState<boolean>(false);
 
-  // Authenticate Admin User
-  useEffect(() => {
-    async function verifyAdmin() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const email = session.user.email;
-          if (email === "admin@florus.pics") {
-            setIsAdmin(true);
-            setAdminEmail(email);
-            // Fetch dashboard data
-            fetchDashboardData();
-          } else {
-            setIsAdmin(false);
-            setAuthError("Unauthorized user. Redirecting...");
-            setTimeout(() => {
-              router.replace("/dashboard");
-            }, 2500);
-          }
-        } else {
-          setIsAdmin(false);
-          setAuthError("Not logged in. Redirecting to home...");
-          setTimeout(() => {
-            router.replace("/");
-          }, 2500);
-        }
-      } catch (err) {
-        console.error("Auth guard check exception:", err);
-        setIsAdmin(false);
-        setAuthError("Auth error occurred. Redirecting...");
-        setTimeout(() => {
-          router.replace("/");
-        }, 2500);
-      }
-    }
-    verifyAdmin();
-  }, [router]);
+  // Utility to trigger quick floating messages
+  const showFeedback = (type: "success" | "error", text: string) => {
+    setActionFeedback({ type, text });
+    setTimeout(() => {
+      setActionFeedback(null);
+    }, 4000);
+  };
 
   // Fetch all tables
   const fetchDashboardData = async () => {
@@ -195,13 +164,48 @@ export default function AdminPage() {
     fetchDashboardData();
   };
 
-  // Utility to trigger quick floating messages
-  const showFeedback = (type: "success" | "error", text: string) => {
-    setActionFeedback({ type, text });
-    setTimeout(() => {
-      setActionFeedback(null);
-    }, 4000);
-  };
+  // Authenticate Admin User
+  // Declared after fetchDashboardData/showFeedback so it does not reference
+  // const declarations before they are initialised.
+  useEffect(() => {
+    async function verifyAdmin() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const email = session.user.email;
+          if (email === "admin@florus.pics") {
+            setIsAdmin(true);
+            setAdminEmail(email);
+            // Fetch dashboard data
+            fetchDashboardData();
+          } else {
+            setIsAdmin(false);
+            setAuthError("Unauthorized user. Redirecting...");
+            setTimeout(() => {
+              router.replace("/dashboard");
+            }, 2500);
+          }
+        } else {
+          setIsAdmin(false);
+          setAuthError("Not logged in. Redirecting to home...");
+          setTimeout(() => {
+            router.replace("/");
+          }, 2500);
+        }
+      } catch (err) {
+        console.error("Auth guard check exception:", err);
+        setIsAdmin(false);
+        setAuthError("Auth error occurred. Redirecting...");
+        setTimeout(() => {
+          router.replace("/");
+        }, 2500);
+      }
+    }
+    verifyAdmin();
+    // fetchDashboardData and showFeedback are stable-per-render helpers that only
+    // call setState setters; re-running on identity change would re-verify auth.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   // -------------------------------------------------------------
   // Data modification handlers
@@ -298,60 +302,6 @@ export default function AdminPage() {
     } catch (err) {
       console.error(err);
       showFeedback("error", "Error occurred while updating generation details.");
-    } finally {
-      setSubmittingAction(false);
-    }
-  };
-
-  // Edit payment status (e.g. processing or completing a pending payment)
-  const handleUpdatePaymentStatus = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editPayment) return;
-
-    setSubmittingAction(true);
-    const previousStatus = editPayment.status;
-    const targetStatus = editPaymentStatus;
-
-    try {
-      // 1. Update Payment record
-      const { error: payErr } = await supabase
-        .from("payments")
-        .update({ status: targetStatus })
-        .eq("id", editPayment.id);
-
-      if (payErr) throw payErr;
-
-      // 2. If payment was 'pending' and is now marked 'completed', automatically top up user balance
-      if (previousStatus === "pending" && targetStatus === "completed") {
-        // Fetch current user profile to avoid dirty states
-        const { data: prof, error: getErr } = await supabase
-          .from("profiles")
-          .select("balance_inr")
-          .eq("id", editPayment.user_id)
-          .single();
-
-        if (getErr) throw getErr;
-
-        const currentBal = Number(prof?.balance_inr || 0);
-        const { error: profErr } = await supabase
-          .from("profiles")
-          .update({
-            balance_inr: currentBal + Number(editPayment.amount),
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", editPayment.user_id);
-
-        if (profErr) throw profErr;
-        showFeedback("success", `Marked transaction completed. Credited +₹${Number(editPayment.amount).toFixed(2)} to user's wallet.`);
-      } else {
-        showFeedback("success", `Updated payment transaction to ${targetStatus.toUpperCase()}.`);
-      }
-
-      setEditPayment(null);
-      fetchDashboardData();
-    } catch (err) {
-      console.error(err);
-      showFeedback("error", "Failed to update payment status.");
     } finally {
       setSubmittingAction(false);
     }
@@ -1035,7 +985,6 @@ export default function AdminPage() {
                                   <button
                                     onClick={() => {
                                       setEditPayment(p);
-                                      setEditPaymentStatus(p.status);
                                     }}
                                     className="btn-secondary px-2.5 py-1.5 rounded-lg text-[10px] font-semibold flex items-center gap-1"
                                   >

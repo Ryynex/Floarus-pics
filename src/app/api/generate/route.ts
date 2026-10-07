@@ -26,16 +26,65 @@ if (falKey) {
 const publicUrlCache = new Map<string, string>();
 
 /**
+ * Minimal shape of the Fal run payload we actually consume. Fal's schema varies
+ * across model versions (flat `images` vs nested `data.images`), so both are
+ * modelled and normalised at the point of use.
+ */
+interface FalImageRef {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+interface FalRunResult {
+  images?: FalImageRef[];
+  image?: FalImageRef;
+  data?: {
+    images?: FalImageRef[];
+    image?: FalImageRef;
+  };
+}
+
+/**
+ * Error whose `message` is intentionally written to be shown to end users.
+ * The outer catch only echoes messages that are instances of this class, so raw
+ * upstream errors and absolute filesystem paths never leak to the client.
+ */
+class ClientSafeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ClientSafeError";
+  }
+}
+
+/** Client-safe label for a reference source, with no filesystem paths or raw upstream text. */
+function describeRefSource(urlOrPath: string): string {
+  const trimmed = urlOrPath.trim();
+  if (trimmed.startsWith("data:")) return "inline uploaded image";
+  if (trimmed.startsWith("blob:")) return "temporary browser preview";
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    try {
+      return `remote image at ${new URL(trimmed).hostname}`;
+    } catch {
+      return "remote image";
+    }
+  }
+  return "catalog reference image";
+}
+
+/**
  * Resolves, downsizes, and compresses ANY input image (local file, base64 data URI, or remote URL)
- * to a maximum dimension of 720px before uploading to Fal CDN storage.
+ * to a maximum dimension of 640px before uploading to Fal CDN storage.
  *
- * Why 720px?
- * - At 720px max dimension, a 3:4 or 4:5 portrait reference is ~0.39 - 0.41 Megapixels.
+ * Why 640px?
+ * - At 640px max dimension, a 3:4 or 4:5 portrait reference is ~0.31 - 0.33 Megapixels.
  * - Even with up to 8 input references (1 pose + 1 face + 1 bg + 5 garments):
- *   Total input area is ~3.28 Megapixels.
+ *   Total input area is ~2.6 Megapixels.
  * - Combined with the native ~4.61 - 4.73 Megapixel catalog output (e.g. 1920x2400):
- *   Total area is ~7.89 Megapixels, safely under Fal's 9.0 Megapixel limit!
+ *   Total area is ~7.3 Megapixels, safely under Fal's 9.0 Megapixel limit!
  * - This guarantees that Fal.ai flux-2-pro/edit will NEVER throw the 422 "Requested area too large" error.
+ *
+ * Throws an Error whose `message` is already client-safe on every failure path.
  */
 async function getCompressedFalUrl(urlOrPath: string, maxDim = 640): Promise<string> {
   if (!urlOrPath) return "";
@@ -69,10 +118,16 @@ async function getCompressedFalUrl(urlOrPath: string, maxDim = 640): Promise<str
           inputBuffer = Buffer.from(arrayBuffer);
           break;
         } else {
-          lastError = new Error(`HTTP ${res.status} fetching remote image`);
+          lastError = new ClientSafeError(
+            `Could not fetch the reference image (${describeRefSource(trimmed)}): HTTP ${res.status}.`
+          );
         }
       } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
+        // Network/timeout errors can embed the full URL, so only the reason is surfaced.
+        console.warn(`Fetch attempt ${attempt} failed for ${describeRefSource(trimmed)}:`, err);
+        lastError = new ClientSafeError(
+          `Could not reach the reference image (${describeRefSource(trimmed)}). Check your connection and try again.`
+        );
         if (attempt < 3) {
           await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
@@ -82,36 +137,61 @@ async function getCompressedFalUrl(urlOrPath: string, maxDim = 640): Promise<str
       throw lastError;
     }
   } else {
+    // Guard against schemes that are neither data:, http(s): nor a real on-disk path.
+    // Previously a blob:/object URL fell through to the filesystem branch and produced a
+    // confusing "file not found" error containing an absolute path.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+      throw new ClientSafeError(
+        `Unsupported image reference (${describeRefSource(trimmed)}). Please re-upload the image.`
+      );
+    }
+
     let localRelative = trimmed;
     if (localRelative.startsWith("/")) localRelative = localRelative.slice(1);
-    const filePath = path.join(process.cwd(), "public", localRelative);
-    if (fs.existsSync(filePath)) {
+
+    // Contain the resolved path inside public/ to block traversal via "../".
+    const publicRoot = path.resolve(process.cwd(), "public");
+    const filePath = path.resolve(publicRoot, localRelative);
+    if (filePath !== publicRoot && !filePath.startsWith(publicRoot + path.sep)) {
+      throw new ClientSafeError(`Unsupported image reference (${describeRefSource(trimmed)}).`);
+    }
+
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       inputBuffer = fs.readFileSync(filePath);
     } else {
-      throw new Error(`Local file not found on disk: ${filePath}`);
+      throw new ClientSafeError(`Reference image not found (${describeRefSource(trimmed)}).`);
     }
   }
 
   if (!inputBuffer || inputBuffer.length === 0) {
-    throw new Error(`Empty image buffer for '${trimmed.slice(0, 50)}'`);
+    throw new ClientSafeError(`Reference image is empty (${describeRefSource(trimmed)}).`);
   }
 
   // Compress to maxDim (640px) with sharp
-  const optimizedBuffer = await sharp(inputBuffer)
-    .resize({
-      width: maxDim,
-      height: maxDim,
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .jpeg({ quality: 80, mozjpeg: true })
-    .toBuffer();
+  try {
+    inputBuffer = await sharp(inputBuffer)
+      .resize({
+        width: maxDim,
+        height: maxDim,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 80, mozjpeg: true })
+      .toBuffer();
+  } catch (err) {
+    console.error(`sharp failed to process ${describeRefSource(trimmed)}:`, err);
+    throw new ClientSafeError(
+      `Could not read the image (${describeRefSource(trimmed)}). It may be corrupt or in an unsupported format.`
+    );
+  }
 
-  const blob = new Blob([new Uint8Array(optimizedBuffer)], { type: "image/jpeg" });
+  const blob = new Blob([new Uint8Array(inputBuffer)], { type: "image/jpeg" });
   const uploadedUrl = await fal.storage.upload(blob);
 
   if (!uploadedUrl) {
-    throw new Error(`Fal storage upload returned null for compressed buffer of '${trimmed.slice(0, 40)}'`);
+    throw new ClientSafeError(
+      `Could not host the compressed image (${describeRefSource(trimmed)}). Please try again.`
+    );
   }
 
   publicUrlCache.set(cacheKey, uploadedUrl);
@@ -173,11 +253,9 @@ export async function POST(req: NextRequest) {
       outfitType = "Wholesale Saree (6-Yard)",
       
       // Master photoshoot reference (Zero Hallucination Anchor)
-      shootId = "shoot_10_garden_morning",
       shootTitle = "Morning Sun Botanical Garden",
       shootImageUrl = "/reference_shoots/garden_01_morning_sun.jpg",
       shootSetting = "Botanical Garden with Soft Greenery Bokeh & Natural Morning Flare",
-      shootPose = "Relaxed natural standing pose with hand resting gently at waist",
       
       // 3 Face Modes: "keep_original" | "custom_face" | "random_face"
       faceMode = "keep_original",
@@ -185,7 +263,6 @@ export async function POST(req: NextRequest) {
       aspectRatio = "4:5",
 
       // Magic Mode parameters
-      modelId = "indian_female_standard",
       modelName = "Indian Female Model",
       modelFaceUrl = null,
       poseId = "01_hand_on_hip_full_length",
@@ -294,8 +371,11 @@ export async function POST(req: NextRequest) {
           fallbackMessage: `Notice: Operating in sandbox simulation mode. (${reason})`
         });
       } catch (dbErr) {
-        const errorMsg = dbErr instanceof Error ? dbErr.message : "Failed to execute transaction";
-        return NextResponse.json({ error: errorMsg }, { status: 500 });
+        console.error("Sandbox fallback credit transaction failed:", dbErr);
+        return NextResponse.json(
+          { error: "Could not complete the request. Please try again." },
+          { status: 500 }
+        );
       }
     };
 
@@ -305,9 +385,42 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Compress All Garment Reference Images Directly (Strictly Max 5 Garments, <= 640px)
-    const compressedGarmentUrls = await Promise.all(
-      activeGarments.map(async (g) => await getCompressedFalUrl(g.url, 640))
-    );
+    // Per-item fault tolerance: one unreachable garment must not abort the whole
+    // generation. Transient failures get retried; a permanent failure drops that
+    // garment and is reported back so the client knows what was skipped.
+    const garmentFailures: string[] = [];
+    const compressedGarmentUrls = (
+      await Promise.all(
+        activeGarments.map(async (g, idx) => {
+          try {
+            return await retryOperation(() => getCompressedFalUrl(g.url, 640), 2, 1000);
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : "unknown error";
+            console.error(`Garment reference ${idx + 1} failed to prepare:`, reason);
+            garmentFailures.push(`Garment ${idx + 1}: ${reason}`);
+            return "";
+          }
+        })
+      )
+    ).filter((u) => u.length > 0);
+
+    if (compressedGarmentUrls.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            garmentFailures[0] ||
+            "None of the provided fabric reference images could be loaded. Please re-upload them.",
+          skippedGarments: garmentFailures,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (garmentFailures.length > 0) {
+      console.warn(
+        `Continuing with ${compressedGarmentUrls.length}/${activeGarments.length} garments; skipped: ${garmentFailures.join("; ")}`
+      );
+    }
 
     // Formulate per-layer fabric notes
     const notesSummary = activeGarments
@@ -546,7 +659,7 @@ export async function POST(req: NextRequest) {
     console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, References: ${imageUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP)`);
 
     // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 4.5MP-5.0MP Ultra-Sharp Asset)
-    let falResult: any;
+    let falResult: FalRunResult;
     try {
       falResult = await retryOperation(async () => {
         return await fal.run("fal-ai/flux-2-pro/edit", {
@@ -626,8 +739,18 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : "Internal server error";
+    const rawMsg = error instanceof Error ? error.message : String(error);
     console.error("Generation API internal error:", error);
+
+    // Only messages explicitly marked client-safe are echoed back. Anything else
+    // (filesystem paths, raw upstream errors, stack text) is replaced, while the
+    // full detail stays in the server logs.
+    const errorMsg =
+      error instanceof ClientSafeError
+        ? error.message
+        : "Image generation failed due to an internal error. Please try again.";
+
+    console.error(`Internal error detail: ${rawMsg}`);
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

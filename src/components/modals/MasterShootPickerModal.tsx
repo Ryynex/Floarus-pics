@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import Image from "next/image";
-import { Search, X, Check, Upload, Sparkles, Camera, MapPin, Sun } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Search, X, Check, Upload, MapPin, Sun } from "lucide-react";
 import { MASTER_SHOOTS, MasterShoot, getSavedCustomShoots, saveCustomShoot } from "@/lib/catalogData";
 import { supabase } from "@/lib/supabaseClient";
 import { compressImageClient } from "@/lib/imageCompression";
@@ -12,31 +11,37 @@ interface MasterShootPickerModalProps {
   onClose: () => void;
   selectedShoot: MasterShoot;
   onSelect: (shoot: MasterShoot) => void;
+  onUploadError?: (message: string) => void;
 }
 
 export function MasterShootPickerModal({
   isOpen,
   onClose,
   selectedShoot,
-  onSelect
+  onSelect,
+  onUploadError
 }: MasterShootPickerModalProps) {
   const [activeTab, setActiveTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [allShoots, setAllShoots] = useState<MasterShoot[]>(MASTER_SHOOTS);
+  const [allShoots, setAllShoots] = useState<MasterShoot[]>(() => {
+    const saved = getSavedCustomShoots();
+    return saved.length > 0 ? [...saved, ...MASTER_SHOOTS] : MASTER_SHOOTS;
+  });
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load user's saved custom photoshoot references
-  useEffect(() => {
+  // Re-read saved custom photoshoots whenever the modal is (re)opened.
+  // Adjusting state during render is the React-recommended alternative to
+  // setState-in-effect: React discards and re-runs this component immediately,
+  // with no cascading commit or stale intermediate frame.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
       const saved = getSavedCustomShoots();
-      if (saved.length > 0) {
-        setAllShoots([...saved, ...MASTER_SHOOTS]);
-      } else {
-        setAllShoots(MASTER_SHOOTS);
-      }
+      setAllShoots(saved.length > 0 ? [...saved, ...MASTER_SHOOTS] : MASTER_SHOOTS);
     }
-  }, [isOpen]);
+  }
 
   if (!isOpen) return null;
 
@@ -62,10 +67,33 @@ export function MasterShootPickerModal({
     if (!file) return;
 
     setIsUploading(true);
+
+    // Compress first and outside the upload try/catch: a compression failure is not
+    // recoverable by falling back to a data URL, because the only thing available
+    // would be the full-resolution original we were trying to avoid persisting.
+    let compressedFile: File;
+    try {
+      compressedFile = await compressImageClient(file, 640, 0.85);
+    } catch (err) {
+      console.error("Custom shoot compression failed:", err);
+      onUploadError?.(
+        err instanceof Error ? err.message : "Could not read the selected image."
+      );
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const registerShoot = (customShoot: MasterShoot) => {
+      saveCustomShoot(customShoot);
+      setAllShoots([customShoot, ...allShoots]);
+      onSelect(customShoot);
+      onClose();
+    };
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || "anonymous";
-      const compressedFile = await compressImageClient(file, 1000, 0.85);
       const fileName = `shoot-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
       const filePath = `${userId}/custom-shoots/${fileName}`;
 
@@ -79,7 +107,7 @@ export function MasterShootPickerModal({
         .from("garments")
         .getPublicUrl(filePath);
 
-      const customShoot: MasterShoot = {
+      registerShoot({
         id: `custom_shoot_${Date.now()}`,
         title: compressedFile.name.replace(/\.[^/.]+$/, "").substring(0, 30) || "Custom Brand Shoot",
         category: "custom",
@@ -89,18 +117,14 @@ export function MasterShootPickerModal({
         lighting: "Authentic camera lighting from uploaded reference",
         poseDescription: "Reference pose and body geometry from uploaded photo",
         badge: "Brand Upload"
-      };
-
-      saveCustomShoot(customShoot);
-      setAllShoots([customShoot, ...allShoots]);
-      onSelect(customShoot);
-      onClose();
+      });
     } catch (err) {
       console.error("Custom shoot upload failed:", err);
-      // Fallback: create data URL for local session
+      // Upload failed (offline, quota, etc). Fall back to a data URL built from the
+      // ALREADY-COMPRESSED file, so we never persist a multi-megabyte original.
       const reader = new FileReader();
       reader.onload = () => {
-        const customShoot: MasterShoot = {
+        registerShoot({
           id: `custom_shoot_${Date.now()}`,
           title: "Custom Brand Shoot",
           category: "custom",
@@ -110,13 +134,12 @@ export function MasterShootPickerModal({
           lighting: "Custom reference lighting",
           poseDescription: "Custom reference pose & hands",
           badge: "Brand Upload"
-        };
-        saveCustomShoot(customShoot);
-        setAllShoots([customShoot, ...allShoots]);
-        onSelect(customShoot);
-        onClose();
+        });
       };
-      reader.readAsDataURL(file);
+      reader.onerror = () => {
+        onUploadError?.("Could not save the photoshoot reference. Please try again.");
+      };
+      reader.readAsDataURL(compressedFile);
     } finally {
       setIsUploading(false);
     }

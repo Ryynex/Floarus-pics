@@ -97,7 +97,7 @@ export default function Home() {
 
     try {
       if (authMode === "login") {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password: cleanPassword,
         });

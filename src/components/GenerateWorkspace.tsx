@@ -14,8 +14,6 @@ import {
   X,
   User,
   ChevronRight,
-  ChevronDown,
-  Shirt,
   Camera,
   MapPin,
   Sun,
@@ -24,7 +22,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  OUTFIT_TYPES,
   MASTER_SHOOTS,
   MasterShoot,
   CatalogModel,
@@ -49,68 +46,57 @@ interface UploadedGarment {
 
 export function GenerateWorkspace() {
   const router = useRouter();
+
+  // Hydrate from localStorage during the initial render (lazy useState initializers)
+  // rather than in a mount effect. This avoids a cascading re-render on every load
+  // and means the save-on-change effect never has to guard against "not loaded yet".
+  const initialPrefs = getSavedStudioPreferences();
+  const initialModels = getSavedCustomModels();
+  const initialGarments = getSavedGarments();
+
   // 1. Master Photoshoot Reference Anchor (Pose, Hands & Environment)
-  const [selectedShoot, setSelectedShoot] = useState<MasterShoot>(MASTER_SHOOTS[0]);
+  const [selectedShoot, setSelectedShoot] = useState<MasterShoot>(
+    initialPrefs?.selectedShoot ?? MASTER_SHOOTS[0]
+  );
   const [isShootModalOpen, setIsShootModalOpen] = useState(false);
 
   // 2. Model Face Option: "keep_original" | "custom_face" | "random_face"
-  const [faceMode, setFaceMode] = useState<"keep_original" | "custom_face" | "random_face">("keep_original");
-  const [selectedModel, setSelectedModel] = useState<CatalogModel>(PRESET_MODELS[0]);
+  const [faceMode, setFaceMode] = useState<"keep_original" | "custom_face" | "random_face">(
+    initialPrefs?.faceMode ?? "keep_original"
+  );
+  const [selectedModel, setSelectedModel] = useState<CatalogModel>(
+    initialPrefs?.selectedModel ?? (initialModels.length > 0 ? initialModels[0] : PRESET_MODELS[0])
+  );
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
 
   // 3. Outfit & Product Garment Uploads
-  const [outfitType, setOutfitType] = useState<string>("Wholesale Saree (6-Yard)");
-  const [garments, setGarments] = useState<UploadedGarment[]>([]);
-  const [customStylingNotes, setCustomStylingNotes] = useState<string>("");
+  // Studio mode has no outfit-type selector, so this is read-only and persisted.
+  const [outfitType] = useState<string>(
+    initialPrefs?.outfitType ?? "Wholesale Saree (6-Yard)"
+  );
+  const [garments, setGarments] = useState<UploadedGarment[]>(() =>
+    initialGarments.slice(0, 5).map((g, idx) => ({
+      id: g.id,
+      url: g.url,
+      note: g.note || "",
+      slotLabel: g.slotLabel || `Fabric Angle ${idx + 1}`
+    }))
+  );
+  const [customStylingNotes, setCustomStylingNotes] = useState<string>(
+    initialPrefs?.customStylingNotes ?? ""
+  );
   const [isUploading, setIsUploading] = useState(false);
 
   // Execution & Output States
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState("");
-  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(initialPrefs?.outputUrl ?? null);
   const [showLightbox, setShowLightbox] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
 
-  const isLoadedRef = useRef(false);
-
-  // Load custom saved models, permanent garments, and user preferences on mount
-  useEffect(() => {
-    // 1. Load permanent user workspace preferences
-    const savedPrefs = getSavedStudioPreferences();
-    if (savedPrefs) {
-      if (savedPrefs.selectedShoot) setSelectedShoot(savedPrefs.selectedShoot);
-      if (savedPrefs.faceMode) setFaceMode(savedPrefs.faceMode);
-      if (savedPrefs.selectedModel) setSelectedModel(savedPrefs.selectedModel);
-      if (savedPrefs.outfitType) setOutfitType(savedPrefs.outfitType);
-      if (savedPrefs.customStylingNotes !== undefined) setCustomStylingNotes(savedPrefs.customStylingNotes);
-      if (savedPrefs.outputUrl) setOutputUrl(savedPrefs.outputUrl);
-    } else {
-      const savedModels = getSavedCustomModels();
-      if (savedModels.length > 0) {
-        setSelectedModel(savedModels[0]);
-      }
-    }
-
-    // 2. Load permanent uploaded outfit fabric photos
-    const savedGarments = getSavedGarments();
-    if (savedGarments.length > 0) {
-      setGarments(
-        savedGarments.slice(0, 5).map((g, idx) => ({
-          id: g.id,
-          url: g.url,
-          note: g.note || "",
-          slotLabel: g.slotLabel || `Fabric Angle ${idx + 1}`
-        }))
-      );
-    }
-
-    isLoadedRef.current = true;
-  }, []);
-
   // Automatically save all user choices locally whenever any option changes
   useEffect(() => {
-    if (!isLoadedRef.current) return;
     saveStudioPreferences({
       selectedShoot,
       faceMode,
@@ -145,7 +131,6 @@ export function GenerateWorkspace() {
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const costEstimation = 49.00;
 
   // Upload Garment Photos to Supabase Storage with Client Compression (Max 5 Garments)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,7 +161,7 @@ export function GenerateWorkspace() {
       for (let i = 0; i < filesToUpload.length; i++) {
         const rawFile = filesToUpload[i];
         // Automatically compress garment photo client-side before upload
-        const compressedFile = await compressImageClient(rawFile, 1000, 0.85);
+        const compressedFile = await compressImageClient(rawFile, 640, 0.85);
         const fileName = `${folder}/uploads/garment-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
         const { error } = await supabase.storage
@@ -259,7 +244,7 @@ export function GenerateWorkspace() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return null;
       const folder = session.user.id;
-      const compressedFile = await compressImageClient(file, 1000, 0.85);
+      const compressedFile = await compressImageClient(file, 640, 0.85);
       const fileName = `${folder}/models/custom-model-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
       const { error } = await supabase.storage
@@ -906,6 +891,7 @@ export function GenerateWorkspace() {
         onClose={() => setIsShootModalOpen(false)}
         selectedShoot={selectedShoot}
         onSelect={(shoot) => setSelectedShoot(shoot)}
+        onUploadError={(msg) => addToast("error", msg)}
       />
 
       {/* MODEL PICKER MODAL (For Custom Brand Face) */}

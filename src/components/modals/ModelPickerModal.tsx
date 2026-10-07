@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Search, X, UploadCloud, Check, User, Trash2, Sparkles } from "lucide-react";
 import {
   PRESET_MODELS,
@@ -10,7 +10,27 @@ import {
   deleteSavedCustomModel
 } from "@/lib/catalogData";
 
-import { compressImageClient } from "@/lib/imageCompression";
+import { compressImageClient, ImageCompressionError } from "@/lib/imageCompression";
+
+/**
+ * Reads a compressed image into an inline `data:` URI.
+ * Used as an upload fallback so a failed Supabase upload never leaves an
+ * unusable `blob:` URL in the catalog.
+ */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () =>
+      reject(
+        new ImageCompressionError(
+          `Failed to read '${file.name}' for local preview fallback`,
+          { cause: reader.error }
+        )
+      );
+    reader.readAsDataURL(file);
+  });
+}
 
 interface ModelPickerModalProps {
   isOpen: boolean;
@@ -29,20 +49,25 @@ export function ModelPickerModal({
 }: ModelPickerModalProps) {
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [customModels, setCustomModels] = useState<CatalogModel[]>([]);
+  const [customModels, setCustomModels] = useState<CatalogModel[]>(getSavedCustomModels);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [modelNameInput, setModelNameInput] = useState<string>("");
 
-  // Load permanent custom models from localStorage on mount and when modal opens
-  useEffect(() => {
+  // Refresh saved custom models and clear the pending draft each time the modal
+  // is opened. Adjusting state during render is the React-recommended alternative
+  // to setState-in-effect: React discards and re-runs this component immediately,
+  // with no cascading commit or stale intermediate frame.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
       setCustomModels(getSavedCustomModels());
       setPendingFile(null);
       setPendingPreview(null);
       setModelNameInput("");
     }
-  }, [isOpen]);
+  }
 
   if (!isOpen) return null;
 
@@ -69,7 +94,10 @@ export function ModelPickerModal({
         if (uploadedUrl) url = uploadedUrl;
       }
       if (!url) {
-        url = pendingPreview || URL.createObjectURL(compressedFile);
+        // Upload failed (offline, quota, etc). Fall back to an inline data URI so the
+        // server can still read and compress it. A blob:/object URL would not survive
+        // persistence or be readable by the API route, so it must never be stored here.
+        url = await fileToDataUrl(compressedFile);
       }
 
       const newModel: CatalogModel = {
