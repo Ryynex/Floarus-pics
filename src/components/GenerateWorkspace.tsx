@@ -25,16 +25,21 @@ import {
   MASTER_SHOOTS,
   MasterShoot,
   CatalogModel,
+  CatalogFabric,
   MAX_GARMENT_REFERENCES,
   PRESET_MODELS,
+  PRESET_FABRICS,
   getSavedCustomModels,
   getSavedGarments,
   saveGarmentsToStorage,
   getSavedStudioPreferences,
-  saveStudioPreferences
+  saveStudioPreferences,
+  getSavedFabricPreference,
+  saveFabricPreference
 } from "@/lib/catalogData";
 import { MasterShootPickerModal } from "./modals/MasterShootPickerModal";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
+import { FabricPickerModal } from "./modals/FabricPickerModal";
 import { compressImageClient } from "@/lib/imageCompression";
 
 interface UploadedGarment {
@@ -70,6 +75,12 @@ export function GenerateWorkspace() {
   );
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
 
+  // 3. Garment Fabric Selection (15 Main Saree Weaves)
+  const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
+    initialPrefs?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
+  );
+  const [isFabricModalOpen, setIsFabricModalOpen] = useState(false);
+
   // 3. Outfit & Product Garment Uploads
   // Studio mode has no outfit-type selector, so this is read-only and persisted.
   const [outfitType] = useState<string>(
@@ -102,14 +113,17 @@ export function GenerateWorkspace() {
       selectedShoot,
       faceMode,
       selectedModel,
+      selectedFabric,
       outfitType,
       customStylingNotes,
       outputUrl
     });
+    saveFabricPreference(selectedFabric);
   }, [
     selectedShoot,
     faceMode,
     selectedModel,
+    selectedFabric,
     outfitType,
     customStylingNotes,
     outputUrl
@@ -304,6 +318,11 @@ export function GenerateWorkspace() {
           // Face Mode
           faceMode,
           customFaceUrl: faceMode === "custom_face" ? (selectedModel.imageUrl || null) : null,
+
+          // Fabric Specification
+          fabric: selectedFabric.name,
+          fabricDescription: selectedFabric.description,
+          fabricDrapePhysics: selectedFabric.drapePhysics,
 
           customNotes: customStylingNotes,
           // Strictly limit to the maximum garment reference count
@@ -572,7 +591,55 @@ export function GenerateWorkspace() {
               )}
             </div>
 
-            {/* 3. PRODUCT FABRIC PHOTOS & PER-PHOTO NOTES */}
+            {/* 3. SAREE / GARMENT FABRIC (15 CURATED WEAVES) */}
+            <div className="flex flex-col gap-2 pt-1">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-bold uppercase tracking-wider text-ink flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-fuchsia-accent" />
+                  <span>Saree / Garment Fabric</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsFabricModalOpen(true)}
+                  className="text-xs text-fuchsia-accent hover:underline font-semibold cursor-pointer"
+                >
+                  Change Fabric
+                </button>
+              </div>
+
+              <div
+                onClick={() => setIsFabricModalOpen(true)}
+                className="p-3 sm:p-3.5 bg-surface border border-line rounded-xl flex items-center justify-between gap-3 hover:border-fuchsia-accent/50 hover:bg-clay-soft/30 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-10 w-10 rounded-xl bg-fuchsia-accent/10 border border-line flex items-center justify-center text-fuchsia-accent shrink-0 group-hover:scale-105 transition-transform">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-bold text-ink truncate group-hover:text-fuchsia-accent transition-colors">
+                        {selectedFabric.name}
+                      </span>
+                      {selectedFabric.badge && (
+                        <span className="bg-sand border border-line text-ink-soft text-[8px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0">
+                          {selectedFabric.badge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] sm:text-[11px] text-ink-soft truncate mt-0.5">
+                      {selectedFabric.description}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 sm:gap-1.5 text-fuchsia-accent font-semibold text-xs shrink-0 pl-1">
+                  <span className="hidden xs:inline sm:inline">15 Fabrics</span>
+                  <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. PRODUCT FABRIC PHOTOS & PER-PHOTO NOTES */}
             <div className="flex flex-col gap-2.5 sm:gap-3 pt-1">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-bold uppercase tracking-wider text-ink flex items-center gap-1.5">
@@ -902,6 +969,17 @@ export function GenerateWorkspace() {
         selectedModel={selectedModel}
         onSelect={(model) => setSelectedModel(model)}
         onCustomUpload={handleCustomModelUpload}
+      />
+
+      {/* FABRIC PICKER MODAL (15 Weaves) */}
+      <FabricPickerModal
+        isOpen={isFabricModalOpen}
+        onClose={() => setIsFabricModalOpen(false)}
+        selectedFabric={selectedFabric}
+        onSelect={(fabric) => {
+          setSelectedFabric(fabric);
+          saveFabricPreference(fabric);
+        }}
       />
 
       {/* TOAST NOTIFICATION CONTAINER STACK */}

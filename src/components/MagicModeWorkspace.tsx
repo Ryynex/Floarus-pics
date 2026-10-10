@@ -29,23 +29,28 @@ import {
   CatalogBackground,
   CatalogHairstyle,
   CatalogJewellery,
+  CatalogFabric,
   PRESET_MODELS,
   PRESET_POSES,
   PRESET_BACKGROUNDS,
   PRESET_HAIRSTYLES,
   PRESET_JEWELLERY,
+  PRESET_FABRICS,
   MAX_GARMENT_REFERENCES,
   getSavedCustomModels,
   getSavedGarments,
   saveGarmentsToStorage,
   getSavedMagicPreferences,
-  saveMagicPreferences
+  saveMagicPreferences,
+  getSavedFabricPreference,
+  saveFabricPreference
 } from "@/lib/catalogData";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
 import { PosePickerModal } from "./modals/PosePickerModal";
 import { BackgroundPickerModal } from "./modals/BackgroundPickerModal";
 import { HairstylePickerModal } from "./modals/HairstylePickerModal";
 import { JewelleryPickerModal } from "./modals/JewelleryPickerModal";
+import { FabricPickerModal } from "./modals/FabricPickerModal";
 import { compressImageClient } from "@/lib/imageCompression";
 
 interface UploadedPhoto {
@@ -84,6 +89,9 @@ export function MagicModeWorkspace() {
   const [selectedJewellery, setSelectedJewellery] = useState<CatalogJewellery>(
     initialPrefs?.selectedJewellery ?? PRESET_JEWELLERY[0]
   );
+  const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
+    initialPrefs?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
+  );
 
   // Modal Visibility States
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -91,6 +99,7 @@ export function MagicModeWorkspace() {
   const [isBgModalOpen, setIsBgModalOpen] = useState(false);
   const [isHairModalOpen, setIsHairModalOpen] = useState(false);
   const [isJewelModalOpen, setIsJewelModalOpen] = useState(false);
+  const [isFabricModalOpen, setIsFabricModalOpen] = useState(false);
 
   // 2. Outfit Type & Garment Uploads
   const [outfitType, setOutfitType] = useState<string>(
@@ -127,11 +136,13 @@ export function MagicModeWorkspace() {
       backgroundMode,
       selectedHairstyle,
       selectedJewellery,
+      selectedFabric,
       outfitType,
       customStylingNotes,
       outputUrl,
       recentGenerations
     });
+    saveFabricPreference(selectedFabric);
   }, [
     selectedModel,
     selectedPose,
@@ -139,6 +150,7 @@ export function MagicModeWorkspace() {
     backgroundMode,
     selectedHairstyle,
     selectedJewellery,
+    selectedFabric,
     outfitType,
     customStylingNotes,
     outputUrl,
@@ -346,11 +358,14 @@ export function MagicModeWorkspace() {
           backgroundDescription: selectedBackground.description,
           backgroundMode,
 
-          // 4. Hairstyle & Jewellery
+          // 4. Hairstyle, Jewellery & Fabric
           hairstyle: selectedHairstyle.name,
           hairstyleDescription: selectedHairstyle.description,
           jewellery: selectedJewellery.name,
           jewelleryDescription: selectedJewellery.description,
+          fabric: selectedFabric.name,
+          fabricDescription: selectedFabric.description,
+          fabricDrapePhysics: selectedFabric.drapePhysics,
 
           // 5. Custom Notes & Product Photos (Max MAX_GARMENT_REFERENCES)
           customNotes: customStylingNotes,
@@ -606,11 +621,11 @@ export function MagicModeWorkspace() {
                   <ChevronRight className="h-4 w-4 text-ink-faint group-hover:text-fuchsia-accent transition-colors shrink-0 mt-2" />
                 </button>
 
-                {/* Tile 5: JEWELLERY (Full Width or 5th slot) */}
+                {/* Tile 5: JEWELLERY */}
                 <button
                   type="button"
                   onClick={() => setIsJewelModalOpen(true)}
-                  className="sm:col-span-2 p-3.5 sm:p-4 rounded-xl border border-line bg-surface hover:border-fuchsia-accent/50 hover:bg-clay-soft/40 transition-all text-left flex items-start justify-between gap-3 group cursor-pointer"
+                  className="p-3.5 sm:p-4 rounded-xl border border-line bg-surface hover:border-fuchsia-accent/50 hover:bg-clay-soft/40 transition-all text-left flex items-start justify-between gap-3 group cursor-pointer"
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="h-10 w-10 rounded-xl bg-clay-soft border border-line flex items-center justify-center text-amber-warm shrink-0 group-hover:scale-105 transition-transform">
@@ -625,6 +640,31 @@ export function MagicModeWorkspace() {
                       </span>
                       <span className="text-[11px] text-ink-soft truncate">
                         {selectedJewellery.description || "Optional ethnic ornaments"}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-ink-faint group-hover:text-fuchsia-accent transition-colors shrink-0 mt-2" />
+                </button>
+
+                {/* Tile 6: FABRIC */}
+                <button
+                  type="button"
+                  onClick={() => setIsFabricModalOpen(true)}
+                  className="p-3.5 sm:p-4 rounded-xl border border-line bg-surface hover:border-fuchsia-accent/50 hover:bg-clay-soft/40 transition-all text-left flex items-start justify-between gap-3 group cursor-pointer"
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-fuchsia-accent/10 border border-line flex items-center justify-center text-fuchsia-accent shrink-0 group-hover:scale-105 transition-transform">
+                      <Layers className="h-5 w-5" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] font-bold text-ink-faint uppercase tracking-wider">
+                        Fabric ({selectedFabric.badge || "Drape"})
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-ink truncate group-hover:text-fuchsia-accent transition-colors">
+                        {selectedFabric.name}
+                      </span>
+                      <span className="text-[11px] text-ink-soft truncate">
+                        {selectedFabric.description}
                       </span>
                     </div>
                   </div>
@@ -991,6 +1031,13 @@ export function MagicModeWorkspace() {
         onClose={() => setIsJewelModalOpen(false)}
         selectedJewellery={selectedJewellery}
         onSelect={(jewel) => setSelectedJewellery(jewel)}
+      />
+
+      <FabricPickerModal
+        isOpen={isFabricModalOpen}
+        onClose={() => setIsFabricModalOpen(false)}
+        selectedFabric={selectedFabric}
+        onSelect={(fabric) => setSelectedFabric(fabric)}
       />
     </div>
   );

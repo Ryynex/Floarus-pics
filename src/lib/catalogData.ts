@@ -39,6 +39,17 @@ export interface CatalogJewellery {
   isCustom?: boolean;
 }
 
+export interface CatalogFabric {
+  id: string;
+  name: string;
+  category: "silks" | "sheers" | "cottons" | "luxe";
+  categoryLabel: string;
+  description: string;
+  drapePhysics: string;
+  badge?: string;
+  isCustom?: boolean;
+}
+
 export interface WorkflowMode {
   id: "sarees" | "suits" | "magic" | "pose";
   title: string;
@@ -247,6 +258,7 @@ export interface SavedMagicPreferences {
   backgroundMode?: "fixed" | "inspiration";
   selectedHairstyle?: CatalogHairstyle;
   selectedJewellery?: CatalogJewellery;
+  selectedFabric?: CatalogFabric;
   outfitType?: string;
   customStylingNotes?: string;
   outputUrl?: string | null;
@@ -279,6 +291,7 @@ export interface SavedStudioPreferences {
   selectedShoot?: MasterShoot;
   faceMode?: "keep_original" | "custom_face" | "random_face";
   selectedModel?: CatalogModel;
+  selectedFabric?: CatalogFabric;
   outfitType?: string;
   customStylingNotes?: string;
   outputUrl?: string | null;
@@ -303,6 +316,29 @@ export function saveStudioPreferences(prefs: SavedStudioPreferences): void {
     localStorage.setItem(STUDIO_PREFERENCES_KEY, JSON.stringify(prefs));
   } catch (e) {
     console.error("Failed to save studio workspace preferences:", e);
+  }
+}
+
+// Global helper for persisting and syncing selected fabric across the browser
+const FABRIC_PREFERENCE_KEY = "florus_saved_fabric_preference";
+
+export function getSavedFabricPreference(): CatalogFabric | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(FABRIC_PREFERENCE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.error("Failed to load fabric preference:", e);
+    return null;
+  }
+}
+
+export function saveFabricPreference(fabric: CatalogFabric): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(FABRIC_PREFERENCE_KEY, JSON.stringify(fabric));
+  } catch (e) {
+    console.error("Failed to save fabric preference:", e);
   }
 }
 
@@ -728,7 +764,146 @@ export const OUTFIT_TYPES = [
 ];
 
 // -------------------------------------------------------------
-// 8. Master Photoshoot References (Real Curated Shoots)
+// 8. 15 Main Saree & Ethnic Garment Fabrics (Physical Drape & Luster Conditioning)
+// -------------------------------------------------------------
+export const PRESET_FABRICS: CatalogFabric[] = [
+  // 1. Silks & Brocades (5 Fabrics)
+  {
+    id: "kanjeevaram-silk",
+    name: "Kanjeevaram Silk",
+    category: "silks",
+    categoryLabel: "Silks & Brocades",
+    description: "Heavy South Indian pure silk with authentic gold zari border relief and structured pleats",
+    drapePhysics: "heavy, structured mulberry silk with crisp pleated drape, stiff pallu fall, and luminous gold zari relief",
+    badge: "Royal Weave"
+  },
+  {
+    id: "banarasi-brocade-silk",
+    name: "Banarasi Brocade Silk",
+    category: "silks",
+    categoryLabel: "Silks & Brocades",
+    description: "Opulent North Indian silk embossed with metallic floral kadwa motifs and regal luster",
+    drapePhysics: "dense, opulent brocade silk with firm structural pleating, embossed metallic gold floral motifs, and rich royal luster",
+    badge: "Bridal Classic"
+  },
+  {
+    id: "pure-mulberry-silk",
+    name: "Pure Mulberry Silk",
+    category: "silks",
+    categoryLabel: "Silks & Brocades",
+    description: "Ultra-smooth natural silk with liquid sheen, organic thread weave, and fluid graceful fall",
+    drapePhysics: "ultra-smooth pure silk with natural directional sheen, fluid graceful drape, and authentic organic thread weave"
+  },
+  {
+    id: "tussar-wild-silk",
+    name: "Tussar Silk (Wild Kosa)",
+    category: "silks",
+    categoryLabel: "Silks & Brocades",
+    description: "Handspun textured wild silk with natural honey-gold slub sheen and dignified drape",
+    drapePhysics: "textured wild tussar silk with distinct tactile slub thread grain, earthy matte luster, and crisp dignified drape"
+  },
+  {
+    id: "chanderi-silk-cotton",
+    name: "Chanderi Silk-Cotton",
+    category: "silks",
+    categoryLabel: "Silks & Brocades",
+    description: "Featherlight sheer gossamer weave with subtle sheen and delicate gold woven butties",
+    drapePhysics: "featherlight sheer silk-cotton blend with subtle gossamer sheen, semi-translucent airy drape, and delicate gold woven butties"
+  },
+
+  // 2. Sheers & Flowy (5 Fabrics)
+  {
+    id: "pure-chiffon",
+    name: "Pure Chiffon",
+    category: "sheers",
+    categoryLabel: "Sheers & Flowy",
+    description: "Whisper-light, semi-sheer fabric with soft cascading liquid drapes hugging body curves",
+    drapePhysics: "airy, semi-sheer chiffon with gossamer lightness, delicate micro-texture, and soft fluid cascading drape hugging body curves",
+    badge: "Flowy & Light"
+  },
+  {
+    id: "flowing-georgette",
+    name: "Flowing Georgette",
+    category: "sheers",
+    categoryLabel: "Sheers & Flowy",
+    description: "Bouncy pebble-grain crinkled fabric with graceful drape and fluid body-contouring pleats",
+    drapePhysics: "textured pebble-grain georgette with subtle crepe elasticity, bouncy drape, and fluid pleating that contours gracefully"
+  },
+  {
+    id: "crisp-organza",
+    name: "Crisp Organza",
+    category: "sheers",
+    categoryLabel: "Sheers & Flowy",
+    description: "Stiff sheer fabric with crystalline glass sheen and voluminous billowing pleated flares",
+    drapePhysics: "crisp, semi-translucent sheer organza with glassy crystalline sheen, structured airy volume, and billowing pleated flare",
+    badge: "Trending"
+  },
+  {
+    id: "tissue-silk",
+    name: "Tissue Silk",
+    category: "sheers",
+    categoryLabel: "Sheers & Flowy",
+    description: "Ultra-fine metallic woven yarn with shimmering glass-like reflections and crisp drape",
+    drapePhysics: "iridescent metallic tissue silk woven with gold and silver threads, glassy metallic highlights, and semi-crisp reflective drape"
+  },
+  {
+    id: "delicate-net",
+    name: "Delicate Net / Tulle",
+    category: "sheers",
+    categoryLabel: "Sheers & Flowy",
+    description: "Fine hexagonal sheer mesh fabric with airy volume for cocktail and evening drapes",
+    drapePhysics: "fine hexagonal sheer net mesh with delicate airy volume, sheer transparency, and ethereal evening drape"
+  },
+
+  // 3. Cottons & Linens (2 Fabrics)
+  {
+    id: "pure-handloom-cotton",
+    name: "Pure Handloom Cotton (Mulmul)",
+    category: "cottons",
+    categoryLabel: "Cottons & Linens",
+    description: "Ultra-soft breathable cotton with matte organic thread texture and relaxed natural folds",
+    drapePhysics: "soft, breathable handloom cotton with matte finish, visible authentic organic warp and weft yarn weave, and relaxed natural folds",
+    badge: "Breathable"
+  },
+  {
+    id: "crisp-pure-linen",
+    name: "Crisp Pure Linen",
+    category: "cottons",
+    categoryLabel: "Cottons & Linens",
+    description: "Earthy textured flax weave with distinct cross-hatch slub and relaxed contemporary silhouette",
+    drapePhysics: "pure natural flax linen with distinctive slub cross-hatch weave, matte earthy texture, and crisp contemporary drape"
+  },
+
+  // 4. Luxe & Heavy Drapes (3 Fabrics)
+  {
+    id: "pure-crepe-silk",
+    name: "Pure Crepe / Crepe Silk",
+    category: "luxe",
+    categoryLabel: "Luxe & Drape",
+    description: "Subtle pebbled matte surface with liquid-like cascading fall and heavy zero-stiffness pleats",
+    drapePhysics: "pebble-textured pure silk crepe with fluid liquid drape, weighty falling pleats, and zero-stiffness contouring"
+  },
+  {
+    id: "glossy-satin",
+    name: "Glossy Satin",
+    category: "luxe",
+    categoryLabel: "Luxe & Drape",
+    description: "Mirror-smooth liquid sheen with high-contrast radiant drape folds and shimmering highlights",
+    drapePhysics: "liquid-smooth satin with radiant high-gloss specular reflections, fluid heavy drape, and deep shimmering folds"
+  },
+  {
+    id: "royal-velvet",
+    name: "Royal Velvet",
+    category: "luxe",
+    categoryLabel: "Luxe & Drape",
+    description: "Dense plush pile fabric with deep light-absorbing shadows and opulent royal weight",
+    drapePhysics: "dense, plush royal velvet with deep light-absorbing pile, rich directional shadows, and heavy opulent structural drape",
+    badge: "Royal Luxe"
+  }
+];
+
+// -------------------------------------------------------------
+// 9. Master Photoshoot References (Real Curated Shoots)
 // Prevents AI hallucination by providing real poses, natural hands,
 // and authentic Indian lighting physics.
 // -------------------------------------------------------------
