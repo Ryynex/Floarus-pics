@@ -286,8 +286,6 @@ export async function POST(req: NextRequest) {
       jewellery = "Default (as before)",
       jewelleryDescription = "",
       fabric = "Kanjeevaram Silk",
-      fabricDescription = "",
-      fabricDrapePhysics = "",
       customNotes = "",
       garments = [],
       sareeUrls = []
@@ -503,7 +501,7 @@ export async function POST(req: NextRequest) {
       const bgRef = refList.find(r => r.type === "background");
 
       const promptParts: string[] = [
-        `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${outfitType || "ethnic outfit"}.`
+        `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabric ? `${fabric} ` : ""}${outfitType || "ethnic outfit"}.`
       ];
 
       // Model Face
@@ -566,7 +564,7 @@ export async function POST(req: NextRequest) {
           ? `Reference Image ${garmentIndices[0]}` 
           : `Reference Images ${garmentIndices[0]} to ${garmentIndices[garmentIndices.length - 1]}`;
         promptParts.push(
-          `Product Garment Draping: Drape the authentic ethnic outfit from ${garmentRangeStr} directly onto the model.`
+          `Product Garment Draping: Drape the authentic ${fabric ? `${fabric} ` : ""}ethnic outfit from ${garmentRangeStr} directly onto the model.`
         );
       }
 
@@ -576,13 +574,6 @@ export async function POST(req: NextRequest) {
 
       if (customNotes) {
         promptParts.push(`Styling & drape instructions: ${customNotes}.`);
-      }
-
-      // Fabric & Drape Physics Conditioning
-      if (fabric) {
-        promptParts.push(
-          `Garment Fabric & Drape Physics: The garment is tailored from authentic ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. ${fabricDrapePhysics || `Authentic tactile textile realism with natural physical drape and pleat gravity corresponding to ${fabric}`}. Accurately render the true optical sheen, light reflection, weave texture, and authentic weight and fall of ${fabric}.`
-        );
       }
 
       // Quality, Skin Realism & Fabric Physics
@@ -617,8 +608,7 @@ export async function POST(req: NextRequest) {
           `High-end luxury Indian fashion catalog editorial portrait photograph.`,
           `Facial Identity Transfer: Transfer the exact facial identity, features, and expression of the model in Reference Image 1 onto the model in Reference Image 2.`,
           `Preserve Pose & Setting: Preserve the exact body pose, natural hand anatomy, posture, lighting, and background setting from Reference Image 2 (${shootTitle}: ${shootSetting || backgroundName}).`,
-          `Garment Draping: Drape the model in the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
-          fabric ? `Fabric & Drape Realism: Crafted from authentic ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drape physics: ${fabricDrapePhysics || `authentic textile weave grain with true physical drape gravity corresponding to ${fabric}`}. Render realistic textile luster, specular sheen, and authentic pleat/pallu fall.` : "",
+          `Garment Draping: Drape the model in the authentic ${fabric ? `${fabric} ` : ""}ethnic garment from ${garmentRange} (${outfitType}).`,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile weave texture, and authentic pleats/pallu drape directly onto the outfit.`,
@@ -639,8 +629,7 @@ export async function POST(req: NextRequest) {
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural authentic features, non-glossy matte skin, and a warm confident expression.`,
           `Preserve Pose & Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from Reference Image 1 (${shootTitle}: ${shootSetting || backgroundName}).`,
-          `Garment Draping: Replace her outfit completely with the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
-          fabric ? `Fabric & Drape Realism: Crafted from authentic ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drape physics: ${fabricDrapePhysics || `authentic textile weave grain with true physical drape gravity corresponding to ${fabric}`}. Render realistic textile luster, specular sheen, and authentic pleat/pallu fall.` : "",
+          `Garment Draping: Replace her outfit completely with the authentic ${fabric ? `${fabric} ` : ""}ethnic garment from ${garmentRange} (${outfitType}).`,
           notesSummary ? `Product specifications: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, yarn weave texture, and authentic drape directly onto her outfit.`,
@@ -659,10 +648,9 @@ export async function POST(req: NextRequest) {
           : `Reference Images 2 to ${imageUrls.length}`;
 
         fluxPrompt = [
-          `High-end luxury Indian fashion catalog editorial photograph of the exact model from Reference Image 1 wearing the authentic ethnic garment from ${garmentRange} (${outfitType}).`,
+          `High-end luxury Indian fashion catalog editorial photograph of the exact model from Reference Image 1 wearing the authentic ${fabric ? `${fabric} ` : ""}ethnic garment from ${garmentRange} (${outfitType}).`,
           `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and background environment exactly as shown in Reference Image 1 (${shootTitle}).`,
-          `Replace her outfit completely with the authentic ethnic garment shown in ${garmentRange}.`,
-          fabric ? `Fabric & Drape Realism: Crafted from authentic ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drape physics: ${fabricDrapePhysics || `authentic textile weave grain with true physical drape gravity corresponding to ${fabric}`}. Render realistic textile luster, specular sheen, and authentic pleat/pallu fall.` : "",
+          `Replace her outfit completely with the authentic ${fabric ? `${fabric} ` : ""}ethnic garment shown in ${garmentRange}.`,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile thread weave texture, and pallu drape directly onto the draped outfit.`,
