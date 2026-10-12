@@ -244,7 +244,7 @@ export function MasterShootPickerModal({
 
         {/* Shoots Grid - 2 columns on phone, 3 on tablet, 4 on desktop */}
         <div
-          className="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-6 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4"
+          className="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-6 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 smooth-scroll-grid"
           style={{ minHeight: "0px" }}
         >
           {filteredShoots.map((shoot) => {
@@ -256,7 +256,7 @@ export function MasterShootPickerModal({
                   onSelect(shoot);
                   onClose();
                 }}
-                className={`group relative rounded-xl sm:rounded-2xl border-2 overflow-hidden cursor-pointer transition-all duration-200 bg-surface shadow-md flex flex-col min-h-[290px] sm:min-h-[350px] ${
+                className={`group relative rounded-xl sm:rounded-2xl border-2 overflow-hidden cursor-pointer transition-all duration-200 bg-surface shadow-md flex flex-col min-h-[290px] sm:min-h-[350px] img-perf-card ${
                   isSelected
                     ? "border-fuchsia-accent ring-2 ring-fuchsia-accent/40 shadow-xl"
                     : "border-line hover:border-fuchsia-accent/50 hover:shadow-xl"
@@ -278,6 +278,10 @@ export function MasterShootPickerModal({
                     }}
                     className="transition-transform duration-500 ease-out group-hover:scale-105"
                     loading="lazy"
+                    decoding="async"
+                    onError={(e) => {
+                      e.currentTarget.src = "/images/florus_logo.png";
+                    }}
                   />
 
                   {/* Badges Overlay */}

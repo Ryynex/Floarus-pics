@@ -101,7 +101,7 @@ export function JewelleryPickerModal({
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
                 activeCategory === cat.id
-                  ? "bg-purple-accent text-[#1F1A15] shadow-sm"
+                  ? "bg-purple-accent text-[#05130A] shadow-sm font-semibold"
                   : "bg-surface border border-line text-ink-soft hover:text-ink hover:border-purple-accent/40"
               }`}
             >
@@ -134,7 +134,7 @@ export function JewelleryPickerModal({
               />
               <button
                 type="submit"
-                className="w-full py-2 rounded-lg bg-purple-accent text-[#1F1A15] text-xs font-bold uppercase tracking-wide cursor-pointer hover:bg-[#e0b85c] transition-colors"
+                className="w-full py-2 rounded-lg bg-purple-accent text-[#05130A] text-xs font-bold uppercase tracking-wide cursor-pointer hover:bg-[#6ee7b7] transition-colors"
               >
                 Apply Custom Jewellery
               </button>

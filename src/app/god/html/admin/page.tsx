@@ -1273,7 +1273,7 @@ export default function AdminPage() {
                       setEditPayment(null);
                     }}
                     disabled={submittingAction}
-                    className="flex-1 py-2.5 rounded-lg bg-sage hover:bg-sage/90 text-[#1F1A15] font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="flex-1 py-2.5 rounded-lg bg-sage hover:bg-sage/90 text-[#05130A] font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Check className="h-4 w-4" /> Approve & Credit
                   </button>
@@ -1333,7 +1333,7 @@ export default function AdminPage() {
               <button
                 onClick={handleDeleteRecord}
                 disabled={submittingAction}
-                className="flex-1 py-2 rounded-lg bg-brick hover:bg-brick/90 text-[#1F1A15] font-semibold text-xs transition-all disabled:opacity-50 cursor-pointer"
+                className="flex-1 py-2 rounded-lg bg-brick hover:bg-brick/90 text-[#05130A] font-semibold text-xs transition-all disabled:opacity-50 cursor-pointer"
               >
                 {submittingAction ? "Deleting..." : "Confirm Delete"}
               </button>

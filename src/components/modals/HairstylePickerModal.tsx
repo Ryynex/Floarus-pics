@@ -100,7 +100,7 @@ export function HairstylePickerModal({
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
                 activeCategory === cat.id
-                  ? "bg-fuchsia-accent text-[#1F1A15] shadow-sm"
+                  ? "bg-fuchsia-accent text-[#05130A] shadow-sm font-semibold"
                   : "bg-surface border border-line text-ink-soft hover:text-ink hover:border-fuchsia-accent/30"
               }`}
             >

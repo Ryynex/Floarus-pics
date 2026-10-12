@@ -101,7 +101,7 @@ export function PosePickerModal({
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
                 activeCategory === cat.id
-                  ? "bg-fuchsia-accent text-[#1F1A15] shadow-sm"
+                  ? "bg-fuchsia-accent text-[#05130A] shadow-sm"
                   : "bg-surface border border-line text-ink-soft hover:text-ink hover:border-fuchsia-accent/30"
               }`}
             >
@@ -123,7 +123,7 @@ export function PosePickerModal({
                     onSelect(pose);
                     onClose();
                   }}
-                  className={`group rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col bg-surface ${
+                  className={`group rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col bg-surface img-perf-card ${
                     isSelected
                       ? "border-fuchsia-accent ring-2 ring-fuchsia-accent/20 shadow-sm"
                       : "border-line hover:border-fuchsia-accent/40"
@@ -133,13 +133,18 @@ export function PosePickerModal({
                     <img
                       src={pose.imageUrl}
                       alt={pose.name}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = PRESET_POSES[0].imageUrl;
+                      }}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-70 group-hover:opacity-40 transition-opacity" />
 
                     {isSelected && (
-                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-fuchsia-accent text-[#1F1A15] flex items-center justify-center shadow-md">
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-fuchsia-accent text-[#05130A] flex items-center justify-center shadow-md">
                         <Check className="h-3 w-3" />
                       </div>
                     )}

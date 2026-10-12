@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
       // Master photoshoot reference (Zero Hallucination Anchor)
       shootTitle = "Morning Sun Botanical Garden",
       shootImageUrl = "/reference_shoots/garden_01_morning_sun.jpg",
-      shootSetting = "Botanical Garden with Soft Greenery Bokeh & Natural Morning Flare",
+      shootSetting = "Sunlit Botanical Garden with Lush Foliage & Natural Morning Flare",
       
       // 3 Face Modes: "keep_original" | "custom_face" | "random_face"
       faceMode = "keep_original",
@@ -285,7 +285,9 @@ export async function POST(req: NextRequest) {
       hairstyleDescription = "",
       jewellery = "Default (as before)",
       jewelleryDescription = "",
-      fabric = "Kanjeevaram Silk",
+      fabric = "Auto-Detect from Photo (Default)",
+      fabricDescription = "",
+      fabricDrapePhysics = "",
       customNotes = "",
       garments = [],
       sareeUrls = []
@@ -500,8 +502,21 @@ export async function POST(req: NextRequest) {
       const faceRef = refList.find(r => r.type === "face");
       const bgRef = refList.find(r => r.type === "background");
 
+      // Fabric Handling (Default: Auto-Detect from garment photo, User choice is optional override)
+      const isAutoDetectFabric =
+        !fabric ||
+        fabric.toLowerCase().includes("auto-detect") ||
+        fabric.toLowerCase().includes("wholesale saree fabric") ||
+        fabric.toLowerCase().includes("default");
+
+      const fabricTitleDescriptor = isAutoDetectFabric ? "" : `${fabric} `;
+
+      const fabricDirective = isAutoDetectFabric
+        ? `AUTOMATIC FABRIC & TEXTILE DETECTION (DEFAULT MANDATE): Flux 2 Pro must closely analyze and identify the exact authentic fabric material, textile weave density, yarn thread sheen, weight, and drape physics directly from the uploaded garment reference photo(s). Accurately replicate its authentic physical material composition (e.g. pure silk, raw silk, tussar, banarasi brocade, organza, georgette, chiffon, cotton, linen, velvet, satin, or tissue) as captured in the photo. Faithfully simulate its exact tactile texture, realistic surface light reflection/luster (matte, subtle sheen, or luminous silk luster), thread slubs, zari border relief, and true physical drape gravity and pleat folding as dictated by the detected fabric.`
+        : `SPECIFIED FABRIC OVERRIDE: The user has tailored the fabric weave to ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drapery physics & tactile texture: ${fabricDrapePhysics || fabric}. Mirror this weave density, thread grain, and surface reflection authentically while keeping all patterns, prints, and colors true to the reference photos.`;
+
       const promptParts: string[] = [
-        `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabric ? `${fabric} ` : ""}${outfitType || "ethnic outfit"}.`
+        `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || "ethnic outfit"}.`
       ];
 
       // Model Face
@@ -528,20 +543,16 @@ export async function POST(req: NextRequest) {
         promptParts.push(`Pose: Elegant natural standing pose with graceful hand placement.`);
       }
 
-      // Background
+      // Background & Physical Environmental Integration
       if (bgRef) {
-        if (backgroundMode === "fixed") {
-          promptParts.push(
-            `Background & Environment (STRICT FIXED MODE): Place the model directly within the exact architectural backdrop, spatial perspective, horizon, and room geometry of Reference Image ${bgRef.index} (${backgroundName}${backgroundDescription ? `: ${backgroundDescription}` : ""}). Synchronize lighting direction and shadows seamlessly.`
-          );
-        } else {
-          promptParts.push(
-            `Background Atmosphere (INSPIRATION MODE): Draw the luxurious ambient aesthetic, warm color temperature, and setting mood from Reference Image ${bgRef.index} (${backgroundName}${backgroundDescription ? `: ${backgroundDescription}` : ""}). Harmonize depth of field with soft bokeh.`
-          );
-        }
+        promptParts.push(
+          `Background & Scene Integration: Place the model directly inside the authentic three-dimensional physical setting and architectural space from Reference Image ${bgRef.index} (${backgroundName}${backgroundDescription ? `: ${backgroundDescription}` : ""}). ` +
+          `CRITICAL SHARP BACKGROUND (ZERO BLUR): Deep depth of field, f/8 to f/11 aperture, zero background blur, zero blurry backdrop, zero shallow depth of field, zero artificial bokeh. The entire background environment, architectural walls, flooring, decor, and spatial geometry must be crisp, tack-sharp, and completely in focus throughout the depth of the frame. ` +
+          `PHYSICAL GROUNDING & LIGHTING BOUNCE: The model must be realistically grounded and physically positioned inside the space. Her feet and garment hem must rest naturally on the floor with authentic soft contact shadows and ambient occlusion. Synchronize lighting direction, shadow angles, and ambient color temperature so the background light naturally wraps around and reflects onto her skin, hair, and draped outfit. Authentic in-camera editorial look, seamless spatial perspective, zero cutout effect, no floating model.`
+        );
       } else if (backgroundDescription) {
         promptParts.push(
-          `Background & Setting: High-end editorial environment: ${backgroundDescription}. Soft balanced ambient light.`
+          `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}. Sharp in-focus background with zero blur, deep f/8 aperture, realistic physical grounding with authentic floor contact shadows, and seamless ambient lighting integration.`
         );
       }
 
@@ -564,7 +575,8 @@ export async function POST(req: NextRequest) {
           ? `Reference Image ${garmentIndices[0]}` 
           : `Reference Images ${garmentIndices[0]} to ${garmentIndices[garmentIndices.length - 1]}`;
         promptParts.push(
-          `Product Garment Draping: Drape the authentic ${fabric ? `${fabric} ` : ""}ethnic outfit from ${garmentRangeStr} directly onto the model.`
+          `Product Garment Draping: Drape the authentic ${fabricTitleDescriptor}ethnic outfit from ${garmentRangeStr} directly onto the model.`,
+          fabricDirective
         );
       }
 
@@ -576,9 +588,9 @@ export async function POST(req: NextRequest) {
         promptParts.push(`Styling & drape instructions: ${customNotes}.`);
       }
 
-      // Quality, Skin Realism & Fabric Physics
+      // Quality, Skin Realism & Deep Focus Photography
       promptParts.push(
-        `Hyper-realistic raw photography aesthetic: authentic non-glossy human skin texture, visible natural micro-pores and subtle fine skin grain, soft matte finish without artificial plastic smoothness or waxy glow. Authentic tactile textile realism: crisp woven fabric texture, distinct warp and weft thread grain, tactile yarn slubs, genuine zari embroidery relief, and realistic fabric gravity drape. Natural human anatomy, slender hands with five natural fingers, Hasselblad editorial studio lighting, 8k resolution, photorealistic master lookbook.`
+        `Photographic Realism & Deep Focus: Shot on medium format camera at f/8 aperture with edge-to-edge sharpness across both the model and the entire background environment. No artificial background blurring, no shallow depth of field blur, crisp architectural textures. Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief, and realistic fabric gravity drape. Natural human anatomy with slender five-finger hands, Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
       );
 
       fluxPrompt = promptParts.filter(Boolean).join(" ");
@@ -590,6 +602,18 @@ export async function POST(req: NextRequest) {
       // =========================================================================
       const rawShootUrl = shootImageUrl || "/reference_shoots/garden_01_morning_sun.jpg";
       const compressedShootUrl = await getCompressedFalUrl(rawShootUrl, 640);
+
+      const isAutoDetectFabric =
+        !fabric ||
+        fabric.toLowerCase().includes("auto-detect") ||
+        fabric.toLowerCase().includes("wholesale saree fabric") ||
+        fabric.toLowerCase().includes("default");
+
+      const fabricTitleDescriptor = isAutoDetectFabric ? "" : `${fabric} `;
+
+      const fabricDirective = isAutoDetectFabric
+        ? `AUTOMATIC FABRIC & TEXTILE DETECTION (DEFAULT MANDATE): Flux 2 Pro must closely analyze and identify the exact authentic fabric material, textile weave density, yarn thread sheen, weight, and drape physics directly from the uploaded garment reference photo(s). Accurately replicate its authentic physical material composition (e.g. pure silk, raw silk, tussar, banarasi brocade, organza, georgette, chiffon, cotton, linen, velvet, satin, or tissue) as captured in the photo. Faithfully simulate its exact tactile texture, realistic surface light reflection/luster (matte, subtle sheen, or luminous silk luster), thread slubs, zari border relief, and true physical drape gravity and pleat folding as dictated by the detected fabric.`
+        : `SPECIFIED FABRIC OVERRIDE: The user has tailored the fabric weave to ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drapery physics & tactile texture: ${fabricDrapePhysics || fabric}. Mirror this weave density, thread grain, and surface reflection authentically while keeping all patterns, prints, and colors true to the reference photos.`;
 
       if (faceMode === "custom_face" && (customFaceUrl || modelFaceUrl)) {
         // CUSTOM FACE MODE:
@@ -605,14 +629,16 @@ export async function POST(req: NextRequest) {
           : `Reference Images 3 to ${imageUrls.length}`;
 
         fluxPrompt = [
-          `High-end luxury Indian fashion catalog editorial portrait photograph.`,
+          `High-end luxury Indian fashion catalog editorial portrait photograph with deep depth of field.`,
           `Facial Identity Transfer: Transfer the exact facial identity, features, and expression of the model in Reference Image 1 onto the model in Reference Image 2.`,
-          `Preserve Pose & Setting: Preserve the exact body pose, natural hand anatomy, posture, lighting, and background setting from Reference Image 2 (${shootTitle}: ${shootSetting || backgroundName}).`,
-          `Garment Draping: Drape the model in the authentic ${fabric ? `${fabric} ` : ""}ethnic garment from ${garmentRange} (${outfitType}).`,
+          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body posture, natural hand anatomy, lighting direction, and background environment from Reference Image 2 (${shootTitle}: ${shootSetting || backgroundName}).`,
+          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The entire background setting and architecture must remain sharp, clear, and fully in focus (deep f/8 aperture, zero background blur, zero shallow focus, zero artificial bokeh). The model must appear realistically integrated and physically grounded inside the space, casting authentic soft contact shadows onto the floor/ground, with ambient light from the surroundings naturally illuminating her skin and outfit.`,
+          `Garment Draping: Drape the model in the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentRange} (${outfitType}).`,
+          fabricDirective,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile weave texture, and authentic pleats/pallu drape directly onto the outfit.`,
-          `Hyper-realistic natural skin micro-pores, matte non-glossy skin finish, un-airbrushed raw texture, realistic slender hand anatomy, tactile garment weave grain with true physical drape gravity, sharp editorial lighting, 8k resolution master lookbook.`
+          `Hyper-realistic natural skin micro-pores, matte non-glossy skin finish, un-airbrushed raw texture, realistic slender hand anatomy, tactile garment weave grain with true physical drape gravity, sharp edge-to-edge catalog lighting, 8k resolution master lookbook.`
         ].filter(Boolean).join(" ");
 
       } else if (faceMode === "random_face") {
@@ -628,12 +654,14 @@ export async function POST(req: NextRequest) {
 
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural authentic features, non-glossy matte skin, and a warm confident expression.`,
-          `Preserve Pose & Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from Reference Image 1 (${shootTitle}: ${shootSetting || backgroundName}).`,
-          `Garment Draping: Replace her outfit completely with the authentic ${fabric ? `${fabric} ` : ""}ethnic garment from ${garmentRange} (${outfitType}).`,
+          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from Reference Image 1 (${shootTitle}: ${shootSetting || backgroundName}).`,
+          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background environment and architecture must remain crisp, tack-sharp, and completely in focus (deep f/8 focus, zero background blur, zero shallow depth of field, zero artificial bokeh). The model must appear realistically present and physically grounded inside the scene, casting natural soft contact shadows onto the floor, with matching ambient light bounce and perspective.`,
+          `Garment Draping: Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentRange} (${outfitType}).`,
+          fabricDirective,
           notesSummary ? `Product specifications: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, yarn weave texture, and authentic drape directly onto her outfit.`,
-          `Hyper-realistic human skin with visible fine pores and subtle natural grain (no waxy or plastic airbrushing), realistic slender hands and fingers with gold bangles, tactile textile weave with authentic physical drape physics, sharp studio editorial lighting, 8k resolution master lookbook.`
+          `Hyper-realistic human skin with visible fine pores and subtle natural grain (no waxy or plastic airbrushing), realistic slender hands and fingers with gold bangles, tactile textile weave with authentic physical drape physics, sharp edge-to-edge catalog lighting, 8k resolution master lookbook.`
         ].filter(Boolean).join(" ");
 
       } else {
@@ -648,14 +676,15 @@ export async function POST(req: NextRequest) {
           : `Reference Images 2 to ${imageUrls.length}`;
 
         fluxPrompt = [
-          `High-end luxury Indian fashion catalog editorial photograph of the exact model from Reference Image 1 wearing the authentic ${fabric ? `${fabric} ` : ""}ethnic garment from ${garmentRange} (${outfitType}).`,
+          `High-end luxury Indian fashion catalog editorial photograph of the exact model from Reference Image 1 wearing the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentRange} (${outfitType}).`,
           `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and background environment exactly as shown in Reference Image 1 (${shootTitle}).`,
-          `Replace her outfit completely with the authentic ${fabric ? `${fabric} ` : ""}ethnic garment shown in ${garmentRange}.`,
+          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background setting, architecture, and environment must remain completely in focus and tack-sharp (deep f/8 aperture, zero background blur, zero blurry backdrop, zero artificial bokeh). The model must be realistically grounded and physically positioned inside the scene, with authentic contact shadows on the floor/ground and seamless environmental lighting bounce matching the space.`,
+          `Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment shown in ${garmentRange}.`,
+          fabricDirective,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile thread weave texture, and pallu drape directly onto the draped outfit.`,
-          `Harmonize natural ambient lighting, soft daylight highlights, and depth of field with the setting: ${shootSetting || backgroundName}.`,
-          `Hyper-realistic natural skin with subtle pores and matte finish (non-glossy, non-waxy, raw photographic realism), realistic slender hands and fingers, tangible fabric thread grain with physical drape and pleat gravity, sharp studio editorial lighting, 8k resolution master lookbook.`
+          `Hyper-realistic natural skin with subtle pores and matte finish (non-glossy, non-waxy, raw photographic realism), realistic slender hands and fingers, tangible fabric thread grain with physical drape and pleat gravity, sharp studio editorial lighting with full scene depth, 8k resolution master lookbook.`
         ].filter(Boolean).join(" ");
       }
     }

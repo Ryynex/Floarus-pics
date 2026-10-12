@@ -42,7 +42,7 @@ export interface CatalogJewellery {
 export interface CatalogFabric {
   id: string;
   name: string;
-  category: "silks" | "sheers" | "cottons" | "luxe";
+  category: "auto" | "silks" | "sheers" | "cottons" | "luxe";
   categoryLabel: string;
   description: string;
   drapePhysics: string;
@@ -267,17 +267,6 @@ export interface SavedMagicPreferences {
 
 const MAGIC_PREFERENCES_KEY = "florus_saved_magic_preferences";
 
-export function getSavedMagicPreferences(): SavedMagicPreferences | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(MAGIC_PREFERENCES_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    console.error("Failed to load magic workspace preferences:", e);
-    return null;
-  }
-}
-
 export function saveMagicPreferences(prefs: SavedMagicPreferences): void {
   if (typeof window === "undefined") return;
   try {
@@ -322,14 +311,14 @@ export function saveStudioPreferences(prefs: SavedStudioPreferences): void {
 // Global helper for persisting and syncing selected fabric across the browser
 const FABRIC_PREFERENCE_KEY = "florus_saved_fabric_preference";
 
-export function getSavedFabricPreference(): CatalogFabric | null {
-  if (typeof window === "undefined") return null;
+export function getSavedFabricPreference(): CatalogFabric {
+  if (typeof window === "undefined") return PRESET_FABRICS[0];
   try {
     const raw = localStorage.getItem(FABRIC_PREFERENCE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? JSON.parse(raw) : PRESET_FABRICS[0];
   } catch (e) {
     console.error("Failed to load fabric preference:", e);
-    return null;
+    return PRESET_FABRICS[0];
   }
 }
 
@@ -343,312 +332,760 @@ export function saveFabricPreference(fabric: CatalogFabric): void {
 }
 
 // -------------------------------------------------------------
-// 3. 25+ Comprehensive Catalog Poses (Clear & Approachable)
+// 3. 38 Curated Catalog Poses
 // -------------------------------------------------------------
 export const PRESET_POSES: CatalogPose[] = [
-  // Standing & Drape
   {
-    id: "hand-on-hip",
-    name: "Hand on hip — full length",
-    category: "standing",
-    imageUrl: "/reference_poses/01_hand_on_hip_full_length.jpg",
-    description: "Classic straight-to-camera stance showing full outfit height, hemline, and pallu drop."
+    "id": "fs-1",
+    "name": "Studio Editorial Standing — FS1",
+    "category": "standing",
+    "imageUrl": "/reference_poses/FS1.jpg",
+    "description": "Full length studio stance showing front pleats, pallu drape, and clean silhouette."
   },
   {
-    id: "holding-drape",
-    name: "Holding the drape at waist",
-    category: "standing",
-    imageUrl: "/reference_poses/02_holding_drape_at_waist.jpg",
-    description: "Model gently lifts and holds the pallu border to present intricate zari work directly to camera."
+    "id": "fs-4",
+    "name": "Studio Clean Frontal — FS4",
+    "category": "standing",
+    "imageUrl": "/reference_poses/FS4.jpg",
+    "description": "Clean straight-to-camera studio posture ideal for catalog showcase."
   },
   {
-    id: "leaning-pillar",
-    name: "Leaning against pillar / wall",
-    category: "standing",
-    imageUrl: "/reference_poses/03_leaning_against_wall.jpg",
-    description: "Relaxed editorial pose showcasing side drape silhouette and architectural depth."
+    "id": "fs-5",
+    "name": "Studio Confident Stance — FS5",
+    "category": "standing",
+    "imageUrl": "/reference_poses/FS5.jpg",
+    "description": "Confident poised standing pose emphasizing shoulder drape and waistline."
   },
   {
-    id: "side-profile",
-    name: "Side profile, hand on waist",
-    category: "standing",
-    imageUrl: "/reference_poses/04_side_profile_hand_on_waist.jpg",
-    description: "Highlights blouse back embroidery, waist curvature, and the full side fall of the garment."
+    "id": "fs-6",
+    "name": "Studio Three-Quarter Profile — FS6",
+    "category": "standing",
+    "imageUrl": "/reference_poses/FS6.jpg",
+    "description": "Editorial 45-degree angle displaying drape flow and border relief."
   },
   {
-    id: "hands-folded-front",
-    name: "Both hands clasped gently in front",
-    category: "standing",
-    imageUrl: "/reference_poses/11_hands_clasped_front.jpg",
-    description: "Traditional modest posture optimal for showcasing bangles, rings, and clean front pleats."
+    "id": "fs-7",
+    "name": "Studio Fluid Stride — FS7",
+    "category": "motion",
+    "imageUrl": "/reference_poses/FS7.jpg",
+    "description": "Subtle runway step capturing pleat movement and fabric flow."
   },
   {
-    id: "one-hand-on-pallu",
-    name: "One hand touching shoulder pallu",
-    category: "standing",
-    imageUrl: "/reference_poses/12_one_hand_touching_shoulder.jpg",
-    description: "Directs visual focus toward the shoulder pin, border tassels, and neckline embroidery."
+    "id": "fs-8",
+    "name": "Studio Regal Silhouette — FS8",
+    "category": "regal",
+    "imageUrl": "/reference_poses/FS8.jpg",
+    "description": "Poised royal standing posture for high-end boutique lookbooks."
   },
   {
-    id: "standing-three-quarter",
-    name: "Standing, three-quarter turn",
-    category: "standing",
-    imageUrl: "/reference_poses/14_standing_three_quarter_turn.jpg",
-    description: "Classic 45-degree catalog posture showcasing garment silhouette and shoulder line."
+    "id": "pose-p1",
+    "name": "Poised Hand on Waist — P1",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P1.jpg",
+    "description": "Classic hand on waist stance highlighting side fall and blouse cut."
   },
   {
-    id: "side-profile-90",
-    name: "Pure side profile, full length",
-    category: "standing",
-    imageUrl: "/reference_poses/24_side_profile_90_degree.jpg",
-    description: "Clean 90-degree lateral profile standing straight, showing full spine posture and hemline."
+    "id": "pose-p2",
+    "name": "Gentle Pallu Hold — P2",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P2.jpg",
+    "description": "Delicately lifting pallu border to present intricate zari work."
   },
   {
-    id: "pallu-display",
-    name: "Front-facing elegant pallu display",
-    category: "standing",
-    imageUrl: "/reference_poses/25_front_facing_pallu_display.jpg",
-    description: "Direct frontal posture giving 100% clarity on the front pleats and chest drape pattern."
-  },
-
-  // Motion & Walking
-  {
-    id: "walking-motion",
-    name: "Walking forward / windswept stride",
-    category: "motion",
-    imageUrl: "/reference_poses/05_walking_windswept_motion.jpg",
-    description: "Dynamic fluid stride capturing fabric flow, pleat flare, and authentic runway motion."
+    "id": "pose-p3",
+    "name": "Relaxed Studio Lean — P3",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P3.jpg",
+    "description": "Natural leaning posture giving casual yet elegant appeal."
   },
   {
-    id: "holding-parasol",
-    name: "Holding decorative parasol",
-    category: "motion",
-    imageUrl: "/reference_poses/09_holding_parasol.jpg",
-    description: "Heritage outdoor accessory posture creating shade highlights and festive flair."
+    "id": "pose-p4",
+    "name": "Front Pleat Presentation — P4",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P4.jpg",
+    "description": "Focused frontal stance ensuring crisp visibility of lower pleats."
   },
   {
-    id: "dupatta-held-out",
-    name: "Dupatta held out with both hands",
-    category: "motion",
-    imageUrl: "/reference_poses/18_dupatta_held_out_wingspan.jpg",
-    description: "Expands sheer organza or bandhani dupatta to demonstrate full width and border craft."
+    "id": "pose-p5",
+    "name": "Graceful Walking Motion — P5",
+    "category": "motion",
+    "imageUrl": "/reference_poses/P5.jpg",
+    "description": "Windswept stride capturing dynamic movement and hemline flare."
   },
   {
-    id: "turning-back",
-    name: "Turning around, looking over shoulder",
-    category: "motion",
-    imageUrl: "/reference_poses/19_turning_around_back_shot.jpg",
-    description: "Showcases the back blouse tie-up, back tassels (latkans), and trailing pallu length."
-  },
-
-  // Seated & Regal
-  {
-    id: "seated-steps",
-    name: "Seated on steps, drape fanned",
-    category: "seated",
-    imageUrl: "/reference_poses/06_seated_on_steps_drape_fanned.jpg",
-    description: "Regal seated arrangement on palace steps with the saree pallu fanned across the floor."
+    "id": "pose-p6",
+    "name": "Turn Looking Back — P6",
+    "category": "motion",
+    "imageUrl": "/reference_poses/P6.jpg",
+    "description": "Looking over shoulder showing blouse back design and long pallu fall."
   },
   {
-    id: "seated-ledge",
-    name: "Seated front-facing on a ledge",
-    category: "seated",
-    imageUrl: "/reference_poses/07_seated_front_facing_ledge.jpg",
-    description: "Commercial seated posture optimal for unstitched suits and flared kurtas."
+    "id": "pose-p7",
+    "name": "Dynamic Fluid Turn — P7",
+    "category": "motion",
+    "imageUrl": "/reference_poses/P7.jpg",
+    "description": "Fluid mid-turn capturing garment swing and light reflection."
   },
   {
-    id: "seated-reading",
-    name: "Seated reading a book",
-    category: "seated",
-    imageUrl: "/reference_poses/08_seated_reading_book.jpg",
-    description: "Warm lifestyle posture reflecting quiet luxury, literary elegance, and boutique vibe."
+    "id": "pose-p8",
+    "name": "Gentle Breeze Stride — P8",
+    "category": "motion",
+    "imageUrl": "/reference_poses/P8.jpg",
+    "description": "Walking posture with gentle breeze effect on sheer pallu."
   },
   {
-    id: "leaning-railing",
-    name: "Leaning back on terrace railing",
-    category: "seated",
-    imageUrl: "/reference_poses/10_leaning_back_on_railing.jpg",
-    description: "Balcony terrace posture with breezy lighting and relaxed royal demeanor."
+    "id": "pose-p9",
+    "name": "Side Profile Elegance — P9",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P9.jpg",
+    "description": "Graceful 90-degree lateral profile highlighting posture and border."
   },
   {
-    id: "seated-royal-chair",
-    name: "Seated in ornate carved royal chair",
-    category: "regal",
-    imageUrl: "/reference_poses/13_seated_royal_armchair.jpg",
-    description: "Queenly posture resting arms on carved wooden armrests, ideal for royal lookbooks."
+    "id": "pose-p10",
+    "name": "Both Hands Clasped — P10",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P10.jpg",
+    "description": "Hands held together in front, drawing focus to bangles and rings."
   },
   {
-    id: "leaning-table",
-    name: "Leaning on a studio table",
-    category: "seated",
-    imageUrl: "/reference_poses/20_leaning_on_table.jpg",
-    description: "Contemporary catalog posture leaning forward slightly on a minimal studio table."
+    "id": "pose-p11",
+    "name": "Hand at Shoulder Pin — P11",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P11.jpg",
+    "description": "Drawing attention toward neckline craft, shoulder brooch, and blouse."
   },
   {
-    id: "seated-cross-legged",
-    name: "Seated cross-legged on low platform",
-    category: "regal",
-    imageUrl: "/reference_poses/21_seated_cross_legged_diwan.jpg",
-    description: "Traditional baithak posture showing off fabric drape puddling gracefully."
-  },
-
-  // Details & Close-ups
-  {
-    id: "close-portrait",
-    name: "Close-up 3/4 bust portrait",
-    category: "details",
-    imageUrl: "/reference_poses/15_close_up_bust_portrait.jpg",
-    description: "Focused bust-up crop emphasizing blouse necklines, jewellery pairing, and collar border."
+    "id": "pose-p12",
+    "name": "Subtle Diagonal Stance — P12",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P12.jpg",
+    "description": "Modern diagonal catalogue stance optimizing depth and lighting."
   },
   {
-    id: "adjusting-earring",
-    name: "Hand gently touching earring / jhumka",
-    category: "details",
-    imageUrl: "/reference_poses/16_adjusting_earring_gesture.jpg",
-    description: "Candid bridal gesture drawing natural attention to neckline, sleeve work, and ornaments."
+    "id": "pose-p13",
+    "name": "Editorial Lookbook Stance — P13",
+    "category": "standing",
+    "imageUrl": "/reference_poses/P13.jpg",
+    "description": "High-fashion minimalist posture tailored for luxury retail banners."
   },
   {
-    id: "hands-on-bangles",
-    name: "Hands resting at waist adjusting bangles",
-    category: "details",
-    imageUrl: "/reference_poses/17_hands_at_waist_adjusting_bangles.jpg",
-    description: "Perfect angle to show the waist tuck, pleat neatness, and sleeve embroidery."
+    "id": "pose-p19",
+    "name": "Seated on Floor Steps — P19",
+    "category": "seated",
+    "imageUrl": "/reference_poses/P19.jpg",
+    "description": "Fanning out the heavy saree border across floor steps."
   },
   {
-    id: "high-angle-shot",
-    name: "High angle, looking up at camera",
-    category: "details",
-    imageUrl: "/reference_poses/22_high_angle_looking_up.jpg",
-    description: "Editorial high camera angle looking down softly as model looks up toward camera."
+    "id": "pose-p20",
+    "name": "Seated on Regal Divan — P20",
+    "category": "seated",
+    "imageUrl": "/reference_poses/P20.jpg",
+    "description": "Comfortable seated posture on traditional platform or bench."
   },
   {
-    id: "shy-blush",
-    name: "Shy blush, hand near mouth",
-    category: "details",
-    imageUrl: "/reference_poses/23_shy_blush_hand_over_mouth.jpg",
-    description: "Candid soft gesture with right hand held delicately near mouth with a joyful gentle smile."
+    "id": "pose-p21",
+    "name": "Seated Studio Chair — P21",
+    "category": "seated",
+    "imageUrl": "/reference_poses/P21.jpg",
+    "description": "Contemporary chair seating showing thigh drape and border."
+  },
+  {
+    "id": "pose-p22",
+    "name": "Resting on Armrest — P22",
+    "category": "seated",
+    "imageUrl": "/reference_poses/P22.jpg",
+    "description": "Arm resting naturally on chair armrest with gentle relaxed smile."
+  },
+  {
+    "id": "pose-p23",
+    "name": "Low Baithak Seated — P23",
+    "category": "seated",
+    "imageUrl": "/reference_poses/P23.jpg",
+    "description": "Traditional cross-legged baithak arrangement showcasing fabric folds."
+  },
+  {
+    "id": "pose-p24",
+    "name": "Seated Cross-Legged Poise — P24",
+    "category": "seated",
+    "imageUrl": "/reference_poses/P24.jpg",
+    "description": "Graceful ground seated pose with pallu spread artfully."
+  },
+  {
+    "id": "pose-p25",
+    "name": "Royal Throne Posture — P25",
+    "category": "regal",
+    "imageUrl": "/reference_poses/P25.jpg",
+    "description": "Imposing royal posture suited for heavy bridal silks and kanchipuram."
+  },
+  {
+    "id": "pose-p26",
+    "name": "Queenly Palace Presence — P26",
+    "category": "regal",
+    "imageUrl": "/reference_poses/P26.jpg",
+    "description": "Stately posture communicating royal heritage and timeless elegance."
+  },
+  {
+    "id": "pose-p27",
+    "name": "Heritage Court Posture — P27",
+    "category": "regal",
+    "imageUrl": "/reference_poses/P27.jpg",
+    "description": "Dignified poise resting hand lightly on carved pillar or rail."
+  },
+  {
+    "id": "pose-p28",
+    "name": "Aristocratic Stature — P28",
+    "category": "regal",
+    "imageUrl": "/reference_poses/P28.jpg",
+    "description": "Tall commanding stance with expansive drape and calm expression."
+  },
+  {
+    "id": "pose-p29",
+    "name": "Royal Heritage Poise — P29",
+    "category": "regal",
+    "imageUrl": "/reference_poses/P29.jpg",
+    "description": "Opulent stance balancing drape fullness with poise."
+  },
+  {
+    "id": "pose-p30",
+    "name": "Close-up Jewellery Focus — P30",
+    "category": "details",
+    "imageUrl": "/reference_poses/P30.jpg",
+    "description": "Bust-level framing highlighting necklace, earrings, and blouse neck."
+  },
+  {
+    "id": "pose-p31",
+    "name": "Touching Earring Gesture — P31",
+    "category": "details",
+    "imageUrl": "/reference_poses/P31.jpg",
+    "description": "Candid bridal gesture touching ear ornament with subtle smile."
+  },
+  {
+    "id": "pose-p32",
+    "name": "Adjusting Bangle at Wrist — P32",
+    "category": "details",
+    "imageUrl": "/reference_poses/P32.jpg",
+    "description": "Hands at waist level adjusting bangles, highlighting sleeve motifs."
+  },
+  {
+    "id": "pose-p33",
+    "name": "Delicate Collar Touch — P33",
+    "category": "details",
+    "imageUrl": "/reference_poses/P33.jpg",
+    "description": "Hand near collarbone showing choker necklace and zari embroidery."
+  },
+  {
+    "id": "pose-p34",
+    "name": "High Angle Gaze — P34",
+    "category": "details",
+    "imageUrl": "/reference_poses/P34.jpg",
+    "description": "Editorial camera angle capturing facial features and head drape."
+  },
+  {
+    "id": "pose-p35",
+    "name": "Candid Shy Blush — P35",
+    "category": "details",
+    "imageUrl": "/reference_poses/P35.jpg",
+    "description": "Gentle shy candid expression holding drape tip near cheek."
+  },
+  {
+    "id": "pose-p36",
+    "name": "Close Portrait Profile — P36",
+    "category": "details",
+    "imageUrl": "/reference_poses/P36.jpg",
+    "description": "Tight beauty portrait framing eye makeup, maang tikka, and border."
+  },
+  {
+    "id": "pose-p37",
+    "name": "Intricate Drape Detail — P37",
+    "category": "details",
+    "imageUrl": "/reference_poses/P37.jpg",
+    "description": "Torso-level close-up displaying weave precision, zari, and pleats."
   }
 ];
 
 // -------------------------------------------------------------
-// 4. 15 Curated Luxury Catalog Backgrounds
+// 4. 61 Curated Luxury Catalog Backgrounds
 // -------------------------------------------------------------
 export const PRESET_BACKGROUNDS: CatalogBackground[] = [
-  // Heritage & Forts
   {
-    id: "pastel-palace",
-    name: "Pastel painted palace interior",
-    category: "heritage",
-    imageUrl: "/reference_backgrounds/01_pastel_palace_interior.jpg",
-    description: "Soft mint and blush fresco walls with heritage arched corridors and polished marble."
+    "id": "bg-b1",
+    "name": "Minimal Studio Setting — B1",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B1.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "rajasthani-fort",
-    name: "Rajasthani fort, golden hour",
-    category: "heritage",
-    imageUrl: "/reference_backgrounds/02_rajasthani_fort_golden_hour.jpg",
-    description: "Sun-drenched sandstone courtyards bathed in warm sunset hues and dramatic historic stone."
+    "id": "bg-b2",
+    "name": "Minimal Studio Setting — B2",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B2.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "jaipur-stepwell",
-    name: "Jaipur stepwell / baoli",
-    category: "heritage",
-    imageUrl: "/reference_backgrounds/11_jaipur_stepwell_baoli.jpg",
-    description: "Geometrical stone staircases of historic Rajasthan stepwells, dramatic and editorial."
-  },
-
-  // Festive & Traditional Settings
-  {
-    id: "diya-courtyard",
-    name: "Evening courtyard lit with brass diyas",
-    category: "festive",
-    imageUrl: "/reference_backgrounds/13_diya_courtyard_twilight.jpg",
-    description: "Magical twilight atmosphere with warm flickering brass oil lamps and soft golden glows."
-  },
-
-  // Modern & Minimalist Studio
-  {
-    id: "studio-neutral",
-    name: "Neutral studio backdrop (Warm Beige)",
-    category: "studio",
-    imageUrl: "/reference_backgrounds/10_neutral_studio_backdrop.jpg",
-    description: "Clean warm beige cyclorama wall with soft commercial diffused studio light. 100% fabric focus."
-  },
-
-  // Gardens & Nature
-  {
-    id: "green-garden",
-    name: "Lush green garden estate",
-    category: "gardens",
-    imageUrl: "/reference_backgrounds/05_lush_green_estate_garden.jpg",
-    description: "Manicured estate lawn with blooming jasmine, tropical foliage, and natural daylight."
+    "id": "bg-b3",
+    "name": "Minimal Studio Setting — B3",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B3.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "colonial-balcony",
-    name: "Colonial garden balcony with bougainvillea",
-    category: "gardens",
-    imageUrl: "/reference_backgrounds/06_colonial_garden_balcony.jpg",
-    description: "White balustrade balcony overflowing with magenta bougainvillea vines and morning sunlight."
+    "id": "bg-b4",
+    "name": "Minimal Studio Setting — B4",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B4.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "sunlit-villa",
-    name: "Sunlit villa garden, golden hour",
-    category: "gardens",
-    imageUrl: "/reference_backgrounds/07_sunlit_villa_garden.jpg",
-    description: "Luxury villa stone courtyard bathed in rich amber evening backlight."
+    "id": "bg-b5",
+    "name": "Minimal Studio Setting — B5",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B5.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "veranda-curtains",
-    name: "Veranda with sheer breezy curtains",
-    category: "gardens",
-    imageUrl: "/reference_backgrounds/08_veranda_sheer_curtains.jpg",
-    description: "Airy colonnade with translucent sheer white drapes moving softly in the gentle wind."
+    "id": "bg-b6",
+    "name": "Minimal Studio Setting — B6",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B6.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "desert-sunset-dunes",
-    name: "Golden Thar desert sand dunes",
-    category: "gardens",
-    imageUrl: "/reference_backgrounds/12_golden_thar_desert_dunes.jpg",
-    description: "Dramatic rippled golden sand dunes under an amber and purple twilight sky."
-  },
-
-  // Luxury Interiors & Architecture
-  {
-    id: "baroque-hall",
-    name: "Grand baroque marble hall",
-    category: "luxury_interiors",
-    imageUrl: "/reference_backgrounds/03_grand_baroque_marble_hall.jpg",
-    description: "Opulent European and Indo-Saracenic grandeur with gilded pillars and reflective floors."
+    "id": "bg-b7",
+    "name": "Minimal Studio Setting — B7",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B7.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "heritage-room",
-    name: "Chandelier heritage room",
-    category: "luxury_interiors",
-    imageUrl: "/reference_backgrounds/04_chandelier_heritage_room.jpg",
-    description: "Intimate regal room featuring crystal chandeliers, warm teak furniture, and Persian rugs."
+    "id": "bg-b8",
+    "name": "Minimal Studio Setting — B8",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B8.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "vintage-car",
-    name: "Vintage car & heritage portico",
-    category: "luxury_interiors",
-    imageUrl: "/reference_backgrounds/09_vintage_car_portico.jpg",
-    description: "Cream classic vintage car parked under a grand heritage mansion driveway arch."
+    "id": "bg-b9",
+    "name": "Minimal Studio Setting — B9",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B9.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "warm-library",
-    name: "Warm royal library with mahogany wood",
-    category: "luxury_interiors",
-    imageUrl: "/reference_backgrounds/14_warm_royal_library.jpg",
-    description: "Rich mahogany bookshelves, vintage leather binding, and warm amber banker lamps."
+    "id": "bg-b10",
+    "name": "Minimal Studio Setting — B10",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B10.jpg",
+    "description": "Clean modern cyclorama studio backdrop with neutral diffused fashion lighting."
   },
   {
-    id: "penthouse-skyline",
-    name: "Modern luxury penthouse city view",
-    category: "luxury_interiors",
-    imageUrl: "/reference_backgrounds/15_modern_penthouse_skyline.jpg",
-    description: "Floor-to-ceiling glass windows overlooking modern high-rise city lights at dusk."
+    "id": "bg-b11",
+    "name": "Heritage Palace Corridor — B11",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B11.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b12",
+    "name": "Heritage Palace Corridor — B12",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B12.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b13",
+    "name": "Heritage Palace Corridor — B13",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B13.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b14",
+    "name": "Heritage Palace Corridor — B14",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B14.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b15",
+    "name": "Heritage Palace Corridor — B15",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B15.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b16",
+    "name": "Heritage Palace Corridor — B16",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B16.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b17",
+    "name": "Heritage Palace Corridor — B17",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B17.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b18",
+    "name": "Heritage Palace Corridor — B18",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B18.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b19",
+    "name": "Heritage Palace Corridor — B19",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B19.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b20",
+    "name": "Heritage Palace Corridor — B20",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/B20.jpg",
+    "description": "Historical carved pillars, stone archways, and warm regal architectural ambient."
+  },
+  {
+    "id": "bg-b21",
+    "name": "Opulent Luxury Salon — B21",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B21.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b22",
+    "name": "Opulent Luxury Salon — B22",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B22.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b23",
+    "name": "Opulent Luxury Salon — B23",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B23.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b24",
+    "name": "Opulent Luxury Salon — B24",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B24.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b25",
+    "name": "Opulent Luxury Salon — B25",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B25.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b26",
+    "name": "Opulent Luxury Salon — B26",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B26.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b27",
+    "name": "Opulent Luxury Salon — B27",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B27.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b28",
+    "name": "Opulent Luxury Salon — B28",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B28.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b29",
+    "name": "Opulent Luxury Salon — B29",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B29.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b30",
+    "name": "Opulent Luxury Salon — B30",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/B30.jpg",
+    "description": "Grand interior setting with marble finishes, chandeliers, and high-fashion aesthetic."
+  },
+  {
+    "id": "bg-b31",
+    "name": "Festive Courtyard Ambiance — B31",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B31.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b32",
+    "name": "Festive Courtyard Ambiance — B32",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B32.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b33",
+    "name": "Festive Courtyard Ambiance — B33",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B33.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b34",
+    "name": "Festive Courtyard Ambiance — B34",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B34.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b35",
+    "name": "Festive Courtyard Ambiance — B35",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B35.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b36",
+    "name": "Festive Courtyard Ambiance — B36",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B36.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b37",
+    "name": "Festive Courtyard Ambiance — B37",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B37.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b38",
+    "name": "Festive Courtyard Ambiance — B38",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B38.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b39",
+    "name": "Festive Courtyard Ambiance — B39",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B39.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b40",
+    "name": "Festive Courtyard Ambiance — B40",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/B40.jpg",
+    "description": "Warm atmospheric twilight setting with celebratory lighting and golden glows."
+  },
+  {
+    "id": "bg-b46",
+    "name": "Estate Garden Veranda — B46",
+    "category": "gardens",
+    "imageUrl": "/reference_backgrounds/B46.jpg",
+    "description": "Sunlit outdoor flora, lush botanical greenery, and serene natural ambiance."
+  },
+  {
+    "id": "bg-b48",
+    "name": "Estate Garden Veranda — B48",
+    "category": "gardens",
+    "imageUrl": "/reference_backgrounds/B48.jpg",
+    "description": "Sunlit outdoor flora, lush botanical greenery, and serene natural ambiance."
+  },
+  {
+    "id": "bg-b49",
+    "name": "Estate Garden Veranda — B49",
+    "category": "gardens",
+    "imageUrl": "/reference_backgrounds/B49.jpg",
+    "description": "Sunlit outdoor flora, lush botanical greenery, and serene natural ambiance."
+  },
+  {
+    "id": "bg-u2e4fb22b",
+    "name": "Signature Atelier Setting — U2e4fb22b",
+    "category": "gardens",
+    "imageUrl": "/reference_backgrounds/U2e4fb22b.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u3d6f9c25",
+    "name": "Signature Atelier Setting — U3d6f9c25",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/U3d6f9c25.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u4bbc2a14",
+    "name": "Signature Atelier Setting — U4bbc2a14",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/U4bbc2a14.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u7ee3d1f0",
+    "name": "Signature Atelier Setting — U7ee3d1f0",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/U7ee3d1f0.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u44c828d4",
+    "name": "Signature Atelier Setting — U44c828d4",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/U44c828d4.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u67a244c7",
+    "name": "Signature Atelier Setting — U67a244c7",
+    "category": "gardens",
+    "imageUrl": "/reference_backgrounds/U67a244c7.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u486f139f",
+    "name": "Signature Atelier Setting — U486f139f",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/U486f139f.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u2607fe8f",
+    "name": "Signature Atelier Setting — U2607fe8f",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/U2607fe8f.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u3718a1ee",
+    "name": "Signature Atelier Setting — U3718a1ee",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/U3718a1ee.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u6816b726",
+    "name": "Signature Atelier Setting — U6816b726",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/U6816b726.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-u971784e7",
+    "name": "Signature Atelier Setting — U971784e7",
+    "category": "gardens",
+    "imageUrl": "/reference_backgrounds/U971784e7.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-ua2c0f716",
+    "name": "Signature Atelier Setting — Ua2c0f716",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/Ua2c0f716.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-ua899c079",
+    "name": "Signature Atelier Setting — Ua899c079",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/Ua899c079.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-uabb9390e",
+    "name": "Signature Atelier Setting — Uabb9390e",
+    "category": "luxury_interiors",
+    "imageUrl": "/reference_backgrounds/Uabb9390e.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-uc18d4988",
+    "name": "Signature Atelier Setting — Uc18d4988",
+    "category": "festive",
+    "imageUrl": "/reference_backgrounds/Uc18d4988.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-ud4226230",
+    "name": "Signature Atelier Setting — Ud4226230",
+    "category": "gardens",
+    "imageUrl": "/reference_backgrounds/Ud4226230.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-uf0c8920c",
+    "name": "Signature Atelier Setting — Uf0c8920c",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/Uf0c8920c.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
+  },
+  {
+    "id": "bg-uf3022a1f",
+    "name": "Signature Atelier Setting — Uf3022a1f",
+    "category": "heritage",
+    "imageUrl": "/reference_backgrounds/Uf3022a1f.jpg",
+    "description": "Ultra high-resolution curated editorial background with cinematic depth of field."
   }
 ];
+
+export function getSavedMagicPreferences(): SavedMagicPreferences | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(MAGIC_PREFERENCES_KEY);
+    if (!raw) return null;
+    const prefs: SavedMagicPreferences = JSON.parse(raw);
+
+    // Auto-heal Pose: verify against current PRESET_POSES
+    if (prefs.selectedPose) {
+      if (prefs.selectedPose.id !== "custom") {
+        const found = PRESET_POSES.find(
+          (p) => p.id === prefs.selectedPose?.id || p.imageUrl === prefs.selectedPose?.imageUrl
+        );
+        prefs.selectedPose = found || PRESET_POSES[0];
+      }
+    } else {
+      prefs.selectedPose = PRESET_POSES[0];
+    }
+
+    // Auto-heal Background: verify against current PRESET_BACKGROUNDS
+    if (prefs.selectedBackground) {
+      if (prefs.selectedBackground.id !== "custom") {
+        const found = PRESET_BACKGROUNDS.find(
+          (b) => b.id === prefs.selectedBackground?.id || b.imageUrl === prefs.selectedBackground?.imageUrl
+        );
+        prefs.selectedBackground = found || PRESET_BACKGROUNDS[0];
+      }
+    } else {
+      prefs.selectedBackground = PRESET_BACKGROUNDS[0];
+    }
+
+    // Also heal model if invalid
+    if (prefs.selectedModel && prefs.selectedModel.category !== "custom") {
+      const foundModel = PRESET_MODELS.find(
+        (m) => m.id === prefs.selectedModel?.id || m.imageUrl === prefs.selectedModel?.imageUrl
+      );
+      if (foundModel) {
+        prefs.selectedModel = foundModel;
+      }
+    }
+
+    // Persist healed preferences back to localStorage so stale URLs never get reused
+    localStorage.setItem(MAGIC_PREFERENCES_KEY, JSON.stringify(prefs));
+
+    return prefs;
+  } catch (e) {
+    console.error("Failed to load magic workspace preferences:", e);
+    return null;
+  }
+}
 
 // -------------------------------------------------------------
 // 5. 25+ Curated Hairstyles
@@ -767,6 +1204,18 @@ export const OUTFIT_TYPES = [
 // 8. 15 Main Saree & Ethnic Garment Fabrics (Physical Drape & Luster Conditioning)
 // -------------------------------------------------------------
 export const PRESET_FABRICS: CatalogFabric[] = [
+  // 0. AI Vision Auto-Detect (Default)
+  {
+    id: "auto-detect",
+    name: "Auto-Detect from Photo (Default)",
+    category: "auto",
+    categoryLabel: "AI Vision Auto-Detect",
+    description: "Flux 2 Pro analyzes and detects the exact authentic fabric weave, sheen, weight & drape physics directly from your garment photo.",
+    drapePhysics: "authentic fabric detected directly from the garment reference photo: mirror the exact physical weave density, surface luster, thread texture, translucency, and natural drape weight seen in the photo",
+    badge: "AI Default",
+    isCustom: false
+  },
+
   // 1. Silks & Brocades (5 Fabrics)
   {
     id: "kanjeevaram-silk",
@@ -1098,7 +1547,7 @@ export const MASTER_SHOOTS: MasterShoot[] = [
     category: "garden",
     imageUrl: "/reference_shoots/garden_01_morning_sun.jpg",
     modelPersona: "Warm Approachable Indian Woman with radiant natural smile",
-    settingTitle: "Botanical Garden with Soft Greenery Bokeh & Natural Morning Flare",
+    settingTitle: "Sunlit Botanical Garden with Lush Foliage & Natural Morning Flare",
     lighting: "Dappled morning sunlight filtering through garden foliage",
     poseDescription: "Medium-close portrait angle for blouse detailing and neck jewelry",
     badge: "Flagship Choice"

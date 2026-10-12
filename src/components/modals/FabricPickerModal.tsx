@@ -26,6 +26,7 @@ export function FabricPickerModal({
 
   const categories = [
     { id: "all", label: `All Fabrics (${PRESET_FABRICS.length})` },
+    { id: "auto", label: "AI Auto-Detect (Default)" },
     { id: "silks", label: "Silks & Brocades (5)" },
     { id: "sheers", label: "Sheers & Flowy (5)" },
     { id: "cottons", label: "Cottons & Linens (2)" },
@@ -73,7 +74,7 @@ export function FabricPickerModal({
           <div className="flex items-center gap-2">
             <Layers className="h-5 w-5 text-fuchsia-accent" />
             <h3 className="text-base font-bold text-ink tracking-wide">
-              Select Garment Fabric ({PRESET_FABRICS.length} Main Weaves)
+              Select Garment Fabric (Optional Override)
             </h3>
           </div>
 
@@ -106,7 +107,7 @@ export function FabricPickerModal({
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
                 activeCategory === cat.id
-                  ? "bg-fuchsia-accent text-[#1F1A15] shadow-sm font-bold"
+                  ? "bg-fuchsia-accent text-[#05130A] shadow-sm font-bold"
                   : "bg-surface border border-line text-ink-soft hover:text-ink hover:border-fuchsia-accent/40"
               }`}
             >
@@ -193,7 +194,7 @@ export function FabricPickerModal({
                       </div>
                       {isSelected ? (
                         <div className="h-4 w-4 rounded-full bg-fuchsia-accent flex items-center justify-center shrink-0">
-                          <Check className="h-3 w-3 text-[#1F1A15] stroke-[3]" />
+                          <Check className="h-3 w-3 text-[#05130A] stroke-[3]" />
                         </div>
                       ) : null}
                     </div>

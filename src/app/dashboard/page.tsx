@@ -17,7 +17,12 @@ import {
   FileText,
   Key,
   ShieldAlert,
-  Zap
+  Zap,
+  Search,
+  Maximize2,
+  X,
+  Sparkles,
+  ImageIcon
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { GenerateWorkspace } from "@/components/GenerateWorkspace";
@@ -64,6 +69,19 @@ function DashboardContent() {
   const [copied, setCopied] = useState(false);
   const [showApiToken, setShowApiToken] = useState(false);
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
+
+  // History Tab Enhanced Filtering & Lightbox States
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>("all");
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(24);
+  const [lightboxRecord, setLightboxRecord] = useState<GenerationRecord | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+  const handleCopyUrl = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedUrl(url);
+    setTimeout(() => setCopiedUrl(null), 2000);
+  };
 
   const downloadImage = async (url: string, filename: string) => {
     try {
@@ -162,7 +180,7 @@ function DashboardContent() {
   }, [currentTab, router]);
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 max-w-5xl">
+    <div className="flex flex-col gap-4 sm:gap-6 max-w-7xl">
 
       {/* Upper Status & Greeting Section */}
       <section className="card p-4 sm:p-6 flex flex-col md:flex-row md:justify-between md:items-center gap-3 sm:gap-4">
@@ -206,118 +224,370 @@ function DashboardContent() {
         <MagicModeWorkspace />
       )}
 
-      {currentTab === "history" && (
-        <section className="card p-4 sm:p-6 md:p-8 flex flex-col gap-5 sm:gap-6">
-          <div className="flex justify-between items-center border-b border-line pb-4 gap-2">
-            <div>
-              <h3 className="text-sm sm:text-base font-bold text-ink flex items-center gap-2">
-                <History className="h-4 w-4 sm:h-5 sm:w-5 text-fuchsia-accent" /> Catalog History
-              </h3>
-              <p className="text-xs sm:text-sm text-ink-soft mt-0.5">Browse previously generated model photoshoots.</p>
-            </div>
-            <button
-              onClick={() => profile && fetchHistory(profile.id)}
-              className="btn-secondary px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium flex items-center gap-1.5 cursor-pointer shrink-0"
-            >
-              <RefreshCw className="h-3 w-3" /> Refresh
-            </button>
-          </div>
+      {currentTab === "history" && (() => {
+        const filteredHistory = historyList.filter((row) => {
+          const q = historySearch.toLowerCase().trim();
+          const matchesSearch = !q || (row.prompt && row.prompt.toLowerCase().includes(q));
+          const matchesStatus = historyStatusFilter === "all" || row.status === historyStatusFilter;
+          return matchesSearch && matchesStatus;
+        });
+        const displayedHistory = filteredHistory.slice(0, visibleHistoryCount);
 
-          {/* Grid Layout gallery */}
-          {historyLoading ? (
-            <div className="py-12 sm:py-16 text-center text-ink-faint text-sm flex flex-col items-center justify-center gap-2">
-              <RefreshCw className="h-5 w-5 animate-spin text-fuchsia-accent" />
-              <span>Loading your catalog...</span>
-            </div>
-          ) : historyList.length === 0 ? (
-            <div className="py-12 sm:py-16 text-center text-ink-faint text-xs sm:text-sm border border-dashed border-line rounded-xl bg-sand/40 px-4">
-              No generations yet. Create your first lookbook from the Generate tab.
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5">
-              {historyList.map((row, i) => (
-                <div key={i} className="card card-hover overflow-hidden flex flex-col group relative">
-                  <div className="relative aspect-[4/5] bg-sand overflow-hidden border-b border-muted-purple">
-                    {row.output_url ? (
-                      <>
-                        <img
-                          src={row.output_url}
-                          alt="Generated Lookbook"
-                          className="object-cover h-full w-full group-hover:scale-[1.03] transition-transform duration-500"
-                        />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-2 sm:p-2.5 gap-1.5 z-10">
-                          <button
-                            type="button"
-                            onClick={() => downloadImage(row.output_url!, `florus-catalog-${i + 1}.png`)}
-                            disabled={downloadingUrl === row.output_url}
-                            className="btn-primary flex-1 text-center py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer shadow-md disabled:opacity-60"
-                            title="Direct download full size image"
-                          >
-                            {downloadingUrl === row.output_url ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Download className="h-3 w-3" />
-                            )}
-                            <span>{downloadingUrl === row.output_url ? "Saving..." : "Download"}</span>
-                          </button>
-                          <a
-                            href={row.output_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-secondary px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1 bg-surface/90 hover:bg-surface text-ink shrink-0"
-                            title="Open full size in new tab"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center text-ink-faint text-xs font-medium">
-                        No output
-                      </div>
-                    )}
-                    <span className="absolute bottom-1.5 left-1.5 sm:bottom-2 sm:left-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-surface/95 border border-line text-[9px] sm:text-[10px] text-ink font-semibold flex items-center gap-1">
-                      <Coins className="h-2.5 w-2.5 text-fuchsia-accent" />
-                      <span>1 Credit</span>
-                    </span>
-                    <span className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold capitalize ${statusPillClass(row.status)}`}>
-                      {row.status}
-                    </span>
+        return (
+          <section className="card p-4 sm:p-6 md:p-8 flex flex-col gap-5 sm:gap-6 shadow-xl">
+            {/* Header & Stats Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-line pb-4 gap-3">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-xl bg-fuchsia-accent/10 border border-fuchsia-accent/30 flex items-center justify-center text-fuchsia-accent shrink-0">
+                    <History className="h-4 w-4" />
                   </div>
-                  <div className="p-2 sm:p-3 flex flex-col gap-1 flex-1 justify-between">
-                    <div>
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[9px] sm:text-[10px] text-ink-faint">
-                          {new Date(row.created_at).toLocaleDateString()}
-                        </span>
-                        {row.output_url && (
-                          <button
-                            type="button"
-                            onClick={() => downloadImage(row.output_url!, `florus-catalog-${i + 1}.png`)}
-                            disabled={downloadingUrl === row.output_url}
-                            className="text-[10px] sm:text-xs font-semibold text-fuchsia-accent hover:text-fuchsia-accent/80 flex items-center gap-1 cursor-pointer transition-colors"
-                            title="Direct download full size image"
-                          >
-                            {downloadingUrl === row.output_url ? (
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                            ) : (
-                              <Download className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                            )}
-                            <span className="text-[10px] sm:text-xs">Download</span>
-                          </button>
+                  <h3 className="text-base sm:text-lg font-bold text-ink">
+                    Editorial Catalog History
+                  </h3>
+                  <span className="pill-success text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    {historyList.length} {historyList.length === 1 ? "Shoot" : "Shoots"}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-ink-soft mt-1">
+                  Browse, zoom, download, and copy links for all your AI synthesized model lookbooks.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => profile && fetchHistory(profile.id)}
+                  disabled={historyLoading}
+                  className="btn-secondary px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${historyLoading ? "animate-spin text-fuchsia-accent" : ""}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Search & Filter Toolbar */}
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-sand/60 p-2.5 sm:p-3 rounded-xl border border-line">
+              {/* Search by prompt */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search shoots by prompt keywords (e.g. silk, banarasi, red, palace)..."
+                  value={historySearch}
+                  onChange={(e) => {
+                    setHistorySearch(e.target.value);
+                    setVisibleHistoryCount(24);
+                  }}
+                  className="input-field text-xs pl-9 pr-8 py-2 w-full"
+                />
+                {historySearch && (
+                  <button
+                    type="button"
+                    onClick={() => setHistorySearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-ink-faint hover:text-ink cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs">
+                {[
+                  { id: "all", label: `All (${historyList.length})` },
+                  { id: "completed", label: "Completed" },
+                  { id: "processing", label: "Processing" },
+                  { id: "failed", label: "Failed" }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setHistoryStatusFilter(tab.id);
+                      setVisibleHistoryCount(24);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                      historyStatusFilter === tab.id
+                        ? "bg-fuchsia-accent text-white shadow-sm"
+                        : "bg-surface border border-line text-ink-soft hover:text-ink hover:border-line-hover"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Gallery Grid */}
+            {historyLoading ? (
+              <div className="py-16 sm:py-20 text-center text-ink-faint text-sm flex flex-col items-center justify-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-fuchsia-accent/10 border border-fuchsia-accent/30 flex items-center justify-center">
+                  <RefreshCw className="h-6 w-6 animate-spin text-fuchsia-accent" />
+                </div>
+                <span className="font-semibold text-ink">Syncing catalog gallery...</span>
+                <span className="text-xs text-ink-faint">Loading high-resolution asset history</span>
+              </div>
+            ) : filteredHistory.length === 0 ? (
+              <div className="py-14 sm:py-18 text-center text-ink-soft text-xs sm:text-sm border-2 border-dashed border-line rounded-2xl bg-sand/30 p-6 flex flex-col items-center justify-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-surface border border-line flex items-center justify-center shadow-xs">
+                  <ImageIcon className="h-6 w-6 text-fuchsia-accent" />
+                </div>
+                <div className="flex flex-col gap-1 max-w-sm">
+                  <span className="font-bold text-ink text-sm">
+                    {historySearch ? "No matching lookbooks found" : "No catalog shoots yet"}
+                  </span>
+                  <p className="text-xs text-ink-soft">
+                    {historySearch
+                      ? `No shoots matched "${historySearch}". Try clearing your search filter.`
+                      : "Generate your first editorial saree or custom model lookbook to build your collection."}
+                  </p>
+                </div>
+                {historySearch ? (
+                  <button
+                    type="button"
+                    onClick={() => setHistorySearch("")}
+                    className="btn-secondary text-xs px-3.5 py-1.5 rounded-xl cursor-pointer mt-1"
+                  >
+                    Clear Filter
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => router.push("/dashboard?tab=generate")}
+                    className="btn-primary text-xs px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-md mt-1"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Create Lookbook</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5 smooth-scroll-grid">
+                  {displayedHistory.map((row, i) => (
+                    <div
+                      key={i}
+                      className="card card-hover overflow-hidden flex flex-col group relative bg-surface border border-line hover:border-fuchsia-accent/50 transition-all shadow-md img-perf-card rounded-2xl"
+                    >
+                      {/* Image Canvas with 4:5 Aspect Ratio */}
+                      <div className="relative aspect-[4/5] bg-sand overflow-hidden border-b border-line">
+                        {row.output_url ? (
+                          <>
+                            <img
+                              src={row.output_url}
+                              alt={row.prompt || "Generated Lookbook"}
+                              loading="lazy"
+                              decoding="async"
+                              onError={(e) => {
+                                e.currentTarget.src = "/images/florus_logo.png";
+                              }}
+                              className="object-cover h-full w-full group-hover:scale-105 transition-transform duration-500 cursor-pointer"
+                              onClick={() => setLightboxRecord(row)}
+                            />
+
+                            {/* Hover Overlay with Action Buttons */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5 sm:p-3 z-10 pointer-events-none group-hover:pointer-events-auto">
+                              {/* Top Bar inside overlay */}
+                              <div className="flex items-center justify-between">
+                                <span className="bg-black/70 backdrop-blur-xs text-white text-[9px] font-semibold px-2 py-0.5 rounded-md border border-white/10">
+                                  {new Date(row.created_at).toLocaleDateString()}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setLightboxRecord(row)}
+                                  className="p-1.5 rounded-lg bg-surface/90 hover:bg-surface text-ink transition-transform hover:scale-105 cursor-pointer shadow-sm"
+                                  title="Fullscreen Zoom"
+                                >
+                                  <Maximize2 className="h-3.5 w-3.5 text-fuchsia-accent" />
+                                </button>
+                              </div>
+
+                              {/* Bottom Action Buttons */}
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => downloadImage(row.output_url!, `florus-catalog-${i + 1}.png`)}
+                                  disabled={downloadingUrl === row.output_url}
+                                  className="btn-primary flex-1 text-center py-1.5 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1 cursor-pointer shadow-md disabled:opacity-60"
+                                  title="Download Full-Res"
+                                >
+                                  {downloadingUrl === row.output_url ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Download className="h-3 w-3" />
+                                  )}
+                                  <span>{downloadingUrl === row.output_url ? "Saving..." : "Download"}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyUrl(row.output_url!)}
+                                  className="p-1.5 sm:p-2 rounded-lg bg-surface/90 hover:bg-surface text-ink cursor-pointer transition-colors shrink-0 shadow-sm"
+                                  title="Copy Image Link"
+                                >
+                                  {copiedUrl === row.output_url ? (
+                                    <Check className="h-3.5 w-3.5 text-sage" />
+                                  ) : (
+                                    <Copy className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+
+                                <a
+                                  href={row.output_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 sm:p-2 rounded-lg bg-surface/90 hover:bg-surface text-ink cursor-pointer transition-colors shrink-0 shadow-sm"
+                                  title="Open in new tab"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-ink-faint text-xs font-medium">
+                            No asset
+                          </div>
                         )}
+
+                        {/* Always visible Top-Right Status Badge */}
+                        <span className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm z-5 ${statusPillClass(row.status)}`}>
+                          {row.status}
+                        </span>
+
+                        {/* Always visible Bottom-Left Credit Pill */}
+                        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-surface/90 backdrop-blur-xs border border-line text-[9px] text-ink font-bold flex items-center gap-1 shadow-sm z-5">
+                          <Coins className="h-2.5 w-2.5 text-fuchsia-accent" />
+                          <span>1 Credit</span>
+                        </span>
                       </div>
-                      <p className="text-[11px] sm:text-xs text-ink-soft line-clamp-2 leading-tight sm:leading-relaxed mt-0.5 sm:mt-1" title={row.prompt}>
-                        {row.prompt || "Catalog generation"}
-                      </p>
+
+                      {/* Card Details Footer */}
+                      <div className="p-2.5 sm:p-3 flex flex-col justify-between flex-1 gap-1.5">
+                        <p className="text-[11px] sm:text-xs text-ink line-clamp-2 leading-relaxed" title={row.prompt}>
+                          {row.prompt || "Catalog lookbook generation"}
+                        </p>
+                        <div className="flex items-center justify-between text-[10px] text-ink-faint pt-1 border-t border-line/50">
+                          <span>{new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                          {row.output_url && (
+                            <button
+                              type="button"
+                              onClick={() => downloadImage(row.output_url!, `florus-catalog-${i + 1}.png`)}
+                              className="text-fuchsia-accent hover:underline font-semibold cursor-pointer"
+                            >
+                              Download
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progressive Batch Loading */}
+                {filteredHistory.length > visibleHistoryCount && (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleHistoryCount((prev) => prev + 24)}
+                      className="btn-secondary px-5 py-2.5 rounded-xl text-xs font-bold cursor-pointer shadow-sm hover:border-fuchsia-accent/50"
+                    >
+                      Load More Lookbooks ({filteredHistory.length - visibleHistoryCount} remaining)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Fullscreen Zoom Lightbox Modal */}
+            {lightboxRecord && lightboxRecord.output_url && (
+              <div
+                className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in"
+                onClick={() => setLightboxRecord(null)}
+              >
+                <div
+                  className="relative max-w-4xl w-full max-h-[92vh] flex flex-col bg-surface border border-line rounded-2xl overflow-hidden shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Lightbox Header */}
+                  <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-line bg-surface/90">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles className="h-4 w-4 text-fuchsia-accent shrink-0" />
+                      <span className="text-xs sm:text-sm font-bold text-ink truncate">
+                        Lookbook Preview — {new Date(lightboxRecord.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyUrl(lightboxRecord.output_url!)}
+                        className="btn-secondary px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedUrl === lightboxRecord.output_url ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-sage" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Copy Link</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => downloadImage(lightboxRecord.output_url!, `florus-editorial-${Date.now()}.png`)}
+                        disabled={downloadingUrl === lightboxRecord.output_url}
+                        className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        {downloadingUrl === lightboxRecord.output_url ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
+                        <span>Download</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setLightboxRecord(null)}
+                        className="p-1.5 rounded-lg text-ink-soft hover:text-ink hover:bg-sand cursor-pointer ml-1"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
+
+                  {/* Lightbox Image Viewport */}
+                  <div className="flex-1 bg-black/60 flex items-center justify-center p-2 sm:p-4 overflow-hidden max-h-[70vh]">
+                    <img
+                      src={lightboxRecord.output_url}
+                      alt={lightboxRecord.prompt || "Lookbook"}
+                      className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
+                      decoding="async"
+                    />
+                  </div>
+
+                  {/* Lightbox Footer Prompt */}
+                  <div className="px-4 sm:px-6 py-3 border-t border-line bg-surface flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-accent">
+                      Prompt / Recipe
+                    </span>
+                    <p className="text-xs text-ink-soft leading-relaxed max-h-16 overflow-y-auto">
+                      {lightboxRecord.prompt || "Editorial Catalog Generation"}
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {currentTab === "billing" && (
         <section className="card p-4 sm:p-6 md:p-8 flex flex-col gap-5 sm:gap-6">

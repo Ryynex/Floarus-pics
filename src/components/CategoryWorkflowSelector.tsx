@@ -49,7 +49,7 @@ export function CategoryWorkflowSelector({
       {/* Title */}
       <div className="flex flex-col items-center text-center gap-1.5 py-2">
         <div className="h-12 w-12 rounded-2xl bg-fuchsia-accent flex items-center justify-center shadow-sm mb-2">
-          <span className="text-xl font-bold text-[#1F1A15]">FL</span>
+          <span className="text-xl font-bold text-[#05130A]">FL</span>
         </div>
         <h2 className="text-2xl font-bold tracking-tight text-ink">
           Choose a workflow

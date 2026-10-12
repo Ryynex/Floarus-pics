@@ -307,7 +307,7 @@ export function ModelPickerModal({
                         onSelect(custom);
                         onClose();
                       }}
-                      className={`group relative aspect-[3/4] rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col justify-end p-3 ${
+                      className={`group relative aspect-[3/4] rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col justify-end p-3 img-perf-card ${
                         isSelected
                           ? "border-sage ring-2 ring-sage/30"
                           : "border-line hover:border-sage/50 bg-sand"
@@ -317,6 +317,11 @@ export function ModelPickerModal({
                         <img
                           src={custom.imageUrl}
                           alt={custom.name}
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            e.currentTarget.src = "/images/florus_logo.png";
+                          }}
                           className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                       )}
@@ -334,7 +339,7 @@ export function ModelPickerModal({
 
                       {/* Selected Badge */}
                       {isSelected && (
-                        <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-sage text-[#1F1A15] flex items-center justify-center shadow-md z-20">
+                        <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-sage text-[#05130A] flex items-center justify-center shadow-md z-20">
                           <Check className="h-3 w-3" />
                         </div>
                       )}
@@ -386,7 +391,7 @@ export function ModelPickerModal({
                         <User className="h-4.5 w-4.5" />
                       </div>
                       {isSelected && (
-                        <div className="h-5 w-5 rounded-full bg-fuchsia-accent text-[#1F1A15] flex items-center justify-center shadow-md shrink-0">
+                        <div className="h-5 w-5 rounded-full bg-fuchsia-accent text-[#05130A] flex items-center justify-center shadow-md shrink-0">
                           <Check className="h-3 w-3" />
                         </div>
                       )}

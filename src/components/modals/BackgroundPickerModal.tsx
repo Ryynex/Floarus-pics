@@ -23,6 +23,7 @@ export function BackgroundPickerModal({
 }: BackgroundPickerModalProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [displayCount, setDisplayCount] = useState<number>(24);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customBgText, setCustomBgText] = useState(
     selectedBackground.id === "custom" ? selectedBackground.description : ""
@@ -46,6 +47,8 @@ export function BackgroundPickerModal({
       b.description.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  const visibleBackgrounds = filteredBackgrounds.slice(0, displayCount);
 
   const handleApplyCustomBg = () => {
     if (!customBgText.trim()) return;
@@ -106,7 +109,7 @@ export function BackgroundPickerModal({
               onClick={() => onModeChange && onModeChange("fixed")}
               className={`px-4 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 backgroundMode === "fixed"
-                  ? "bg-fuchsia-accent text-[#1F1A15] shadow-sm"
+                  ? "bg-fuchsia-accent text-[#05130A] shadow-sm"
                   : "text-ink-soft hover:text-ink"
               }`}
             >
@@ -117,7 +120,7 @@ export function BackgroundPickerModal({
               onClick={() => onModeChange && onModeChange("inspiration")}
               className={`px-4 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 backgroundMode === "inspiration" || !backgroundMode
-                  ? "bg-fuchsia-accent text-[#1F1A15] shadow-sm"
+                  ? "bg-fuchsia-accent text-[#05130A] shadow-sm"
                   : "text-ink-soft hover:text-ink"
               }`}
             >
@@ -140,7 +143,7 @@ export function BackgroundPickerModal({
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
                 activeCategory === cat.id
-                  ? "bg-fuchsia-accent text-[#1F1A15] shadow-sm"
+                  ? "bg-fuchsia-accent text-[#05130A] shadow-sm"
                   : "bg-surface border border-line text-ink-soft hover:text-ink hover:border-fuchsia-accent/30"
               }`}
             >
@@ -150,9 +153,9 @@ export function BackgroundPickerModal({
         </div>
 
         {/* Backgrounds Grid */}
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-6 overflow-y-auto flex-1 smooth-scroll-grid">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {filteredBackgrounds.map((bg) => {
+            {visibleBackgrounds.map((bg) => {
               const isSelected = selectedBackground.id === bg.id;
               return (
                 <div
@@ -162,7 +165,7 @@ export function BackgroundPickerModal({
                     onSelect(bg);
                     onClose();
                   }}
-                  className={`group rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col bg-surface ${
+                  className={`group rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col bg-surface img-perf-card ${
                     isSelected
                       ? "border-fuchsia-accent ring-2 ring-fuchsia-accent/20 shadow-sm"
                       : "border-line hover:border-fuchsia-accent/40"
@@ -172,13 +175,18 @@ export function BackgroundPickerModal({
                     <img
                       src={bg.imageUrl}
                       alt={bg.name}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = PRESET_BACKGROUNDS[0].imageUrl;
+                      }}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-60 group-hover:opacity-30 transition-opacity" />
 
                     {isSelected && (
-                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-fuchsia-accent text-[#1F1A15] flex items-center justify-center shadow-md">
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-fuchsia-accent text-[#05130A] flex items-center justify-center shadow-md">
                         <Check className="h-3 w-3" />
                       </div>
                     )}
@@ -196,7 +204,7 @@ export function BackgroundPickerModal({
             {/* Custom Background Card */}
             <div
               onClick={() => setShowCustomInput(true)}
-              className={`group rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col justify-between p-4 bg-surface ${
+              className={`group rounded-xl overflow-hidden border cursor-pointer transition-all flex flex-col justify-between p-4 bg-surface img-perf-card ${
                 showCustomInput || selectedBackground.id === "custom"
                   ? "border-fuchsia-accent ring-2 ring-fuchsia-accent/20 bg-clay-soft"
                   : "border-dashed border-line hover:border-fuchsia-accent/40 hover:bg-sand/40"
@@ -215,6 +223,20 @@ export function BackgroundPickerModal({
               </div>
             </div>
           </div>
+
+          {/* Load More Button for large image counts */}
+          {filteredBackgrounds.length > displayCount && (
+            <div className="flex justify-center pt-5 pb-2">
+              <button
+                type="button"
+                onClick={() => setDisplayCount((prev) => prev + 24)}
+                className="btn-secondary px-5 py-2 rounded-xl text-xs font-bold text-ink hover:text-fuchsia-accent flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+              >
+                <span>Load More Backdrops ({filteredBackgrounds.length - displayCount} remaining)</span>
+              </button>
+            </div>
+          )}
+
 
           {/* Custom Background Input Box */}
           {showCustomInput && (

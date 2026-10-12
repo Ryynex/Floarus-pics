@@ -1,37 +1,38 @@
 @import "tailwindcss";
 
 @theme {
-  /* Ultra-luxury Obsidian & Warm Copper Palette */
+  /* Ultra-luxury Obsidian & High-Tech Emerald Palette */
   --font-sans: var(--font-sans), system-ui, -apple-system, sans-serif;
   --font-serif: var(--font-serif), Georgia, serif;
 
-  --color-void: #0d0b09;
-  --color-surface: #17130f;
-  --color-fuchsia-accent: #d4784a;
-  --color-fuchsia-hover: #e0885c;
-  --color-purple-accent: #d4a84b;
-  --color-muted-purple: #302820;
-  --color-foreground-muted: #b8aba0;
+  --color-void: #070908;
+  --color-surface: #0e1310;
+  --color-fuchsia-accent: #10b981;
+  --color-fuchsia-hover: #34d399;
+  --color-purple-accent: #34d399;
+  --color-muted-purple: #1e2c22;
+  --color-foreground-muted: #94a3b8;
 
   /* Extended editorial tokens */
-  --color-ink: #f5eee6;
-  --color-ink-soft: #b8aba0;
-  --color-ink-faint: #7a6e62;
-  --color-line: #2e261f;
-  --color-sand: #1f1a14;
-  --color-clay-soft: #382b20;
-  --color-gold-soft: #362c1a;
-  --color-sage: #8fb575;
-  --color-sage-soft: #1d2b15;
-  --color-brick: #d47a6e;
-  --color-brick-soft: #381d1b;
-  --color-amber-warm: #d4a04a;
-  --color-amber-soft: #382a14;
+  --color-ink: #f8fafc;
+  --color-ink-soft: #94a3b8;
+  --color-ink-faint: #64748b;
+  --color-line: #1a261d;
+  --color-line-hover: #2b4533;
+  --color-sand: #141c16;
+  --color-clay-soft: #12281a;
+  --color-gold-soft: #163321;
+  --color-sage: #10b981;
+  --color-sage-soft: #0c2415;
+  --color-brick: #ef4444;
+  --color-brick-soft: #291211;
+  --color-amber-warm: #f59e0b;
+  --color-amber-soft: #291e0a;
 }
 
 :root {
-  --background: #0d0b09;
-  --foreground: #f5eee6;
+  --background: #070908;
+  --foreground: #f8fafc;
 }
 
 html {
@@ -54,8 +55,8 @@ body {
     border: 1px solid var(--color-muted-purple);
     border-radius: 1rem;
     box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.35),
-      0 8px 24px rgba(0, 0, 0, 0.28);
+      0 1px 3px rgba(0, 0, 0, 0.45),
+      0 8px 24px rgba(0, 0, 0, 0.35);
   }
 
   .card-hover {
@@ -63,23 +64,24 @@ body {
   }
 
   .card-hover:hover {
-    border-color: #52463a;
+    border-color: #2b4533;
     box-shadow:
-      0 2px 4px rgba(0, 0, 0, 0.4),
-      0 12px 32px rgba(0, 0, 0, 0.35);
+      0 2px 4px rgba(0, 0, 0, 0.5),
+      0 12px 32px rgba(16, 185, 129, 0.08);
   }
 
   /* Buttons */
   .btn-primary {
     background-color: var(--color-fuchsia-accent);
-    color: #1f1a15;
+    color: #05130a;
+    font-weight: 700;
     border: 1px solid transparent;
     transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   }
 
   .btn-primary:hover:not(:disabled) {
-    background-color: #e08a5c;
-    box-shadow: 0 6px 18px rgba(212, 120, 74, 0.3);
+    background-color: #34d399;
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
     transform: translateY(-1px);
   }
 
@@ -102,7 +104,7 @@ body {
 
   .btn-secondary:hover:not(:disabled) {
     background-color: var(--color-sand);
-    border-color: #52463a;
+    border-color: #2b4533;
     color: var(--color-ink);
   }
 
@@ -114,7 +116,7 @@ body {
   /* Inputs — utilities (pl-9, pr-10, etc.) must override these */
   .input-field {
     width: 100%;
-    background-color: #18130f;
+    background-color: #0b100d;
     border: 1px solid var(--color-muted-purple);
     border-radius: 0.625rem;
     padding: 0.625rem 0.875rem;
@@ -130,7 +132,7 @@ body {
 
   .input-field:focus {
     border-color: var(--color-fuchsia-accent);
-    box-shadow: 0 0 0 3px rgba(212, 120, 74, 0.18);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
   }
 
   .input-field:disabled {
@@ -139,7 +141,7 @@ body {
   }
 
   .input-field option {
-    background-color: #1f1a15;
+    background-color: #0e1310;
     color: var(--color-ink);
   }
 
@@ -156,19 +158,19 @@ body {
   .pill-success {
     background-color: var(--color-sage-soft);
     color: var(--color-sage);
-    border: 1px solid rgba(143, 181, 117, 0.22);
+    border: 1px solid rgba(16, 185, 129, 0.25);
   }
 
   .pill-warning {
     background-color: var(--color-amber-soft);
     color: var(--color-amber-warm);
-    border: 1px solid rgba(212, 160, 74, 0.22);
+    border: 1px solid rgba(245, 158, 11, 0.25);
   }
 
   .pill-danger {
     background-color: var(--color-brick-soft);
     color: var(--color-brick);
-    border: 1px solid rgba(212, 122, 110, 0.22);
+    border: 1px solid rgba(239, 68, 68, 0.25);
   }
 
   .pill-neutral {
@@ -180,14 +182,14 @@ body {
   /* Soft selection / active tile */
   .tile-active {
     background-color: var(--color-clay-soft);
-    border-color: rgba(212, 120, 74, 0.5);
-    box-shadow: 0 0 0 3px rgba(212, 120, 74, 0.12);
+    border-color: rgba(16, 185, 129, 0.6);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
   }
 
   /* Focus ring for interactive cards */
   .focus-ring:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(212, 120, 74, 0.22);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
   }
 
   /* Legacy class kept for any residual references — now a clean dark card */
@@ -195,8 +197,8 @@ body {
     background: var(--color-surface);
     border: 1px solid var(--color-muted-purple);
     box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.35),
-      0 8px 24px rgba(0, 0, 0, 0.28);
+      0 1px 3px rgba(0, 0, 0, 0.45),
+      0 8px 24px rgba(0, 0, 0, 0.35);
   }
 
   .glow-btn-fuchsia {
@@ -204,8 +206,8 @@ body {
   }
 
   .glow-btn-fuchsia:hover:not(:disabled) {
-    background-color: #e08a5c;
-    box-shadow: 0 6px 18px rgba(212, 120, 74, 0.3);
+    background-color: #34d399;
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
     transform: translateY(-1px);
   }
 
@@ -219,8 +221,8 @@ body {
   }
 
   .glow-btn-purple:hover:not(:disabled) {
-    background-color: #e0b85c;
-    box-shadow: 0 6px 18px rgba(212, 168, 75, 0.28);
+    background-color: #6ee7b7;
+    box-shadow: 0 6px 20px rgba(52, 211, 153, 0.3);
     transform: translateY(-1px);
   }
 
@@ -230,16 +232,16 @@ body {
 
   .glow-input:focus {
     border-color: var(--color-fuchsia-accent);
-    box-shadow: 0 0 0 3px rgba(212, 120, 74, 0.18);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
     outline: none;
   }
 
-  /* Subtle warm paper texture for empty hero areas */
+  /* Subtle emerald grid pattern for empty hero areas */
   .bg-grid-pattern {
     background-size: 48px 48px;
     background-image:
-      linear-gradient(to right, rgba(212, 120, 74, 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(212, 120, 74, 0.05) 1px, transparent 1px);
+      linear-gradient(to right, rgba(16, 185, 129, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(16, 185, 129, 0.05) 1px, transparent 1px);
   }
 
   /* Tables */
@@ -252,19 +254,19 @@ body {
     padding: 0.75rem 1rem;
     text-align: left;
     border-bottom: 1px solid var(--color-muted-purple);
-    background-color: #1a1510;
+    background-color: #0d120f;
     white-space: nowrap;
   }
 
   .data-table td {
     padding: 0.875rem 1rem;
     color: var(--color-ink-soft);
-    border-bottom: 1px solid rgba(58, 50, 42, 0.7);
+    border-bottom: 1px solid rgba(30, 44, 34, 0.7);
     vertical-align: middle;
   }
 
   .data-table tbody tr:hover td {
-    background-color: #1a1510;
+    background-color: #0d120f;
   }
 
   .data-table tbody tr:last-child td {
@@ -275,7 +277,7 @@ body {
 /* Scrollbar styling for a polished feel */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3a322a transparent;
+  scrollbar-color: #1e2c22 transparent;
 }
 
 *::-webkit-scrollbar {
@@ -288,12 +290,12 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: #3a322a;
+  background-color: #1e2c22;
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #52463a;
+  background-color: #2b4533;
 }
 
 @keyframes slideIn {
@@ -322,35 +324,53 @@ body {
   animation: fadeIn 0.25s ease-out forwards;
 }
 
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Hide scrollbars on horizontal strips without losing scroll behaviour */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* High-Performance Virtual Image Rendering & GPU compositing */
+.img-perf-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 180px 240px;
+}
+
+.smooth-scroll-grid {
+  transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Aspect ratio fallback safety guards so images never collapse */
 [class*="aspect-[3/4]"],
 .aspect-\[3\/4\] {
   aspect-ratio: 3 / 4;
-  min-height: 240px;
 }
 [class*="aspect-[4/5]"],
 .aspect-\[4\/5\] {
   aspect-ratio: 4 / 5;
-  min-height: 260px;
 }
 [class*="aspect-[4/3]"],
 .aspect-\[4\/3\] {
   aspect-ratio: 4 / 3;
-  min-height: 180px;
-}
-
-@media (max-width: 639px) {
-  [class*="aspect-[3/4]"],
-  .aspect-\[3\/4\] {
-    min-height: 180px;
-  }
-  [class*="aspect-[4/5]"],
-  .aspect-\[4\/5\] {
-    min-height: 200px;
-  }
-  [class*="aspect-[4/3]"],
-  .aspect-\[4\/3\] {
-    min-height: 140px;
-  }
 }
 

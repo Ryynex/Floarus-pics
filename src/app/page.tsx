@@ -471,7 +471,7 @@ export default function Home() {
                   className="btn-primary w-full py-3 mt-1 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    <span className="h-4 w-4 border-2 border-[#1F1A15]/40 border-t-[#1F1A15] rounded-full animate-spin" />
+                    <span className="h-4 w-4 border-2 border-[#05130A]/40 border-t-[#05130A] rounded-full animate-spin" />
                   ) : (
                     <>
                       <span>Open Studio</span>
