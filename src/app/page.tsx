@@ -15,7 +15,9 @@ import {
   Palette,
   Sparkles,
   Image as ImageIcon,
-  X
+  X,
+  Send,
+  ExternalLink
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -96,6 +98,15 @@ export default function Home() {
     }
 
     try {
+      if (authMode === "signup") {
+        setMessage({
+          type: "error",
+          text: "Direct sign up is closed. To create an account, please contact @Ryynex through Telegram.",
+        });
+        setLoading(false);
+        return;
+      }
+
       if (authMode === "login") {
         const { error } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
@@ -107,25 +118,6 @@ export default function Home() {
           text: `Verified! Redirecting to Florus Studio...`,
         });
         router.replace("/dashboard");
-      } else {
-        // Sign up with additional metadata
-        const { error } = await supabase.auth.signUp({
-          email: normalizedEmail,
-          password: cleanPassword,
-          options: {
-            data: {
-              company_name: company.trim() || "Brand Client",
-            },
-          },
-        });
-        if (error) throw error;
-        setMessage({
-          type: "success",
-          text: "Account registered! If confirmation is required, please check your inbox.",
-        });
-        setTimeout(() => {
-          router.replace("/dashboard");
-        }, 1500);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred. Please try again.";
@@ -339,14 +331,19 @@ export default function Home() {
                 <span className="pill-success text-[10px] font-semibold tracking-wide px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1">
                   <ShieldCheck className="h-3 w-3" /> Secure Portal
                 </span>
+                {authMode === "signup" && (
+                  <span className="text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full text-brick bg-brick-soft border border-brick/30 uppercase">
+                    Closed
+                  </span>
+                )}
               </div>
               <h2 className="text-xl font-bold tracking-tight text-ink mt-1">
-                {authMode === "login" ? "Sign in to your studio" : "Create a brand account"}
+                {authMode === "login" ? "Sign in to your studio" : "Sign Up is Closed"}
               </h2>
               <p className="text-sm text-ink-soft leading-relaxed">
                 {authMode === "login"
                   ? "Access your generate workspace, catalog history, and wallet."
-                  : "Start generating professional catalog photoshoots for your label."}
+                  : "To sign up, contact @Ryynex through Telegram."}
               </p>
             </div>
 
@@ -364,110 +361,140 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setAuthMode("signup"); setMessage(null); }}
-                className={`py-2 text-sm font-semibold rounded-lg transition-all cursor-pointer ${
+                className={`py-2 text-sm font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                   authMode === "signup"
                     ? "bg-surface text-ink shadow-sm"
                     : "text-ink-soft hover:text-ink"
                 }`}
               >
-                Register
+                <span>Sign Up</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-brick bg-brick/10 border border-brick/25 px-1.5 py-0.5 rounded">
+                  Closed
+                </span>
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleAuth} className="flex flex-col gap-4">
-
-              {/* Optional Company Field for Register */}
-              {authMode === "signup" && (
+            {authMode === "signup" ? (
+              <div className="flex flex-col items-center text-center gap-5 p-5 sm:p-6 rounded-2xl bg-sand/60 border border-line">
+                <div className="h-14 w-14 rounded-2xl bg-[#229ED9]/15 border border-[#229ED9]/30 flex items-center justify-center text-[#229ED9] shadow-inner">
+                  <Send className="h-7 w-7" />
+                </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="label-caps">Company Name</label>
+                  <h3 className="font-bold text-base text-ink">Sign Up is Closed</h3>
+                  <p className="text-xs sm:text-sm text-ink-soft max-w-xs leading-relaxed">
+                    Direct sign up is closed. To sign up, please contact <strong className="text-ink font-semibold">@Ryynex</strong> through Telegram to request access and studio credits.
+                  </p>
+                </div>
+
+                <a
+                  href="https://t.me/Ryynex"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-[#229ED9] hover:bg-[#1d8bc0] text-white shadow-md shadow-[#229ED9]/25 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                >
+                  <Send className="h-4 w-4" />
+                  <span>Contact @Ryynex on Telegram</span>
+                  <ExternalLink className="h-3.5 w-3.5 opacity-80" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode("login"); setMessage(null); }}
+                  className="text-xs font-semibold text-fuchsia-accent hover:underline cursor-pointer"
+                >
+                  Already have an account? Sign in here →
+                </button>
+              </div>
+            ) : (
+              /* Form */
+              <form onSubmit={handleAuth} className="flex flex-col gap-4">
+
+                {/* Email Input */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="label-caps">Business Email</label>
                   <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint pointer-events-none" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint pointer-events-none" />
                     <input
-                      type="text"
+                      type="email"
                       required
-                      placeholder="e.g. Milan Digital Atelier"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="partner@fashionbrand.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="input-field pl-9"
                     />
                   </div>
                 </div>
-              )}
 
-              {/* Email Input */}
-              <div className="flex flex-col gap-1.5">
-                <label className="label-caps">Business Email</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint pointer-events-none" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="partner@fashionbrand.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="input-field pl-9"
-                  />
-                </div>
-              </div>
-
-              {/* Password Input */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="label-caps">Password</label>
-                  {authMode === "login" && (
+                {/* Password Input */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="label-caps">Password</label>
                     <span className="text-[11px] font-medium text-fuchsia-accent">Contact support to reset</span>
-                  )}
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint pointer-events-none z-10" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="input-field pl-9 pr-11"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-ink-faint hover:text-ink hover:bg-sand/80 transition-colors cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint pointer-events-none z-10" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    required
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input-field pl-9 pr-11"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-ink-faint hover:text-ink hover:bg-sand/80 transition-colors cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
 
-              {/* Form Feedback Messages */}
-              {message && (
-                <div className={`p-3 rounded-xl border text-sm font-medium flex gap-2 items-start ${
-                  message.type === "success"
-                    ? "bg-sage-soft border-sage/25 text-sage"
-                    : "bg-brick-soft border-brick/25 text-brick"
-                }`}>
-                  <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <span>{message.text}</span>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full py-3 mt-1 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <span className="h-4 w-4 border-2 border-[#1F1A15]/40 border-t-[#1F1A15] rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>{authMode === "login" ? "Open Studio" : "Create Account"}</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </>
+                {/* Form Feedback Messages */}
+                {message && (
+                  <div className={`p-3 rounded-xl border text-sm font-medium flex gap-2 items-start ${
+                    message.type === "success"
+                      ? "bg-sage-soft border-sage/25 text-sage"
+                      : "bg-brick-soft border-brick/25 text-brick"
+                  }`}>
+                    <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                    <span>{message.text}</span>
+                  </div>
                 )}
-              </button>
-            </form>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary w-full py-3 mt-1 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <span className="h-4 w-4 border-2 border-[#1F1A15]/40 border-t-[#1F1A15] rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span>Open Studio</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+
+                <div className="pt-1 text-center">
+                  <p className="text-xs text-ink-soft">
+                    Need an account? Direct sign up is closed.{" "}
+                    <a
+                      href="https://t.me/Ryynex"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-fuchsia-accent font-semibold hover:underline inline-flex items-center gap-1"
+                    >
+                      Contact @Ryynex on Telegram <ExternalLink className="h-3 w-3 inline" />
+                    </a>
+                  </p>
+                </div>
+              </form>
+            )}
 
             <div className="border-t border-line pt-4 text-center">
               <span className="text-xs text-ink-faint flex justify-center items-center gap-1.5">
