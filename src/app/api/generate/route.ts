@@ -522,7 +522,7 @@ export async function POST(req: NextRequest) {
       // Model Face
       if (faceRef) {
         promptParts.push(
-          `Model Face Identity: Transfer the exact facial features, eye shape, radiant skin tone, and natural expression from Reference Image ${faceRef.index} onto the model.`
+          `Model Face Identity: Transfer the exact facial features, facial structure, eye shape, radiant skin tone, and expression from @image${faceRef.index} onto the model.`
         );
       } else {
         promptParts.push(
@@ -533,7 +533,8 @@ export async function POST(req: NextRequest) {
       // Pose
       if (poseRef) {
         promptParts.push(
-          `Pose & Body Posture: Replicate the exact full-body posture, limb angles, natural hand placement, and silhouette from Reference Image ${poseRef.index} (${poseName}${poseDescription ? `: ${poseDescription}` : ""}).`
+          `Pose & Body Posture: Extract and replicate the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index} (${poseName}${poseDescription ? `: ${poseDescription}` : ""}). ` +
+          `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output.`
         );
       } else if (poseDescription) {
         promptParts.push(
@@ -546,9 +547,10 @@ export async function POST(req: NextRequest) {
       // Background & Physical Environmental Integration
       if (bgRef) {
         promptParts.push(
-          `Background & Scene Integration: Place the model directly inside the authentic three-dimensional physical setting and architectural space from Reference Image ${bgRef.index} (${backgroundName}${backgroundDescription ? `: ${backgroundDescription}` : ""}). ` +
-          `CRITICAL SHARP BACKGROUND (ZERO BLUR): Deep depth of field, f/8 to f/11 aperture, zero background blur, zero blurry backdrop, zero shallow depth of field, zero artificial bokeh. The entire background environment, architectural walls, flooring, decor, and spatial geometry must be crisp, tack-sharp, and completely in focus throughout the depth of the frame. ` +
-          `PHYSICAL GROUNDING & LIGHTING BOUNCE: The model must be realistically grounded and physically positioned inside the space. Her feet and garment hem must rest naturally on the floor with authentic soft contact shadows and ambient occlusion. Synchronize lighting direction, shadow angles, and ambient color temperature so the background light naturally wraps around and reflects onto her skin, hair, and draped outfit. Authentic in-camera editorial look, seamless spatial perspective, zero cutout effect, no floating model.`
+          `Background & Scene Integration: Place the model directly inside the authentic three-dimensional physical environment and architectural setting from @image${bgRef.index} (${backgroundName}${backgroundDescription ? `: ${backgroundDescription}` : ""}). ` +
+          `Replicate the exact walls, flooring, lighting direction, ambient color temperature, and spatial geometry of @image${bgRef.index}. ` +
+          `CRITICAL SHARP BACKGROUND (ZERO BLUR): Deep depth of field, f/8 to f/11 aperture, zero background blur, zero blurry backdrop, zero shallow depth of field, zero artificial bokeh. The entire background environment from @image${bgRef.index} must be crisp, tack-sharp, and completely in focus throughout the depth of the frame. ` +
+          `PHYSICAL GROUNDING & LIGHTING BOUNCE: The model must be realistically grounded and physically positioned inside @image${bgRef.index}. Her feet and garment hem must rest naturally on the floor with authentic soft contact shadows and ambient occlusion. Synchronize lighting direction, shadow angles, and ambient color temperature so the background light naturally wraps around and reflects onto her skin, hair, and draped outfit. Authentic in-camera editorial look, seamless spatial perspective, zero cutout effect, no floating model.`
         );
       } else if (backgroundDescription) {
         promptParts.push(
@@ -571,11 +573,9 @@ export async function POST(req: NextRequest) {
 
       // Garment & Draping
       if (garmentIndices.length > 0) {
-        const garmentRangeStr = garmentIndices.length === 1 
-          ? `Reference Image ${garmentIndices[0]}` 
-          : `Reference Images ${garmentIndices[0]} to ${garmentIndices[garmentIndices.length - 1]}`;
+        const garmentTokens = garmentIndices.map(i => `@image${i}`).join(", ");
         promptParts.push(
-          `Product Garment Draping: Drape the authentic ${fabricTitleDescriptor}ethnic outfit from ${garmentRangeStr} directly onto the model.`,
+          `Product Garment Draping: Drape the authentic ${fabricTitleDescriptor}ethnic outfit from ${garmentTokens} directly onto the model.`,
           fabricDirective
         );
       }
@@ -624,16 +624,14 @@ export async function POST(req: NextRequest) {
         const gUrls = compressedGarmentUrls.slice(0, MAX_GARMENT_REFERENCES);
         imageUrls = [compressedFaceUrl, compressedShootUrl, ...gUrls];
 
-        const garmentRange = gUrls.length === 1 
-          ? "Reference Image 3" 
-          : `Reference Images 3 to ${imageUrls.length}`;
+        const garmentTokens = gUrls.map((_, i) => `@image${3 + i}`).join(", ");
 
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial portrait photograph with deep depth of field.`,
-          `Facial Identity Transfer: Transfer the exact facial identity, features, and expression of the model in Reference Image 1 onto the model in Reference Image 2.`,
-          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body posture, natural hand anatomy, lighting direction, and background environment from Reference Image 2 (${shootTitle}: ${shootSetting || backgroundName}).`,
-          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The entire background setting and architecture must remain sharp, clear, and fully in focus (deep f/8 aperture, zero background blur, zero shallow focus, zero artificial bokeh). The model must appear realistically integrated and physically grounded inside the space, casting authentic soft contact shadows onto the floor/ground, with ambient light from the surroundings naturally illuminating her skin and outfit.`,
-          `Garment Draping: Drape the model in the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentRange} (${outfitType}).`,
+          `Facial Identity Transfer: Transfer the exact facial identity, features, and expression of the model in @image1 onto the model in @image2.`,
+          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body posture, natural hand anatomy, lighting direction, and background environment from @image2 (${shootTitle}: ${shootSetting || backgroundName}).`,
+          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The entire background setting and architecture from @image2 must remain sharp, clear, and fully in focus (deep f/8 aperture, zero background blur, zero shallow focus, zero artificial bokeh). The model must appear realistically integrated and physically grounded inside the space, casting authentic soft contact shadows onto the floor/ground, with ambient light from the surroundings naturally illuminating her skin and outfit.`,
+          `Garment Draping: Drape the model in the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
@@ -648,15 +646,13 @@ export async function POST(req: NextRequest) {
         const gUrls = compressedGarmentUrls.slice(0, MAX_GARMENT_REFERENCES);
         imageUrls = [compressedShootUrl, ...gUrls];
 
-        const garmentRange = gUrls.length === 1 
-          ? "Reference Image 2" 
-          : `Reference Images 2 to ${imageUrls.length}`;
+        const garmentTokens = gUrls.map((_, i) => `@image${2 + i}`).join(", ");
 
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural authentic features, non-glossy matte skin, and a warm confident expression.`,
-          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from Reference Image 1 (${shootTitle}: ${shootSetting || backgroundName}).`,
-          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background environment and architecture must remain crisp, tack-sharp, and completely in focus (deep f/8 focus, zero background blur, zero shallow depth of field, zero artificial bokeh). The model must appear realistically present and physically grounded inside the scene, casting natural soft contact shadows onto the floor, with matching ambient light bounce and perspective.`,
-          `Garment Draping: Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentRange} (${outfitType}).`,
+          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from @image1 (${shootTitle}: ${shootSetting || backgroundName}).`,
+          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background environment and architecture from @image1 must remain crisp, tack-sharp, and completely in focus (deep f/8 focus, zero background blur, zero shallow depth of field, zero artificial bokeh). The model must appear realistically present and physically grounded inside the scene, casting natural soft contact shadows onto the floor, with matching ambient light bounce and perspective.`,
+          `Garment Draping: Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
           notesSummary ? `Product specifications: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
@@ -671,15 +667,13 @@ export async function POST(req: NextRequest) {
         const gUrls = compressedGarmentUrls.slice(0, MAX_GARMENT_REFERENCES);
         imageUrls = [compressedShootUrl, ...gUrls];
 
-        const garmentRange = gUrls.length === 1 
-          ? "Reference Image 2" 
-          : `Reference Images 2 to ${imageUrls.length}`;
+        const garmentTokens = gUrls.map((_, i) => `@image${2 + i}`).join(", ");
 
         fluxPrompt = [
-          `High-end luxury Indian fashion catalog editorial photograph of the exact model from Reference Image 1 wearing the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentRange} (${outfitType}).`,
-          `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and background environment exactly as shown in Reference Image 1 (${shootTitle}).`,
-          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background setting, architecture, and environment must remain completely in focus and tack-sharp (deep f/8 aperture, zero background blur, zero blurry backdrop, zero artificial bokeh). The model must be realistically grounded and physically positioned inside the scene, with authentic contact shadows on the floor/ground and seamless environmental lighting bounce matching the space.`,
-          `Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment shown in ${garmentRange}.`,
+          `High-end luxury Indian fashion catalog editorial photograph of the exact model from @image1 wearing the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
+          `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and background environment exactly as shown in @image1 (${shootTitle}).`,
+          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background setting, architecture, and environment from @image1 must remain completely in focus and tack-sharp (deep f/8 aperture, zero background blur, zero blurry backdrop, zero artificial bokeh). The model must be realistically grounded and physically positioned inside the scene, with authentic contact shadows on the floor/ground and seamless environmental lighting bounce matching the space.`,
+          `Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment shown in ${garmentTokens}.`,
           fabricDirective,
           notesSummary ? `Product specifications & layer notes: ${notesSummary}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
