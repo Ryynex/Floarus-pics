@@ -877,8 +877,13 @@ export async function POST(req: NextRequest) {
 
     if (mode === "magic") {
       // =========================================================================
-      // MAGIC MODE (BETA) PIPELINE
-      // Multi-Reference Mapping: [Pose Anchor, Face Anchor, Background Anchor, ...Garments]
+      // MAGIC MODE (CUSTOM LOOKBOOK) PIPELINE
+      //
+      // fal-ai/flux-2-pro/edit is an EDIT model: image_urls[0] is the primary
+      // anchor that gets transformed, and the later images are references
+      // ("the person from image 1 wearing the outfit from image 2" per fal/BFL
+      // docs). The order is therefore fixed by ROLE, never by availability:
+      //   [Face (identity anchor, when present), Pose, Background, ...Garments]
       // (Max MAX_TOTAL_REFERENCES overall, MAX_GARMENT_REFERENCES garments)
       // =========================================================================
       interface RefEntry {
@@ -890,51 +895,67 @@ export async function POST(req: NextRequest) {
       }
       const refList: RefEntry[] = [];
 
-      // Every non-garment reference is optional: a stale URL drops that one
-      // layer (with a server log) instead of failing the whole request.
-      const prepareOptionalRef = async (
+      // A reference the user explicitly selected (brand face, pose, background)
+      // MUST be usable: silently dropping it changes the edit semantics and
+      // bills a generation that ignores their choice. Failing here happens
+      // BEFORE fal.run and before any charge.
+      const prepareRequiredRef = async (
         url: string,
         label: string
-      ): Promise<string | null> => {
+      ): Promise<string> => {
         try {
           return await retryOperation(() => getCompressedFalUrl(url, 640), 2, 1000);
         } catch (err) {
-          console.error(`${label} reference could not be prepared and was skipped:`,
-            err instanceof Error ? err.message : err);
-          return null;
+          console.error(
+            `${label} reference could not be prepared:`,
+            err instanceof Error ? err.message : err
+          );
+          throw new ClientSafeError(
+            `The ${label.toLowerCase()} reference could not be loaded. Please try again — you were not charged.`,
+            502,
+            true
+          );
         }
       };
 
-      // Slot A: Pose Reference Image (if not custom text pose)
-      if (poseImageUrl && poseId !== "custom") {
-        const compressedPose = await prepareOptionalRef(poseImageUrl, "Pose");
-        if (compressedPose) {
-          refList.push({ url: compressedPose, type: "pose", index: refList.length + 1 });
-        }
-      }
-
-      // Slot B: Brand Custom Model Face (if provided)
+      // Slot 1 (optional): Brand Custom Model Face — the identity anchor.
+      // Without it the pose photo carries a stranger's face, so the prompt
+      // below switches to an explicit identity-replacement directive.
       const rawFace = customFaceUrl || (faceMode === "custom_face" ? modelFaceUrl : null);
       if (rawFace) {
-        const compressedFace = await prepareOptionalRef(rawFace, "Face");
-        if (compressedFace) {
-          refList.push({ url: compressedFace, type: "face", index: refList.length + 1 });
-        }
+        refList.push({
+          url: await prepareRequiredRef(rawFace, "Face"),
+          type: "face",
+          index: refList.length + 1,
+        });
       }
 
-      // Slot C: Background Reference Image (if provided and not custom text)
+      // Slot 2 (when a reference pose was chosen): skeletal posture anchor.
+      // A custom text pose intentionally sends no image.
+      if (poseImageUrl && poseId !== "custom") {
+        refList.push({
+          url: await prepareRequiredRef(poseImageUrl, "Pose"),
+          type: "pose",
+          index: refList.length + 1,
+        });
+      }
+
+      // Slot 3 (when a reference background was chosen): environment anchor.
       if (
         backgroundUrl &&
         backgroundId !== "custom" &&
         backgroundUrl !== poseImageUrl
       ) {
-        const compressedBg = await prepareOptionalRef(backgroundUrl, "Background");
-        if (compressedBg) {
-          refList.push({ url: compressedBg, type: "background", index: refList.length + 1 });
-        }
+        refList.push({
+          url: await prepareRequiredRef(backgroundUrl, "Background"),
+          type: "background",
+          index: refList.length + 1,
+        });
       }
 
-      // Slot D: Product Garment Fabrics (up to MAX_GARMENT_REFERENCES, within MAX_TOTAL_REFERENCES total)
+      // Slot 4+: Product garment fabrics. Unlike the creative anchors above,
+      // garments keep partial tolerance (a stale upload drops just that layer;
+      // failing on all of them was already rejected earlier).
       const garmentIndices: number[] = [];
       for (const garment of preparedGarments) {
         if (refList.length >= MAX_TOTAL_REFERENCES || !garment.url) break;
@@ -954,6 +975,12 @@ export async function POST(req: NextRequest) {
       const poseRef = refList.find(r => r.type === "pose");
       const faceRef = refList.find(r => r.type === "face");
       const bgRef = refList.find(r => r.type === "background");
+
+      // Every @imageN token in the prompt below is derived from this mapping,
+      // so the prompt and the array can never drift apart. Logged for support.
+      console.log(
+        `DEBUG: Magic refs -> ${refList.map(r => `@image${r.index}=${r.type}`).join(", ") || "(none)"}`
+      );
 
       // Layer notes numbered by the SAME @imageN index used in the prompt.
       const notesSummary = refList
@@ -979,19 +1006,36 @@ export async function POST(req: NextRequest) {
         `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || "ethnic outfit"}.`
       ];
 
-      // Model Face
+      // Identity. flux-2-pro/edit transforms its FIRST image, so this section
+      // must match what occupies that slot:
+      //  - brand face present  -> face is the anchor; build the body around it
+      //  - no brand face       -> the pose photo carries a stranger's face, so
+      //    her identity must be explicitly replaced (pose woman would otherwise
+      //    dominate the output — the model cannot un-see a face in the base)
       if (faceRef) {
         promptParts.push(
-          `Model Face Identity: Transfer the exact facial features, facial structure, eye shape, radiant skin tone, and expression from @image${faceRef.index} onto the model.`
+          `Identity & Face Anchor: The person in @image${faceRef.index} is the ONLY identity for this lookbook. Preserve her exact facial features, facial structure, eye shape, skin tone, and expression with zero drift. Compose the complete head-to-toe full-body editorial portrait around this identity — @image${faceRef.index} is the anchor to transform, not a face to average with anyone else.`
+        );
+      } else if (poseRef) {
+        promptParts.push(
+          `IDENTITY REPLACEMENT (MANDATORY): The woman visible in @image${poseRef.index} is a body-geometry stand-in only. REPLACE her face, hairstyle, and entire physical identity with a newly synthesized ${modelName || "Indian fashion model"} — natural radiant skin, refined features, confident elegant catalog expression. RETAIN ONLY her skeletal posture, limb angles, and hand placement. Do NOT retain, blend, or leak any facial features, hair, or identity from @image${poseRef.index} into the output.`
         );
       } else {
         promptParts.push(
-          `Model Characteristics: Beautiful Indian woman with natural radiant skin, refined features, and a confident elegant catalog expression.`
+          `Model Characteristics: Beautiful Indian woman (${modelName || "Indian fashion model"}) with natural radiant skin, refined features, and a confident elegant catalog expression.`
         );
       }
 
       // Pose
-      if (poseRef) {
+      if (poseRef && faceRef) {
+        // Pose is a secondary reference (identity lives at image 1): pull the
+        // body geometry only, never the scene or the person.
+        promptParts.push(
+          `Pose & Body Posture: Adopt the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index} (${poseName}${poseDescription ? `: ${poseDescription}` : ""}). ` +
+          `Use @image${poseRef.index} strictly as a pose and hand-anatomy reference: do not reproduce its studio setting, its background, or its casual clothing, and do not adopt the identity of the person in it.`
+        );
+      } else if (poseRef) {
+        // Pose photo is the edit base: keep the strong discard directive.
         promptParts.push(
           `Pose & Body Posture: Extract and replicate the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index} (${poseName}${poseDescription ? `: ${poseDescription}` : ""}). ` +
           `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output.`

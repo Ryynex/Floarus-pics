@@ -475,7 +475,9 @@ export function MagicModeWorkspace() {
 
       if (!response.ok) {
         const message = result?.error || "Generation request failed";
-        if (response.status === 503) {
+        // 5xx (engine unavailable / reference failed to load) never reaches
+        // billing, so make that explicit instead of leaving users guessing.
+        if (response.status >= 500) {
           addToast("error", `${message} No credits were deducted.`);
         } else {
           addToast("error", message);
