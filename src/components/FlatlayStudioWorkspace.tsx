@@ -482,10 +482,9 @@ export function FlatlayStudioWorkspace() {
             onRemoveSuit={handleRemoveSuit}
             uploading={Boolean(isUploading)}
             uploadingSlotKey={isUploading}
-            variant="flatlay"
             stepNumber={1}
-            sectionTitle="Upload your suits"
-            sectionSubtitle="Only 1 photo per suit is needed. Upload your suit fabric photo and select your staging template below."
+            sectionTitle="Build your suits"
+            sectionSubtitle="Upload kameez fabric, chest design, dupatta, bottom, or complete set (at least 1 photo is needed to generate)"
             renderSuitExtra={(suitEntry) => {
               const suit = suits.find((s) => s.id === suitEntry.id) || suits[0];
               const selectedTemplate =
