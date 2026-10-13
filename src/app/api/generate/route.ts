@@ -998,9 +998,6 @@ export async function POST(req: NextRequest) {
 
       const fabricTitleDescriptor = isAutoDetectFabric ? "" : `${fabric} `;
 
-      const fabricDirective = isAutoDetectFabric
-        ? `AUTOMATIC FABRIC & TEXTILE DETECTION (DEFAULT MANDATE): Flux 2 Pro must closely analyze and identify the exact authentic fabric material, textile weave density, yarn thread sheen, weight, and drape physics directly from the uploaded garment reference photo(s). Accurately replicate its authentic physical material composition (e.g. pure silk, raw silk, tussar, banarasi brocade, organza, georgette, chiffon, cotton, linen, velvet, satin, or tissue) as captured in the photo. Faithfully simulate its exact tactile texture, realistic surface light reflection/luster (matte, subtle sheen, or luminous silk luster), thread slubs, zari border relief, and true physical drape gravity and pleat folding as dictated by the detected fabric.`
-        : `SPECIFIED FABRIC OVERRIDE: The user has tailored the fabric weave to ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drapery physics & tactile texture: ${fabricDrapePhysics || fabric}. Mirror this weave density, thread grain, and surface reflection authentically while keeping all patterns, prints, and colors true to the reference photos.`;
 
       const promptParts: string[] = [
         `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || "ethnic outfit"}.`
@@ -1065,13 +1062,13 @@ export async function POST(req: NextRequest) {
 
       // Hairstyle & Jewellery
       if (hairstyle && hairstyle !== "Default (as before)") {
-        promptParts.push(`Hairstyle: ${hairstyle}${hairstyleDescription ? ` (${hairstyleDescription})` : ""}, polished salon finish.`);
+        promptParts.push(`Hairstyle: ${hairstyle}, polished salon finish.`);
       } else {
         promptParts.push(`Hairstyle: Elegant signature catalog styling.`);
       }
 
       if (jewellery && jewellery !== "Default (as before)") {
-        promptParts.push(`Jewellery: Adorned with fine ${jewellery}${jewelleryDescription ? ` (${jewelleryDescription})` : ""}, catching ambient light highlights.`);
+        promptParts.push(`Jewellery: Adorned with fine ${jewellery}, catching ambient light highlights.`);
       } else {
         promptParts.push(`Jewellery: Harmonized fine ethnic gold bangles and delicate earrings.`);
       }
@@ -1079,8 +1076,12 @@ export async function POST(req: NextRequest) {
       // Garment & Draping
       if (garmentIndices.length > 0) {
         const garmentTokens = garmentIndices.map(i => `@image${i}`).join(", ");
+        const fabricDirective = isAutoDetectFabric
+          ? `MANDATORY FABRIC EXTRACTION: Extract and replicate the exact authentic fabric material, textile weave density, yarn thread sheen, and drape physics directly from ${garmentTokens}. Faithfully reproduce its exact tactile texture, surface luster, and true physical drape gravity and pleats as seen in ${garmentTokens}.`
+          : `SPECIFIED FABRIC OVERRIDE: Fabric weave: ${fabric}. Drapery physics: ${fabricDrapePhysics || fabric}. Mirror this weave density and surface reflection while keeping all patterns, prints, and colors true to ${garmentTokens}.`;
+
         promptParts.push(
-          `Product Garment Draping: Drape the authentic ${fabricTitleDescriptor}ethnic outfit from ${garmentTokens} directly onto the model.`,
+          `MANDATORY GARMENT & FABRIC EXTRACTION: Drape the authentic ethnic outfit from ${garmentTokens} directly onto the model. Transfer the exact intricate embroidery, zari borders, prints, motif placement, fabric colors, and pallu/pleat drape directly from ${garmentTokens} onto her outfit with 100% visual fidelity.`,
           fabricDirective
         );
       }
