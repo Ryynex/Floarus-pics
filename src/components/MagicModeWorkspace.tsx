@@ -25,7 +25,9 @@ import {
   getSavedMagicPreferences,
   saveMagicPreferences,
   getSavedFabricPreference,
-  saveFabricPreference
+  saveFabricPreference,
+  getSavedMagicSuits,
+  saveMagicSuits
 } from "@/lib/catalogData";
 import { ModelPickerModal } from "./modals/ModelPickerModal";
 import { PosePickerModal } from "./modals/PosePickerModal";
@@ -127,15 +129,22 @@ export function MagicModeWorkspace() {
     const prefs = getSavedMagicPreferences();
     const models = getSavedCustomModels();
     const garments = getSavedGarments("magic");
+    const savedSuits = getSavedMagicSuits();
 
     return {
       prefs,
       models,
-      garments
+      garments,
+      suits: savedSuits.length > 0 ? (savedSuits as SuitEntry[]) : INITIAL_SUITS
     };
   });
 
-  const { prefs: initialPrefs, models: initialCustomModels, garments: initialGarments } = hydration;
+  const {
+    prefs: initialPrefs,
+    models: initialCustomModels,
+    garments: initialGarments,
+    suits: initialSuits
+  } = hydration;
 
   const [selectedModel, setSelectedModel] = useState<CatalogModel>(
     () => initialPrefs?.selectedModel ?? PRESET_MODELS[0]
@@ -172,9 +181,14 @@ export function MagicModeWorkspace() {
   const category = searchParams.get("category") || "saree";
 
   // Suit Specific States
-  const [suits, setSuits] = useState<SuitEntry[]>(INITIAL_SUITS);
+  const [suits, setSuits] = useState<SuitEntry[]>(initialSuits);
   const [suitSilhouette, setSuitSilhouette] = useState(SUIT_SILHOUETTES[0].name);
   const [dupattaDrape, setDupattaDrape] = useState(DUPATTA_DRAPING_STYLES[0].name);
+
+  // Sync suit changes to localStorage so uploaded photos persist until manually removed
+  useEffect(() => {
+    saveMagicSuits(suits);
+  }, [suits]);
 
   // Batch generation states
   const [batchCount, setBatchCount] = useState<number>(1);
@@ -218,8 +232,12 @@ export function MagicModeWorkspace() {
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
-  const [outputUrl, setOutputUrl] = useState<string | null>(null);
-  const [recentGenerations, setRecentGenerations] = useState<string[]>([]);
+  const [outputUrl, setOutputUrl] = useState<string | null>(
+    () => initialPrefs?.outputUrl ?? null
+  );
+  const [recentGenerations, setRecentGenerations] = useState<string[]>(
+    () => initialPrefs?.recentGenerations ?? []
+  );
   const [showLightbox, setShowLightbox] = useState(false);
   const [showAdvancedStyling, setShowAdvancedStyling] = useState(false);
 
@@ -308,6 +326,7 @@ export function MagicModeWorkspace() {
         note: p.note,
         name: p.name,
         slotLabel: p.slotLabel,
+        role: p.role,
       }))
     );
   };

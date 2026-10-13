@@ -52,13 +52,19 @@ export function FlatlayStudioWorkspace() {
     const savedSuits = getSavedFlatlaySuits();
     const savedPrefs = getSavedFlatlayPreferences();
     return {
-      suits: savedSuits.length > 0 ? (savedSuits as FlatlaySuit[]) : [
-        {
-          id: "suit_1",
-          suitNumber: 1,
-          templateId: "dark-teak"
-        }
-      ],
+      suits:
+        savedSuits.length > 0
+          ? (savedSuits.map((s) => ({
+              ...s,
+              templateId: s.templateId || "dark-teak"
+            })) as FlatlaySuit[])
+          : [
+              {
+                id: "suit_1",
+                suitNumber: 1,
+                templateId: "dark-teak"
+              }
+            ],
       outputUrl: savedPrefs?.outputUrl ?? null,
       recentGenerations: savedPrefs?.recentGenerations ?? [],
       imageCount: savedPrefs?.imageCount ?? 1

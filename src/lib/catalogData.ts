@@ -211,6 +211,8 @@ export interface SavedGarment {
   note: string;
   name?: string;
   slotLabel?: string;
+  role?: string;
+  slotId?: string;
 }
 
 /**
@@ -261,6 +263,49 @@ export function saveGarmentsToStorage(scope: GarmentScope, garments: SavedGarmen
 }
 
 // -------------------------------------------------------------
+// Magic Suits Storage Helpers
+// -------------------------------------------------------------
+export interface SavedMagicSuit {
+  id: string;
+  suitNumber: number;
+  kameezUrl?: string;
+  chestDesignUrl?: string;
+  dupattaUrl?: string;
+  bottomUrl?: string;
+  completeSetUrl?: string;
+  kameezNote?: string;
+  chestDesignNote?: string;
+  dupattaNote?: string;
+  bottomNote?: string;
+  completeSetNote?: string;
+}
+
+export const MAGIC_SUITS_STORAGE_KEY = "florus_saved_suits_magic";
+
+export function getSavedMagicSuits(): SavedMagicSuit[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(MAGIC_SUITS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error("Failed to load magic suits from localStorage:", e);
+  }
+  return [];
+}
+
+export function saveMagicSuits(suits: SavedMagicSuit[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MAGIC_SUITS_STORAGE_KEY, JSON.stringify(suits));
+  } catch (e) {
+    console.error("Failed to save magic suits to localStorage:", e);
+  }
+}
+
+// -------------------------------------------------------------
 // LocalStorage Helpers for User Selected Workspace Options & Preferences
 // -------------------------------------------------------------
 export interface SavedMagicPreferences {
@@ -298,6 +343,7 @@ export interface SavedStudioPreferences {
   outfitType?: string;
   customStylingNotes?: string;
   outputUrl?: string | null;
+  recentGenerations?: string[];
 }
 
 const STUDIO_PREFERENCES_KEY = "florus_saved_studio_preferences";

@@ -108,9 +108,13 @@ export function GenerateWorkspace() {
   const [isFabricModalOpen, setIsFabricModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(
+    () => getSavedStudioPreferences()?.outputUrl ?? null
+  );
   const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
-  const [recentGenerations, setRecentGenerations] = useState<string[]>([]);
+  const [recentGenerations, setRecentGenerations] = useState<string[]>(
+    () => getSavedStudioPreferences()?.recentGenerations ?? []
+  );
   const [showLightbox, setShowLightbox] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isStylingOpen, setIsStylingOpen] = useState(false);
@@ -121,9 +125,11 @@ export function GenerateWorkspace() {
       selectedModel,
       faceMode,
       selectedFabric,
-      customStylingNotes
+      customStylingNotes,
+      outputUrl,
+      recentGenerations
     });
-  }, [selectedShoot, selectedModel, faceMode, selectedFabric, customStylingNotes]);
+  }, [selectedShoot, selectedModel, faceMode, selectedFabric, customStylingNotes, outputUrl, recentGenerations]);
 
   const { toasts, toast: addToast, dismiss: dismissToast } = useToasts();
 
