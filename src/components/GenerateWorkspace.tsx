@@ -26,7 +26,6 @@ import { FabricPickerModal } from "./modals/FabricPickerModal";
 import {
   AdvancedPanel,
   FALLBACK_IMAGE,
-  GarmentUploader,
   GenerateBar,
   Lightbox,
   LookbookHeader,
@@ -39,6 +38,11 @@ import {
   WorkflowSwitcher,
   useToasts
 } from "./lookbook/ui";
+import {
+  StructuredGarmentUploader,
+  StructuredGarmentSlot,
+  INITIAL_STRUCTURED_SLOTS
+} from "./lookbook/StructuredGarmentUploader";
 import { compressImageClient } from "@/lib/imageCompression";
 
 interface UploadedGarment {
@@ -47,6 +51,7 @@ interface UploadedGarment {
   note: string;
   slotId?: string;
   slotLabel?: string;
+  role?: string;
 }
 
 const DEFAULT_SLOT_LABELS = [
@@ -85,13 +90,32 @@ export function GenerateWorkspace() {
   const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
     () => getSavedFabricPreference() ?? getSavedStudioPreferences()?.selectedFabric ?? PRESET_FABRICS[0]
   );
+  const [structuredSlots, setStructuredSlots] = useState<StructuredGarmentSlot[]>(() => {
+    const saved = getSavedGarments("studio");
+    const hasRoles = saved.some((g) => Boolean(g.role));
+    return INITIAL_STRUCTURED_SLOTS.map((slot, idx) => {
+      const match = hasRoles
+        ? saved.find((g) => g.role === slot.role || g.id === slot.id)
+        : saved[idx];
+      if (match) {
+        return {
+          ...slot,
+          url: match.url,
+          note: match.note || ""
+        };
+      }
+      return slot;
+    });
+  });
   const [garments, setGarments] = useState<UploadedGarment[]>(() => {
-    return getSavedGarments("studio").slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
+    const saved = getSavedGarments("studio");
+    return saved.slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
       id: g.id,
       url: g.url,
       note: g.note || "",
-      slotId: (g as any).slotId || `slot-${idx + 1}`,
-      slotLabel: (g as any).slotLabel || DEFAULT_SLOT_LABELS[idx] || `Fabric Layer ${idx + 1}`
+      slotId: g.slotId || (g as any).role || `slot-${idx + 1}`,
+      slotLabel: g.slotLabel || (g as any).name || DEFAULT_SLOT_LABELS[idx] || `Fabric Layer ${idx + 1}`,
+      role: g.role
     }));
   });
   const [outfitType] = useState<string>("Wholesale Saree");
@@ -116,7 +140,6 @@ export function GenerateWorkspace() {
     () => getSavedStudioPreferences()?.recentGenerations ?? []
   );
   const [showLightbox, setShowLightbox] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
   const [isStylingOpen, setIsStylingOpen] = useState(false);
 
   useEffect(() => {
@@ -164,82 +187,66 @@ export function GenerateWorkspace() {
     }
   };
 
-  const handleFiles = async (files: FileList | File[]) => {
-    const fileArray = Array.from(files);
-    const available = MAX_GARMENT_REFERENCES - garments.length;
-    if (available <= 0) {
-      addToast("info", `Maximum ${MAX_GARMENT_REFERENCES} garment photos allowed.`);
-      return;
-    }
+  const syncSlotsToStorage = (updated: StructuredGarmentSlot[]) => {
+    const active = updated
+      .filter((s) => Boolean(s.url))
+      .map((s) => ({
+        id: s.id,
+        url: s.url!,
+        note: s.note || "",
+        name: s.label,
+        slotLabel: s.label,
+        role: s.role,
+        slotId: s.id
+      }));
+    setGarments(active);
+    saveGarmentsToStorage("studio", active);
+  };
 
-    const toProcess = fileArray.slice(0, available);
+  const handleUploadSlot = async (role: string, file: File) => {
     setIsUploading(true);
-
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const folder = session?.user?.id || "guest";
-      const uploaded: UploadedGarment[] = [];
+      const compressedFile = await compressImageClient(file, 640, 0.85);
+      let finalUrl = "";
 
-      for (let i = 0; i < toProcess.length; i++) {
-        const file = toProcess[i];
-        const compressedFile = await compressImageClient(file, 640, 0.85);
-        let finalUrl = "";
+      if (session?.user) {
+        try {
+          const fileName = `${folder}/uploads/studio-${Date.now()}-${role}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+          const { error: uploadErr } = await supabase.storage
+            .from("generated-lookbooks")
+            .upload(fileName, compressedFile, {
+              contentType: compressedFile.type,
+              upsert: true
+            });
 
-        if (session?.user) {
-          try {
-            const fileName = `${folder}/uploads/studio-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
-            const { error: uploadErr } = await supabase.storage
+          if (!uploadErr) {
+            const { data: { publicUrl } } = supabase.storage
               .from("generated-lookbooks")
-              .upload(fileName, compressedFile, {
-                contentType: compressedFile.type,
-                upsert: true
-              });
-
-            if (!uploadErr) {
-              const { data: { publicUrl } } = supabase.storage
-                .from("generated-lookbooks")
-                .getPublicUrl(fileName);
-              finalUrl = publicUrl;
-            }
-          } catch (storageErr) {
-            console.warn("Storage upload notice:", storageErr);
+              .getPublicUrl(fileName);
+            finalUrl = publicUrl;
           }
+        } catch (storageErr) {
+          console.warn("Storage upload notice:", storageErr);
         }
+      }
 
-        if (!finalUrl) {
-          finalUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.readAsDataURL(compressedFile);
-          });
-        }
-
-        const slotIndex = garments.length + i;
-        uploaded.push({
-          id: `garment-${Date.now()}-${i}`,
-          url: finalUrl,
-          note: "",
-          slotId: `slot-${slotIndex + 1}`,
-          slotLabel: DEFAULT_SLOT_LABELS[slotIndex] || `Fabric Layer ${slotIndex + 1}`
+      if (!finalUrl) {
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(compressedFile);
         });
       }
 
-      setGarments((prev) => {
-        const next = [...prev, ...uploaded];
-        saveGarmentsToStorage(
-          "studio",
-          next.map((g) => ({
-            id: g.id,
-            url: g.url,
-            note: g.note,
-            slotId: g.slotId,
-            slotLabel: g.slotLabel
-          }))
-        );
+      setStructuredSlots((prev) => {
+        const next = prev.map((s) => (s.role === role ? { ...s, url: finalUrl } : s));
+        syncSlotsToStorage(next);
         return next;
       });
 
-      addToast("success", `Uploaded ${uploaded.length} garment photo${uploaded.length > 1 ? "s" : ""}.`);
+      addToast("success", `Uploaded ${role.replace("_", " ")} photo.`);
     } catch (err) {
       console.error("Garment upload error:", err);
       addToast("error", "Failed to upload garment photo.");
@@ -248,43 +255,20 @@ export function GenerateWorkspace() {
     }
   };
 
-  const handleRemoveGarment = (id: string) => {
-    setGarments((prev) => {
-      const next = prev.filter((g) => g.id !== id);
-      saveGarmentsToStorage(
-        "studio",
-        next.map((g) => ({
-          id: g.id,
-          url: g.url,
-          note: g.note,
-          slotId: g.slotId,
-          slotLabel: g.slotLabel
-        }))
-      );
+  const handleRemoveSlot = (role: string) => {
+    setStructuredSlots((prev) => {
+      const next = prev.map((s) => (s.role === role ? { ...s, url: undefined, note: "" } : s));
+      syncSlotsToStorage(next);
       return next;
     });
   };
 
-  const handleUpdateNote = (id: string, note: string) => {
-    setGarments((prev) => {
-      const next = prev.map((g) => (g.id === id ? { ...g, note } : g));
-      saveGarmentsToStorage(
-        "studio",
-        next.map((g) => ({
-          id: g.id,
-          url: g.url,
-          note: g.note,
-          slotId: g.slotId,
-          slotLabel: g.slotLabel
-        }))
-      );
+  const handleUpdateSlotNote = (role: string, note: string) => {
+    setStructuredSlots((prev) => {
+      const next = prev.map((s) => (s.role === role ? { ...s, note } : s));
+      syncSlotsToStorage(next);
       return next;
     });
-  };
-
-  const clearGarments = () => {
-    setGarments([]);
-    saveGarmentsToStorage("studio", []);
   };
 
   const downloadImage = async (url: string, filename: string) => {
@@ -314,8 +298,18 @@ export function GenerateWorkspace() {
 
   // Submit generation request (Supports Multiple Images Batch)
   const handleGenerate = async () => {
-    if (garments.length === 0) {
-      addToast("error", "Please upload at least one garment fabric reference photo.");
+    const activeGarments = structuredSlots
+      .filter((s) => Boolean(s.url))
+      .map((s) => ({
+        url: s.url!,
+        note: s.note || "",
+        slotId: s.id,
+        slotLabel: s.label,
+        role: s.role
+      }));
+
+    if (activeGarments.length === 0) {
+      addToast("error", "Please upload at least one saree photo to generate.");
       return;
     }
 
@@ -363,11 +357,12 @@ export function GenerateWorkspace() {
             fabric: selectedFabric.name,
             fabricDescription: selectedFabric.description,
             customNotes: batchCount > 1 ? `${customStylingNotes} (Angle variation ${i + 1})` : customStylingNotes,
-            garments: garments.slice(0, MAX_GARMENT_REFERENCES).map((g) => ({
+            garments: activeGarments.slice(0, MAX_GARMENT_REFERENCES).map((g) => ({
               url: g.url,
               note: g.note,
               slotId: g.slotId,
-              slotLabel: g.slotLabel
+              slotLabel: g.slotLabel,
+              role: g.role
             }))
           })
         });
@@ -417,39 +412,19 @@ export function GenerateWorkspace() {
       {/* Unified Studio Layout (Preview Rendered at the Last)         */}
       {/* ------------------------------------------------------------ */}
       <div className="flex flex-col gap-6 w-full">
-        {/* 1. Garment References */}
+        {/* 1. Garment & Optional Blouse References */}
         <section className="card p-4 sm:p-6 shadow-sm">
           <Step
             index={1}
-            title="Garment references"
-            hint={`Up to ${MAX_GARMENT_REFERENCES} angles`}
+            title="Garment & Blouse Reference"
+            hint="Only 1 saree photo required, blouse is optional"
           >
-            <GarmentUploader
-              items={garments}
-              max={MAX_GARMENT_REFERENCES}
+            <StructuredGarmentUploader
+              slots={structuredSlots}
+              onUploadSlot={handleUploadSlot}
+              onRemoveSlot={handleRemoveSlot}
+              onUpdateNote={handleUpdateSlotNote}
               uploading={isUploading}
-              dragActive={isDragOver}
-              onFiles={handleFiles}
-              onNote={handleUpdateNote}
-              onRemove={handleRemoveGarment}
-              onClear={clearGarments}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOver(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                setIsDragOver(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragOver(false);
-                if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
-              }}
-              emptyLabel="Upload garment photos"
-              emptyHint="Flat-lay, mannequin or folded fabric"
-              addLabel="Add another angle"
-              notePlaceholder="e.g. Front pallu close-up, contrast blouse"
             />
           </Step>
         </section>
@@ -565,7 +540,7 @@ export function GenerateWorkspace() {
                 ? `Generate ${batchCount} Studio Photos (${batchCount} Credits)`
                 : "Generate Lookbook"
             }
-            disabled={garments.length === 0 || isUploading}
+            disabled={structuredSlots.filter((s) => Boolean(s.url)).length === 0 || isUploading}
             loading={loading}
             onGenerate={handleGenerate}
           />

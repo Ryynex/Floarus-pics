@@ -1355,6 +1355,12 @@ export async function POST(req: NextRequest) {
       const fabricDirective = isAutoDetectFabric
         ? `AUTOMATIC FABRIC & TEXTILE DETECTION (DEFAULT MANDATE): Flux 2 Pro must closely analyze and identify the exact authentic fabric material, textile weave density, yarn thread sheen, weight, and drape physics directly from the uploaded garment reference photo(s). Accurately replicate its authentic physical material composition (e.g. pure silk, raw silk, tussar, banarasi brocade, organza, georgette, chiffon, cotton, linen, velvet, satin, or tissue) as captured in the photo. Faithfully simulate its exact tactile texture, realistic surface light reflection/luster (matte, subtle sheen, or luminous silk luster), thread slubs, zari border relief, and true physical drape gravity and pleat folding as dictated by the detected fabric.`
         : `SPECIFIED FABRIC OVERRIDE: The user has tailored the fabric weave to ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drapery physics & tactile texture: ${fabricDrapePhysics || fabric}. Mirror this weave density, thread grain, and surface reflection authentically while keeping all patterns, prints, and colors true to the reference photos.`;
+      const blouseGarment = preparedGarments.find(
+        (g) => g.role === "blouse" || g.slotLabel?.toLowerCase().includes("blouse")
+      );
+      const blouseDirective = blouseGarment
+        ? `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a fully tailored, beautifully fitted ethnic saree blouse (choli) crafted directly from the uploaded blouse reference photo (${blouseGarment.slotLabel}). Faithfully transfer its exact fabric, color, neckline, and sleeves neatly fitted beneath the saree pallu drape.`
+        : `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant ethnic saree blouse (choli) properly fitted beneath the saree pallu drape, harmonizing with the saree border and zari.`;
 
       const studioFaceUrl = customFaceUrl || modelFaceUrl;
       if (faceMode === "custom_face" && studioFaceUrl) {
@@ -1376,6 +1382,7 @@ export async function POST(req: NextRequest) {
           `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The entire background setting and architecture from @image2 must remain sharp, clear, and fully in focus (deep f/8 aperture, zero background blur, zero shallow focus, zero artificial bokeh). The model must appear realistically integrated and physically grounded inside the space, casting authentic soft contact shadows onto the floor/ground, with ambient light from the surroundings naturally illuminating her skin and outfit.`,
           `Garment Draping: Drape the model in the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
+          blouseDirective,
           studioNotes ? `Product specifications & layer notes: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile weave texture, and authentic pleats/pallu drape directly onto the outfit.`,
@@ -1398,6 +1405,7 @@ export async function POST(req: NextRequest) {
           `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background environment and architecture from @image1 must remain crisp, tack-sharp, and completely in focus (deep f/8 focus, zero background blur, zero shallow depth of field, zero artificial bokeh). The model must appear realistically present and physically grounded inside the scene, casting natural soft contact shadows onto the floor, with matching ambient light bounce and perspective.`,
           `Garment Draping: Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
+          blouseDirective,
           studioNotes ? `Product specifications: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, yarn weave texture, and authentic drape directly onto her outfit.`,
@@ -1420,6 +1428,7 @@ export async function POST(req: NextRequest) {
           `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background setting, architecture, and environment from @image1 must remain completely in focus and tack-sharp (deep f/8 aperture, zero background blur, zero blurry backdrop, zero artificial bokeh). The model must be realistically grounded and physically positioned inside the scene, with authentic contact shadows on the floor/ground and seamless environmental lighting bounce matching the space.`,
           `Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment shown in ${garmentTokens}.`,
           fabricDirective,
+          blouseDirective,
           studioNotes ? `Product specifications & layer notes: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile thread weave texture, and pallu drape directly onto the draped outfit.`,

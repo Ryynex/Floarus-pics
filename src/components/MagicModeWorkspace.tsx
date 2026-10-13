@@ -53,7 +53,8 @@ import {
 } from "./lookbook/ui";
 import {
   StructuredGarmentUploader,
-  StructuredGarmentSlot
+  StructuredGarmentSlot,
+  INITIAL_STRUCTURED_SLOTS
 } from "./lookbook/StructuredGarmentUploader";
 import {
   StructuredSuitUploader,
@@ -77,28 +78,6 @@ const DEFAULT_SLOT_LABELS = [
   "Main body fabric / Saree",
   "Pallu / Border accent",
   "Blouse / Contrast fabric"
-];
-
-const INITIAL_STRUCTURED_SLOTS: StructuredGarmentSlot[] = [
-  {
-    id: "main_drape",
-    role: "main_drape",
-    label: "Main Saree Body",
-    subtitle: "Overall saree fabric and main body color"
-  },
-  {
-    id: "pallu",
-    role: "pallu",
-    label: "Pallu / Border",
-    subtitle: "Pallu end piece & decorative border detail"
-  },
-  {
-    id: "blouse",
-    role: "blouse",
-    label: "Blouse (Optional)",
-    subtitle: "Blouse piece or contrasting fabric swatch",
-    isOptional: true
-  }
 ];
 
 const INITIAL_SUITS: SuitEntry[] = [
@@ -204,8 +183,11 @@ export function MagicModeWorkspace() {
     () => initialPrefs?.blouseStyle ?? "Auto-coordinate with border & zari (Default)"
   );
   const [structuredSlots, setStructuredSlots] = useState<StructuredGarmentSlot[]>(() => {
+    const hasRoles = initialGarments.some((g) => Boolean(g.role));
     return INITIAL_STRUCTURED_SLOTS.map((slot: StructuredGarmentSlot, idx: number) => {
-      const match = initialGarments.find(g => (g as any).role === slot.role || g.id === slot.id) || initialGarments[idx];
+      const match = hasRoles
+        ? initialGarments.find((g) => g.role === slot.role || g.id === slot.id)
+        : initialGarments[idx];
       if (match) {
         return {
           ...slot,
