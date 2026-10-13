@@ -1045,14 +1045,15 @@ export async function POST(req: NextRequest) {
         promptParts.push(`Pose: Elegant natural standing pose with graceful hand placement.`);
       }
 
-      // Background & Physical Environmental Integration
+      // Background & Realistic Environmental Placement
       if (bgRef) {
         promptParts.push(
-          `MANDATORY BACKGROUND & ROOM REPLACEMENT: Completely remove, discard, and replace the background and environment from @image1. ` +
-          `Replace the entire setting, walls, flooring, furniture, architectural elements, lighting direction, and ambient atmosphere with the exact physical environment shown in @image${bgRef.index}. ` +
-          `Place the model directly inside the authentic three-dimensional physical environment and architectural setting from @image${bgRef.index}. ` +
-          `CRITICAL SHARP BACKGROUND (ZERO BLUR): Deep depth of field, f/8 to f/11 aperture, zero background blur, zero blurry backdrop, zero shallow depth of field, zero artificial bokeh. The entire background environment from @image${bgRef.index} must be crisp, tack-sharp, and completely in focus throughout the depth of the frame. ` +
-          `PHYSICAL GROUNDING & LIGHTING BOUNCE: The model must be realistically grounded and physically positioned inside @image${bgRef.index}. Her feet and garment hem must rest naturally on the floor with authentic soft contact shadows and ambient occlusion. Synchronize lighting direction, shadow angles, and ambient color temperature so the background light from @image${bgRef.index} naturally wraps around and reflects onto her skin, hair, and draped outfit. Authentic in-camera editorial look, seamless spatial perspective, zero cutout effect, no floating model.`
+          `MANDATORY BACKGROUND & ROOM REPLACEMENT: Completely remove, discard, and replace the background, walls, and floor from @image1. ` +
+          `AUTHENTIC ENVIRONMENTAL PLACEMENT & REALISTIC INTEGRATION: Place the model naturally and convincingly inside the scene and architectural environment of @image${bgRef.index}. ` +
+          `The background must be the same setting, architectural style, interior decor, materials, and ambiance as @image${bgRef.index}, adapted naturally to accommodate the model in her pose. ` +
+          `REALISTIC 3D PRESENCE (NO CUTOUT EFFECT): The model must look genuinely present and physically occupying the room in @image${bgRef.index} — authentic interaction with the scene, true spatial depth, matching perspective, and correct scale. ` +
+          `NATURAL LIGHTING & SHADOW COHESION: The ambient light, window light, and color temperature from @image${bgRef.index} must wrap realistically around the model, illuminating her face, skin, and draped fabric. Her body, feet, and garment must cast soft, physically accurate contact shadows and ambient occlusion onto the floor and surrounding surfaces, making her look captured entirely in-camera on location. ` +
+          `CRISP, IN-FOCUS BACKGROUND: Deep depth of field (f/8 to f/11), keeping the background architecture and room details sharp, clear, and rich in texture without excessive or artificial blur.`
         );
       } else if (backgroundDescription) {
         promptParts.push(
