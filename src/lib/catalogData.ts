@@ -1013,10 +1013,10 @@ export const PRESET_BACKGROUNDS: CatalogBackground[] = [
   },
   {
     "id": "bg-uabb9390e",
-    "name": "Luxury Architectural Suite — Uab",
+    "name": "Executive Study & Architectural Workspace — Uab",
     "category": "luxury_interiors",
     "imageUrl": "/reference_backgrounds/Uabb9390e.jpg",
-    "description": "Spacious minimalist luxury suite featuring warm indirect architectural lighting and limestone floors."
+    "description": "Executive study with mid-century brown ribbed leather chair, dark wood desk, potted fiddle leaf fig plant, and tall garden picture window."
   },
   {
     "id": "bg-uc18d4988",
