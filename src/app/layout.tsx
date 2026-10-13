@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Playfair_Display } from "next/font/google";
+import AuthCookieSync from "@/components/AuthCookieSync";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${plusJakartaSans.variable} ${playfairDisplay.variable}`}>
       <body className="bg-void text-ink font-sans antialiased min-h-screen selection:bg-clay-soft selection:text-ink">
+        <AuthCookieSync />
         {children}
       </body>
     </html>

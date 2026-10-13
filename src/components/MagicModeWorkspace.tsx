@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { creditsFromBalance } from "@/lib/pricing";
 import {
   CatalogModel,
   CatalogPose,
@@ -80,53 +81,58 @@ const GENERATION_STEPS = [
 ];
 
 export function MagicModeWorkspace() {
-  // Hydrate preferences
-  const initialPrefs = getSavedMagicPreferences();
-  const initialModels = getSavedCustomModels();
-  const initialGarments = getSavedGarments();
+  // Hydrate once per mount: all localStorage reads and preset validation live
+  // in this lazy initializer so ordinary re-renders never touch storage.
+  const [hydration] = useState(() => {
+    const prefs = getSavedMagicPreferences();
+    const models = getSavedCustomModels();
+    const garments = getSavedGarments("magic");
 
-  // Validate initial pose & background to avoid stale dead links
-  const validatedPose = (() => {
-    if (!initialPrefs?.selectedPose) return PRESET_POSES[0];
-    if (initialPrefs.selectedPose.id === "custom") return initialPrefs.selectedPose;
-    return PRESET_POSES.find(
-      (p) => p.id === initialPrefs.selectedPose?.id || p.imageUrl === initialPrefs.selectedPose?.imageUrl
-    ) || PRESET_POSES[0];
-  })();
+    const pose = !prefs?.selectedPose
+      ? PRESET_POSES[0]
+      : prefs.selectedPose.id === "custom"
+        ? prefs.selectedPose
+        : PRESET_POSES.find(
+            (p) => p.id === prefs.selectedPose?.id || p.imageUrl === prefs.selectedPose?.imageUrl
+          ) || PRESET_POSES[0];
 
-  const validatedBackground = (() => {
-    if (!initialPrefs?.selectedBackground) return PRESET_BACKGROUNDS[0];
-    if (initialPrefs.selectedBackground.id === "custom") return initialPrefs.selectedBackground;
-    return PRESET_BACKGROUNDS.find(
-      (b) => b.id === initialPrefs.selectedBackground?.id || b.imageUrl === initialPrefs.selectedBackground?.imageUrl
-    ) || PRESET_BACKGROUNDS[0];
-  })();
+    const background = !prefs?.selectedBackground
+      ? PRESET_BACKGROUNDS[0]
+      : prefs.selectedBackground.id === "custom"
+        ? prefs.selectedBackground
+        : PRESET_BACKGROUNDS.find(
+            (b) => b.id === prefs.selectedBackground?.id || b.imageUrl === prefs.selectedBackground?.imageUrl
+          ) || PRESET_BACKGROUNDS[0];
 
-  const validatedModel = (() => {
-    if (!initialPrefs?.selectedModel) {
-      return initialModels.length > 0 ? initialModels[0] : PRESET_MODELS[0];
-    }
-    if (initialPrefs.selectedModel.category === "custom") return initialPrefs.selectedModel;
-    return PRESET_MODELS.find(
-      (m) => m.id === initialPrefs.selectedModel?.id || m.imageUrl === initialPrefs.selectedModel?.imageUrl
-    ) || (initialModels.length > 0 ? initialModels[0] : PRESET_MODELS[0]);
-  })();
+    const model = !prefs?.selectedModel
+      ? (models.length > 0 ? models[0] : PRESET_MODELS[0])
+      : prefs.selectedModel.category === "custom"
+        ? prefs.selectedModel
+        : PRESET_MODELS.find(
+            (m) => m.id === prefs.selectedModel?.id || m.imageUrl === prefs.selectedModel?.imageUrl
+          ) || (models.length > 0 ? models[0] : PRESET_MODELS[0]);
+
+    return { prefs, garments, pose, background, model };
+  });
+
+  const { prefs: initialPrefs, pose: validatedPose, background: validatedBackground, model: validatedModel } = hydration;
+  const initialGarments = hydration.garments;
 
   // 1. Creative Direction Selectors
   const [selectedModel, setSelectedModel] = useState<CatalogModel>(validatedModel);
   const [selectedPose, setSelectedPose] = useState<CatalogPose>(validatedPose);
   const [selectedBackground, setSelectedBackground] = useState<CatalogBackground>(validatedBackground);
   const [backgroundMode, setBackgroundMode] = useState<"fixed" | "inspiration">(
-    initialPrefs?.backgroundMode ?? "inspiration"
+    () => initialPrefs?.backgroundMode ?? "inspiration"
   );
   const [selectedHairstyle, setSelectedHairstyle] = useState<CatalogHairstyle>(
-    initialPrefs?.selectedHairstyle ?? PRESET_HAIRSTYLES[0]
+    () => initialPrefs?.selectedHairstyle ?? PRESET_HAIRSTYLES[0]
   );
   const [selectedJewellery, setSelectedJewellery] = useState<CatalogJewellery>(
-    initialPrefs?.selectedJewellery ?? PRESET_JEWELLERY[0]
+    () => initialPrefs?.selectedJewellery ?? PRESET_JEWELLERY[0]
   );
   const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
-    initialPrefs?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
+    () => initialPrefs?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
   );
 
   const [showAdvancedStyling, setShowAdvancedStyling] = useState(false);
@@ -141,7 +147,7 @@ export function MagicModeWorkspace() {
 
   // 2. Outfit Type & Garment Uploads
   const [outfitType, setOutfitType] = useState<string>(
-    initialPrefs?.outfitType ?? "Wholesale Saree (6-Yard)"
+    () => initialPrefs?.outfitType ?? "Wholesale Saree (6-Yard)"
   );
   const [photos, setPhotos] = useState<UploadedPhoto[]>(() =>
     initialGarments.slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
@@ -153,7 +159,7 @@ export function MagicModeWorkspace() {
     }))
   );
   const [customStylingNotes, setCustomStylingNotes] = useState<string>(
-    initialPrefs?.customStylingNotes ?? ""
+    () => initialPrefs?.customStylingNotes ?? ""
   );
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -161,10 +167,12 @@ export function MagicModeWorkspace() {
   // 3. Execution & Output States
   const [loading, setLoading] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
-  const [outputUrl, setOutputUrl] = useState<string | null>(initialPrefs?.outputUrl ?? null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(
+    () => initialPrefs?.outputUrl ?? null
+  );
   const [showLightbox, setShowLightbox] = useState(false);
   const [recentGenerations, setRecentGenerations] = useState<string[]>(
-    initialPrefs?.recentGenerations ?? []
+    () => initialPrefs?.recentGenerations ?? []
   );
 
   // Auto-save user selections locally
@@ -300,7 +308,7 @@ export function MagicModeWorkspace() {
 
       setPhotos((prev) => {
         const merged = [...prev, ...newPhotos];
-        saveGarmentsToStorage(
+        saveGarmentsToStorage("magic", 
           merged.map((p) => ({
             id: p.id,
             url: p.url,
@@ -347,13 +355,13 @@ export function MagicModeWorkspace() {
 
   const clearPhotos = () => {
     setPhotos([]);
-    saveGarmentsToStorage([]);
+    saveGarmentsToStorage("magic", []);
   };
 
   const handleRemovePhoto = (id: string) => {
     setPhotos((prev) => {
       const filtered = prev.filter((p) => p.id !== id);
-      saveGarmentsToStorage(
+      saveGarmentsToStorage("magic", 
         filtered.map((p) => ({
           id: p.id,
           url: p.url,
@@ -369,7 +377,7 @@ export function MagicModeWorkspace() {
   const handleUpdateNote = (id: string, note: string) => {
     setPhotos((prev) => {
       const updated = prev.map((p) => (p.id === id ? { ...p, note } : p));
-      saveGarmentsToStorage(
+      saveGarmentsToStorage("magic", 
         updated.map((p) => ({
           id: p.id,
           url: p.url,
@@ -402,6 +410,13 @@ export function MagicModeWorkspace() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Session expired, please sign in again");
 
+      // One idempotency key per logical generation: a network retry of this
+      // exact request cannot charge the wallet twice.
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-0000-4000-8000-000000000000`.replace(/[^0-9a-f-]/gi, "0");
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -410,6 +425,7 @@ export function MagicModeWorkspace() {
         },
         body: JSON.stringify({
           mode: "magic",
+          idempotencyKey,
           outfitType,
           aspectRatio: "4:5",
 
@@ -455,19 +471,31 @@ export function MagicModeWorkspace() {
 
       stageTimers.forEach(clearTimeout);
 
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(result.error || "Generation request failed");
+        const message = result?.error || "Generation request failed";
+        if (response.status === 503) {
+          addToast("error", `${message} No credits were deducted.`);
+        } else {
+          addToast("error", message);
+        }
+        return;
       }
 
       setOutputUrl(result.outputUrl);
       if (result.outputUrl) {
         setRecentGenerations((prev) => [result.outputUrl, ...prev.slice(0, 5)]);
       }
+      const remaining =
+        typeof result.remainingCredits === "number"
+          ? result.remainingCredits
+          : typeof result.newBalance === "number"
+            ? creditsFromBalance(result.newBalance)
+            : null;
       addToast(
         "success",
-        `Lookbook generated! Deducted 1 Credit. Balance: ${result.remainingCredits || (result.newBalance / 49).toFixed(1)} Credits.`
+        `Lookbook generated! Deducted 1 Credit.${remaining !== null ? ` Balance: ${remaining} Credits.` : ""}`
       );
 
       window.dispatchEvent(new Event("profile-updated"));

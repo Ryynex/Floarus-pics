@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Lock,
@@ -21,6 +21,9 @@ import {
   Check
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { clearAuthCookie } from "@/lib/authCookie";
+
+const PAGE_SIZE = 50;
 
 interface Profile {
   id: string;
@@ -52,10 +55,59 @@ interface PaymentRecord {
   email?: string | null;
 }
 
+interface DashboardStats {
+  total_users: number;
+  total_balance: number;
+  total_generations: number;
+  completed_revenue: number;
+}
+
 function statusPillClass(status: string) {
   if (status === "completed") return "pill-success";
   if (status === "pending" || status === "processing") return "pill-warning";
   return "pill-danger";
+}
+
+function PaginationBar({
+  page,
+  totalCount,
+  pageSize,
+  canGoPrev,
+  canGoNext,
+  onPageChange,
+}: {
+  page: number;
+  totalCount: number;
+  pageSize: number;
+  canGoPrev: boolean;
+  canGoNext: boolean;
+  onPageChange: (next: number) => void;
+}) {
+  if (totalCount <= pageSize) return null;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3 bg-sand/40">
+      <span className="text-[11px] text-ink-faint">
+        Page {page + 1} of {totalPages} · {totalCount} rows total
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(Math.max(0, page - 1))}
+          disabled={!canGoPrev}
+          className="btn-secondary px-3 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={!canGoNext}
+          className="btn-secondary px-3 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminPage() {
@@ -72,6 +124,12 @@ export default function AdminPage() {
   const [paymentsList, setPaymentsList] = useState<PaymentRecord[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // Pagination + aggregate stats (exact counts come from the server; the
+  // overview cards use admin_dashboard_stats() instead of summing one page)
+  const [page, setPage] = useState<number>(0);
+  const [counts, setCounts] = useState({ users: 0, generations: 0, payments: 0 });
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   // UI State
   const [currentTab, setCurrentTab] = useState<"overview" | "users" | "generations" | "payments">("overview");
@@ -97,59 +155,136 @@ export default function AdminPage() {
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submittingAction, setSubmittingAction] = useState<boolean>(false);
 
+  // Track pending timeouts so none outlive the page
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const redirectTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+      redirectTimers.current.forEach(t => clearTimeout(t));
+      redirectTimers.current = [];
+    };
+  }, []);
+
   // Utility to trigger quick floating messages
   const showFeedback = (type: "success" | "error", text: string) => {
     setActionFeedback({ type, text });
-    setTimeout(() => {
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => {
       setActionFeedback(null);
     }, 4000);
   };
 
-  // Fetch all tables
-  const fetchDashboardData = async () => {
+  const scheduleRedirect = (path: string) => {
+    redirectTimers.current.push(
+      setTimeout(() => {
+        router.replace(path);
+      }, 2500)
+    );
+  };
+
+  // Resolve display emails for a page of rows without loading every profile
+  const emailMapFor = async (userIds: string[]): Promise<{ [key: string]: string | null }> => {
+    const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+    if (uniqueIds.length === 0) return {};
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .in("id", uniqueIds);
+    if (error || !data) {
+      if (error) console.warn("Email lookup failed:", error.message);
+      return {};
+    }
+    const map: { [key: string]: string | null } = {};
+    data.forEach(p => { map[p.id] = p.email; });
+    return map;
+  };
+
+  // Fetch only the active view, paginated server-side
+  const fetchActiveView = useCallback(async () => {
     try {
       setLoadingData(true);
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
 
-      // Profiles
-      const { data: profiles, error: errProf } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("updated_at", { ascending: false });
-      if (errProf) throw errProf;
+      if (currentTab === "overview") {
+        const [statsRes, gensRes, usersCountRes, gensCountRes, paysCountRes] = await Promise.all([
+          supabase.rpc("admin_dashboard_stats"),
+          supabase
+            .from("generations")
+            .select("id, user_id, prompt, garment_url, face_url, output_url, status, cost_inr, created_at")
+            .order("created_at", { ascending: false })
+            .limit(4),
+          supabase.from("profiles").select("id", { count: "exact", head: true }),
+          supabase.from("generations").select("id", { count: "exact", head: true }),
+          supabase.from("payments").select("id", { count: "exact", head: true }),
+        ]);
 
-      // Generations
-      const { data: gens, error: errGen } = await supabase
-        .from("generations")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (errGen) throw errGen;
+        if (statsRes.error) {
+          console.warn("admin_dashboard_stats unavailable:", statsRes.error.message);
+          setStats(null);
+        } else {
+          setStats(statsRes.data as DashboardStats);
+        }
+        if (gensRes.error) throw gensRes.error;
 
-      // Payments
-      const { data: pays, error: errPay } = await supabase
-        .from("payments")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (errPay) throw errPay;
+        const gens = gensRes.data || [];
+        const map = await emailMapFor(gens.map(g => g.user_id));
+        setGenerationsList(gens.map(g => ({ ...g, email: map[g.user_id] || "Unknown User" })));
+        setUsersList([]);
+        setPaymentsList([]);
+        setCounts({
+          users: usersCountRes.count || 0,
+          generations: gensCountRes.count || 0,
+          payments: paysCountRes.count || 0,
+        });
+        return;
+      }
 
-      // Map emails in memory
-      const emailMap: { [key: string]: string | null } = {};
-      profiles?.forEach(p => {
-        emailMap[p.id] = p.email;
-      });
+      if (currentTab === "users") {
+        const { data, error, count } = await supabase
+          .from("profiles")
+          .select("id, email, balance_inr, updated_at", { count: "exact" })
+          .order("updated_at", { ascending: false })
+          .range(from, to);
+        if (error) throw error;
+        setUsersList(data || []);
+        setCounts(prev => ({ ...prev, users: count || 0 }));
+        setGenerationsList([]);
+        setPaymentsList([]);
+        return;
+      }
 
-      const processedGens = (gens || []).map(g => ({
-        ...g,
-        email: emailMap[g.user_id] || "Unknown User"
-      }));
+      if (currentTab === "generations") {
+        const { data, error, count } = await supabase
+          .from("generations")
+          .select("id, user_id, prompt, garment_url, face_url, output_url, status, cost_inr, created_at", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(from, to);
+        if (error) throw error;
+        const map = await emailMapFor((data || []).map(g => g.user_id));
+        setGenerationsList((data || []).map(g => ({ ...g, email: map[g.user_id] || "Unknown User" })));
+        setCounts(prev => ({ ...prev, generations: count || 0 }));
+        setUsersList([]);
+        setPaymentsList([]);
+        return;
+      }
 
-      const processedPays = (pays || []).map(p => ({
-        ...p,
-        email: emailMap[p.user_id] || "Unknown User"
-      }));
-
-      setUsersList(profiles || []);
-      setGenerationsList(processedGens);
-      setPaymentsList(processedPays);
+      if (currentTab === "payments") {
+        const { data, error, count } = await supabase
+          .from("payments")
+          .select("id, user_id, amount, upi_txn_id, status, created_at", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(from, to);
+        if (error) throw error;
+        const map = await emailMapFor((data || []).map(p => p.user_id));
+        setPaymentsList((data || []).map(p => ({ ...p, email: map[p.user_id] || "Unknown User" })));
+        setCounts(prev => ({ ...prev, payments: count || 0 }));
+        setUsersList([]);
+        setGenerationsList([]);
+        return;
+      }
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       showFeedback("error", "Failed to reload dashboard data.");
@@ -157,11 +292,36 @@ export default function AdminPage() {
       setLoadingData(false);
       setRefreshing(false);
     }
-  };
+  }, [currentTab, page]);
+
+  // Refetch whenever the tab or page changes (after the admin is verified).
+  // The fetch is deferred a microtask so the loading flag is not set
+  // synchronously inside the effect body.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) fetchActiveView();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, fetchActiveView]);
+
+  // If rows were deleted and the current page no longer exists, step back
+  useEffect(() => {
+    const loadedRows =
+      currentTab === "users" ? usersList.length :
+      currentTab === "generations" ? generationsList.length :
+      currentTab === "payments" ? paymentsList.length : 0;
+    if (currentTab !== "overview" && !loadingData && page > 0 && loadedRows === 0) {
+      queueMicrotask(() => setPage(p => Math.max(0, p - 1)));
+    }
+  }, [currentTab, loadingData, page, usersList.length, generationsList.length, paymentsList.length]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchDashboardData();
+    fetchActiveView();
   };
 
   // Authenticate Admin User
@@ -170,40 +330,35 @@ export default function AdminPage() {
   useEffect(() => {
     async function verifyAdmin() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const email = session.user.email;
+        // Server-side middleware already verified this route; getUser() here
+        // re-validates the token instead of trusting the stored session copy.
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (user && !error) {
+          const email = user.email;
           if (email === "admin@florus.pics") {
             setIsAdmin(true);
             setAdminEmail(email);
-            // Fetch dashboard data
-            fetchDashboardData();
+            // Data loading is driven by the fetch effect below
           } else {
             setIsAdmin(false);
             setAuthError("Unauthorized user. Redirecting...");
-            setTimeout(() => {
-              router.replace("/dashboard");
-            }, 2500);
+            scheduleRedirect("/dashboard");
           }
         } else {
           setIsAdmin(false);
           setAuthError("Not logged in. Redirecting to home...");
-          setTimeout(() => {
-            router.replace("/");
-          }, 2500);
+          scheduleRedirect("/");
         }
       } catch (err) {
         console.error("Auth guard check exception:", err);
         setIsAdmin(false);
         setAuthError("Auth error occurred. Redirecting...");
-        setTimeout(() => {
-          router.replace("/");
-        }, 2500);
+        scheduleRedirect("/");
       }
     }
     verifyAdmin();
-    // fetchDashboardData and showFeedback are stable-per-render helpers that only
-    // call setState setters; re-running on identity change would re-verify auth.
+    // scheduleRedirect is a stable-per-render helper; re-running the whole
+    // effect on identity change would re-verify auth and stack timers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
@@ -218,7 +373,6 @@ export default function AdminPage() {
 
     setSubmittingAction(true);
     const targetUserId = editBalanceUser.id;
-    const oldBalance = editBalanceUser.balance_inr;
     const newBalance = parseFloat(newBalanceValue);
 
     if (isNaN(newBalance) || newBalance < 0) {
@@ -228,41 +382,19 @@ export default function AdminPage() {
     }
 
     try {
-      // 1. Update Profile Balance
-      const { error: profError } = await supabase
-        .from("profiles")
-        .update({ balance_inr: newBalance, updated_at: new Date().toISOString() })
-        .eq("id", targetUserId);
+      // Single security-definer RPC: sets the balance, writes the ledger row
+      // and the admin audit log atomically. No client-side multi-step writes.
+      const { error: rpcError } = await supabase.rpc("admin_set_balance", {
+        p_user_id: targetUserId,
+        p_new_balance: newBalance,
+      });
 
-      if (profError) throw profError;
-
-      // 2. Log corresponding payment ledger item (only if balance changes)
-      const diff = newBalance - oldBalance;
-      if (diff !== 0) {
-        const timestamp = new Date().toISOString().replace(/[-:T]/g, "").substring(0, 14);
-        const txnId = `MANUAL_${diff > 0 ? "CREDIT" : "DEBIT"}_${timestamp}`;
-        const absDiff = Math.abs(diff);
-
-        // Keep ledger entries strictly compliant with payments constraints if possible
-        // Note: constraint checks payments_amount_check (amount > 0.00). If diff < 0, we can still log absolute amount
-        const { error: payError } = await supabase
-          .from("payments")
-          .insert({
-            user_id: targetUserId,
-            amount: absDiff,
-            upi_txn_id: txnId,
-            status: "completed"
-          });
-
-        if (payError) {
-          console.warn("Ledger tracking record failed, but balance updated:", payError.message);
-        }
-      }
+      if (rpcError) throw rpcError;
 
       showFeedback("success", `Successfully updated balance for ${editBalanceUser.email} to ₹${newBalance.toFixed(2)}.`);
       setEditBalanceUser(null);
       setNewBalanceValue("");
-      fetchDashboardData();
+      fetchActiveView();
     } catch (err) {
       console.error(err);
       showFeedback("error", "Error occurred while adjusting wallet balance.");
@@ -298,7 +430,7 @@ export default function AdminPage() {
 
       showFeedback("success", "Successfully updated generation record.");
       setEditGen(null);
-      fetchDashboardData();
+      fetchActiveView();
     } catch (err) {
       console.error(err);
       showFeedback("error", "Error occurred while updating generation details.");
@@ -314,38 +446,16 @@ export default function AdminPage() {
 
     setSubmittingAction(true);
     try {
-      // 1. Update status to completed
-      const { error: payErr } = await supabase
-        .from("payments")
-        .update({ status: "completed" })
-        .eq("id", pay.id);
+      // Atomic RPC: marks the payment completed AND credits the wallet in one
+      // transaction, guarded so a pending payment can only be approved once.
+      const { error: rpcError } = await supabase.rpc("admin_approve_payment", {
+        p_payment_id: pay.id,
+      });
 
-      if (payErr) throw payErr;
-
-      // 2. Fetch current balance
-      const { data: prof, error: getErr } = await supabase
-        .from("profiles")
-        .select("balance_inr")
-        .eq("id", pay.user_id)
-        .single();
-
-      if (getErr) throw getErr;
-
-      const currentBal = Number(prof?.balance_inr || 0);
-
-      // 3. Update profiles balance
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .update({
-          balance_inr: currentBal + Number(pay.amount),
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", pay.user_id);
-
-      if (profErr) throw profErr;
+      if (rpcError) throw rpcError;
 
       showFeedback("success", `Approved transaction ${pay.upi_txn_id}. Credited +₹${Number(pay.amount).toFixed(2)} to user's wallet.`);
-      fetchDashboardData();
+      fetchActiveView();
     } catch (err) {
       console.error(err);
       showFeedback("error", "Failed to approve payment.");
@@ -361,15 +471,14 @@ export default function AdminPage() {
 
     setSubmittingAction(true);
     try {
-      const { error: payErr } = await supabase
-        .from("payments")
-        .update({ status: "failed" })
-        .eq("id", pay.id);
+      const { error: rpcError } = await supabase.rpc("admin_reject_payment", {
+        p_payment_id: pay.id,
+      });
 
-      if (payErr) throw payErr;
+      if (rpcError) throw rpcError;
 
       showFeedback("success", `Rejected transaction ${pay.upi_txn_id}.`);
-      fetchDashboardData();
+      fetchActiveView();
     } catch (err) {
       console.error(err);
       showFeedback("error", "Failed to reject payment.");
@@ -392,30 +501,18 @@ export default function AdminPage() {
     }
 
     try {
-      // 1. Insert Payment entry
-      const { error: insertErr } = await supabase
-        .from("payments")
-        .insert({
-          user_id: createPaymentUser.id,
-          amount: amount,
-          upi_txn_id: createPaymentTxnId,
-          status: createPaymentStatus
-        });
+      // Single RPC: inserts the ledger row and, when status is completed,
+      // credits the wallet in the same transaction.
+      const { error: rpcError } = await supabase.rpc("admin_log_payment", {
+        p_user_id: createPaymentUser.id,
+        p_amount: amount,
+        p_upi_txn_id: createPaymentTxnId,
+        p_status: createPaymentStatus,
+      });
 
-      if (insertErr) throw insertErr;
+      if (rpcError) throw rpcError;
 
-      // 2. If logged directly as completed, adjust profile balance automatically
       if (createPaymentStatus === "completed") {
-        const currentBal = Number(createPaymentUser.balance_inr || 0);
-        const { error: profErr } = await supabase
-          .from("profiles")
-          .update({
-            balance_inr: currentBal + amount,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", createPaymentUser.id);
-
-        if (profErr) throw profErr;
         showFeedback("success", `Log entry added. Automatically added +₹${amount.toFixed(2)} to ${createPaymentUser.email}.`);
       } else {
         showFeedback("success", "Pending transaction log recorded successfully.");
@@ -425,7 +522,7 @@ export default function AdminPage() {
       setCreatePaymentAmount("");
       setCreatePaymentTxnId("");
       setCreatePaymentStatus("completed");
-      fetchDashboardData();
+      fetchActiveView();
     } catch (err) {
       console.error(err);
       showFeedback("error", err instanceof Error && err.message.includes("unique")
@@ -446,7 +543,12 @@ export default function AdminPage() {
     try {
       let error = null;
       if (type === "user") {
-        const { error: err } = await supabase.from("profiles").delete().eq("id", id);
+        // Deletes the auth user, profile, generations, payments and storage
+        // files in one transaction. A plain profiles delete would leave the
+        // auth user behind and get blocked by FK constraints.
+        const { error: err } = await supabase.rpc("admin_delete_user", {
+          p_user_id: id,
+        });
         error = err;
       } else if (type === "generation") {
         const { error: err } = await supabase.from("generations").delete().eq("id", id);
@@ -460,7 +562,7 @@ export default function AdminPage() {
 
       showFeedback("success", `Successfully deleted ${type} record.`);
       setDeleteTarget(null);
-      fetchDashboardData();
+      fetchActiveView();
     } catch (err) {
       console.error(err);
       showFeedback("error", `Failed to delete the selected ${type}.`);
@@ -473,13 +575,23 @@ export default function AdminPage() {
   // Data computations for dashboard
   // -------------------------------------------------------------
 
-  // Calculations for overview stats cards
-  const totalUsers = usersList.length;
-  const totalBalance = usersList.reduce((acc, curr) => acc + Number(curr.balance_inr), 0);
-  const totalGens = generationsList.length;
-  const totalRevenue = paymentsList
-    .filter(p => p.status === "completed")
-    .reduce((acc, curr) => acc + Number(curr.amount), 0);
+  // Overview numbers come from admin_dashboard_stats() so they cover the whole
+  // database, not just the page currently loaded below.
+  const totalUsers = stats?.total_users ?? null;
+  const totalBalance = stats?.total_balance ?? null;
+  const totalGens = stats?.total_generations ?? null;
+  const totalRevenue = stats?.completed_revenue ?? null;
+
+  const canGoPrev = page > 0;
+  const canGoNext =
+    (currentTab === "users" && (page + 1) * PAGE_SIZE < counts.users) ||
+    (currentTab === "generations" && (page + 1) * PAGE_SIZE < counts.generations) ||
+    (currentTab === "payments" && (page + 1) * PAGE_SIZE < counts.payments);
+
+  const fmtAmount = (value: number | null) =>
+    value === null
+      ? "—"
+      : `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Search logic filter
   const filteredUsers = usersList.filter(u =>
@@ -578,6 +690,7 @@ export default function AdminPage() {
             <button
               onClick={() => {
                 supabase.auth.signOut();
+                clearAuthCookie();
                 router.replace("/");
               }}
               className="btn-secondary px-4 py-2.5 rounded-xl text-sm font-medium text-brick hover:bg-brick-soft hover:border-brick/30 flex items-center justify-center gap-2"
@@ -590,17 +703,25 @@ export default function AdminPage() {
 
         {/* Tab Selection Row */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-sand border border-muted-purple p-1.5 rounded-2xl">
-          {(["overview", "users", "generations", "payments"] as const).map((tab) => (
+          {([
+            { key: "overview", label: "overview", count: null },
+            { key: "users", label: "users", count: counts.users },
+            { key: "generations", label: "generations", count: counts.generations },
+            { key: "payments", label: "payments", count: counts.payments },
+          ] as const).map((tab) => (
             <button
-              key={tab}
-              onClick={() => { setCurrentTab(tab); setSearchQuery(""); }}
+              key={tab.key}
+              onClick={() => { setCurrentTab(tab.key); setSearchQuery(""); setPage(0); }}
               className={`py-3 text-xs font-semibold rounded-xl transition-all cursor-pointer uppercase tracking-wide ${
-                currentTab === tab
+                currentTab === tab.key
                   ? "bg-surface text-ink border border-line shadow-sm"
                   : "text-ink-soft hover:text-ink"
               }`}
             >
-              {tab}
+              {tab.label}
+              {tab.count !== null && (
+                <span className="ml-1.5 text-[10px] font-bold text-fuchsia-accent">{tab.count}</span>
+              )}
             </button>
           ))}
         </section>
@@ -620,7 +741,7 @@ export default function AdminPage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint" />
                 <input
                   type="text"
-                  placeholder={`Search ${currentTab} by user email, database IDs, transactions, prompts...`}
+                  placeholder={`Search this page of ${currentTab} by user email, database IDs, transactions, prompts...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="input-field pl-11 py-3.5"
@@ -647,7 +768,7 @@ export default function AdminPage() {
                       <Users className="h-4 w-4" />
                     </div>
                     <span className="label-caps">Registered Profiles</span>
-                    <span className="text-3xl font-extrabold text-ink">{totalUsers}</span>
+                    <span className="text-3xl font-extrabold text-ink">{totalUsers ?? "—"}</span>
                   </div>
 
                   <div className="card p-5 flex flex-col gap-3 relative overflow-hidden">
@@ -655,7 +776,7 @@ export default function AdminPage() {
                       <DollarSign className="h-4 w-4" />
                     </div>
                     <span className="label-caps">Wallet Balances</span>
-                    <span className="text-3xl font-extrabold text-ink">₹{totalBalance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="text-3xl font-extrabold text-ink">{fmtAmount(totalBalance)}</span>
                   </div>
 
                   <div className="card p-5 flex flex-col gap-3 relative overflow-hidden">
@@ -663,7 +784,7 @@ export default function AdminPage() {
                       <ImageIcon className="h-4 w-4" />
                     </div>
                     <span className="label-caps">Image Generations</span>
-                    <span className="text-3xl font-extrabold text-ink">{totalGens}</span>
+                    <span className="text-3xl font-extrabold text-ink">{totalGens ?? "—"}</span>
                   </div>
 
                   <div className="card p-5 flex flex-col gap-3 relative overflow-hidden">
@@ -671,7 +792,7 @@ export default function AdminPage() {
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <span className="label-caps">Transactions Income</span>
-                    <span className="text-3xl font-extrabold text-sage">₹{totalRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="text-3xl font-extrabold text-sage">{fmtAmount(totalRevenue)}</span>
                   </div>
                 </div>
 
@@ -717,20 +838,20 @@ export default function AdminPage() {
                       </div>
                       <div className="flex flex-col gap-3 text-xs text-ink-soft">
                         <div className="flex justify-between items-center border-b border-line pb-2">
-                          <span>RLS Policy Bypass</span>
-                          <span className="text-sage font-semibold flex items-center gap-1"><Database className="h-3 w-3" /> ACTIVE</span>
+                          <span>Admin RPC Access</span>
+                          <span className="text-sage font-semibold flex items-center gap-1"><Database className="h-3 w-3" /> GRANTED</span>
                         </div>
                         <div className="flex justify-between items-center border-b border-line pb-2">
                           <span>Profiles Table</span>
-                          <span className="text-ink">{usersList.length} rows</span>
+                          <span className="text-ink">{counts.users} rows</span>
                         </div>
                         <div className="flex justify-between items-center border-b border-line pb-2">
                           <span>Generations Table</span>
-                          <span className="text-ink">{generationsList.length} rows</span>
+                          <span className="text-ink">{counts.generations} rows</span>
                         </div>
                         <div className="flex justify-between items-center pb-1">
                           <span>Payments Table</span>
-                          <span className="text-ink">{paymentsList.length} rows</span>
+                          <span className="text-ink">{counts.payments} rows</span>
                         </div>
                       </div>
                     </div>
@@ -818,6 +939,14 @@ export default function AdminPage() {
                     </table>
                   )}
                 </div>
+                <PaginationBar
+                  page={page}
+                  totalCount={counts.users}
+                  pageSize={PAGE_SIZE}
+                  canGoPrev={canGoPrev}
+                  canGoNext={canGoNext}
+                  onPageChange={setPage}
+                />
               </div>
             )}
 
@@ -916,6 +1045,14 @@ export default function AdminPage() {
                     </table>
                   )}
                 </div>
+                <PaginationBar
+                  page={page}
+                  totalCount={counts.generations}
+                  pageSize={PAGE_SIZE}
+                  canGoPrev={canGoPrev}
+                  canGoNext={canGoNext}
+                  onPageChange={setPage}
+                />
               </div>
             )}
 
@@ -1006,6 +1143,14 @@ export default function AdminPage() {
                     </table>
                   )}
                 </div>
+                <PaginationBar
+                  page={page}
+                  totalCount={counts.payments}
+                  pageSize={PAGE_SIZE}
+                  canGoPrev={canGoPrev}
+                  canGoNext={canGoNext}
+                  onPageChange={setPage}
+                />
               </div>
             )}
 
@@ -1015,7 +1160,7 @@ export default function AdminPage() {
 
       {/* FOOTER */}
       <footer className="w-full border-t border-line bg-sand/50 py-6 text-center text-xs text-ink-faint mt-12 z-10">
-        <span>© {new Date().getFullYear()} Florus.pics Inc. Admin panel access audited. IP logged and monitored.</span>
+        <span>© {new Date().getFullYear()} Florus.pics · Admin console</span>
       </footer>
 
       {/* =============================================================

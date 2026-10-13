@@ -7,7 +7,6 @@ import {
   Mail,
   Lock,
   ArrowRight,
-  Building2,
   ShieldCheck,
   Eye,
   EyeOff,
@@ -29,7 +28,6 @@ export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [company, setCompany] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -40,8 +38,9 @@ export default function Home() {
 
     async function checkSession() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user && isMounted) {
+        // Validate the token with Supabase rather than trusting the stored copy.
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && isMounted) {
           router.replace("/dashboard");
           return;
         }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Layers, Sparkles, User } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { creditsFromBalance } from "@/lib/pricing";
 import {
   MASTER_SHOOTS,
   MasterShoot,
@@ -72,41 +73,40 @@ const FACE_MODES: {
 ];
 
 export function GenerateWorkspace() {
-  // Hydrate from localStorage during the initial render (lazy useState initializers)
-  // rather than in a mount effect. This avoids a cascading re-render on every load
-  // and means the save-on-change effect never has to guard against "not loaded yet".
-  const initialPrefs = getSavedStudioPreferences();
-  const initialModels = getSavedCustomModels();
-  const initialGarments = getSavedGarments();
-
+  // Hydrate lazily inside useState initializers: localStorage is read once per
+  // mount, never during ordinary re-renders.
   // 1. Master Photoshoot Reference Anchor (Pose, Hands & Environment)
   const [selectedShoot, setSelectedShoot] = useState<MasterShoot>(
-    initialPrefs?.selectedShoot ?? MASTER_SHOOTS[0]
+    () => getSavedStudioPreferences()?.selectedShoot ?? MASTER_SHOOTS[0]
   );
   const [isShootModalOpen, setIsShootModalOpen] = useState(false);
 
   // 2. Model Face Option: "keep_original" | "custom_face" | "random_face"
   const [faceMode, setFaceMode] = useState<"keep_original" | "custom_face" | "random_face">(
-    initialPrefs?.faceMode ?? "keep_original"
+    () => getSavedStudioPreferences()?.faceMode ?? "keep_original"
   );
   const [selectedModel, setSelectedModel] = useState<CatalogModel>(
-    initialPrefs?.selectedModel ?? (initialModels.length > 0 ? initialModels[0] : PRESET_MODELS[0])
+    () => {
+      const prefs = getSavedStudioPreferences();
+      const models = getSavedCustomModels();
+      return prefs?.selectedModel ?? (models.length > 0 ? models[0] : PRESET_MODELS[0]);
+    }
   );
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
 
   // 3. Garment Fabric Selection (15 Main Saree Weaves)
   const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
-    initialPrefs?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
+    () => getSavedStudioPreferences()?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
   );
   const [isFabricModalOpen, setIsFabricModalOpen] = useState(false);
 
   // 3. Outfit & Product Garment Uploads
   // Studio mode has no outfit-type selector, so this is read-only and persisted.
   const [outfitType] = useState<string>(
-    initialPrefs?.outfitType ?? "Wholesale Saree (6-Yard)"
+    () => getSavedStudioPreferences()?.outfitType ?? "Wholesale Saree (6-Yard)"
   );
   const [garments, setGarments] = useState<UploadedGarment[]>(() =>
-    initialGarments.slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
+    getSavedGarments("studio").slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
       id: g.id,
       url: g.url,
       note: g.note || "",
@@ -114,14 +114,16 @@ export function GenerateWorkspace() {
     }))
   );
   const [customStylingNotes, setCustomStylingNotes] = useState<string>(
-    initialPrefs?.customStylingNotes ?? ""
+    () => getSavedStudioPreferences()?.customStylingNotes ?? ""
   );
   const [isUploading, setIsUploading] = useState(false);
   const [isStylingOpen, setIsStylingOpen] = useState(false);
 
   // Execution & Output States
   const [loading, setLoading] = useState(false);
-  const [outputUrl, setOutputUrl] = useState<string | null>(initialPrefs?.outputUrl ?? null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(
+    () => getSavedStudioPreferences()?.outputUrl ?? null
+  );
   const [showLightbox, setShowLightbox] = useState(false);
   const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
 
@@ -206,7 +208,7 @@ export function GenerateWorkspace() {
 
       setGarments((prev) => {
         const updated = [...prev, ...newGarments].slice(0, MAX_GARMENT_REFERENCES);
-        saveGarmentsToStorage(
+        saveGarmentsToStorage("studio", 
           updated.map((g) => ({
             id: g.id,
             url: g.url,
@@ -229,7 +231,7 @@ export function GenerateWorkspace() {
   const handleUpdateNote = (id: string, note: string) => {
     setGarments((prev) => {
       const updated = prev.map((g) => (g.id === id ? { ...g, note } : g));
-      saveGarmentsToStorage(
+      saveGarmentsToStorage("studio", 
         updated.map((g) => ({
           id: g.id,
           url: g.url,
@@ -244,7 +246,7 @@ export function GenerateWorkspace() {
   const handleRemoveGarment = (id: string) => {
     setGarments((prev) => {
       const updated = prev.filter((g) => g.id !== id);
-      saveGarmentsToStorage(
+      saveGarmentsToStorage("studio", 
         updated.map((g) => ({
           id: g.id,
           url: g.url,
@@ -297,6 +299,13 @@ export function GenerateWorkspace() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Session expired, please sign in again");
 
+      // One idempotency key per logical generation: a network retry of this
+      // exact request cannot charge the wallet twice.
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-0000-4000-8000-000000000000`.replace(/[^0-9a-f-]/gi, "0");
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -305,6 +314,7 @@ export function GenerateWorkspace() {
         },
         body: JSON.stringify({
           mode: "sarees",
+          idempotencyKey,
           outfitType,
           aspectRatio: "4:5",
           
@@ -335,17 +345,29 @@ export function GenerateWorkspace() {
         })
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(result.error || "Generation request failed");
+        const message = result?.error || "Generation request failed";
+        if (response.status === 503) {
+          addToast("error", `${message} No credits were deducted.`);
+        } else {
+          addToast("error", message);
+        }
+        return;
       }
 
       setOutputUrl(result.outputUrl);
-      setBlurPlaceholderUrl(result.blurPlaceholderUrl);
+      setBlurPlaceholderUrl(result.blurPlaceholderUrl ?? null);
+      const remaining =
+        typeof result.remainingCredits === "number"
+          ? result.remainingCredits
+          : typeof result.newBalance === "number"
+            ? creditsFromBalance(result.newBalance)
+            : null;
       addToast(
         "success",
-        `Lookbook generated successfully! Deducted 1 Credit. Balance: ${result.remainingCredits || (result.newBalance / 49).toFixed(1)} Credits.`
+        `Lookbook generated successfully! Deducted 1 Credit.${remaining !== null ? ` Balance: ${remaining} Credits.` : ""}`
       );
 
       window.dispatchEvent(new Event("profile-updated"));
@@ -378,7 +400,7 @@ export function GenerateWorkspace() {
 
   const clearGarments = () => {
     setGarments([]);
-    saveGarmentsToStorage([]);
+    saveGarmentsToStorage("studio", []);
   };
 
   const viewportStatus = loading ? "loading" : outputUrl ? "ready" : "idle";

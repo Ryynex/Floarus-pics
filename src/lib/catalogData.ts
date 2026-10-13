@@ -226,23 +226,35 @@ export interface SavedGarment {
  */
 export const MAX_GARMENT_REFERENCES = 3;
 
-const SAVED_GARMENTS_STORAGE_KEY = "florus_permanent_saved_garments";
+const LEGACY_SAVED_GARMENTS_KEY = "florus_permanent_saved_garments";
+const SAVED_GARMENTS_KEYS = {
+  studio: "florus_saved_garments_studio",
+  magic: "florus_saved_garments_magic",
+} as const;
+export type GarmentScope = keyof typeof SAVED_GARMENTS_KEYS;
 
-export function getSavedGarments(): SavedGarment[] {
+export function getSavedGarments(scope: GarmentScope): SavedGarment[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(SAVED_GARMENTS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const raw = localStorage.getItem(SAVED_GARMENTS_KEYS[scope]);
+    if (raw) return JSON.parse(raw);
+    // One-time fallback: both workspaces used to share a single key, so new
+    // installs (or migrated users) start from whatever was there.
+    const legacy = localStorage.getItem(LEGACY_SAVED_GARMENTS_KEY);
+    return legacy ? JSON.parse(legacy) : [];
   } catch (e) {
     console.error("Failed to load saved garments from localStorage:", e);
     return [];
   }
 }
 
-export function saveGarmentsToStorage(garments: SavedGarment[]): void {
+export function saveGarmentsToStorage(scope: GarmentScope, garments: SavedGarment[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(SAVED_GARMENTS_STORAGE_KEY, JSON.stringify(garments));
+    localStorage.setItem(SAVED_GARMENTS_KEYS[scope], JSON.stringify(garments));
+    // Drop the shared legacy key so the two workspaces stop clobbering each
+    // other's uploads.
+    localStorage.removeItem(LEGACY_SAVED_GARMENTS_KEY);
   } catch (e) {
     console.error("Failed to save garments to localStorage:", e);
   }
@@ -1067,7 +1079,7 @@ export function getSavedMagicPreferences(): SavedMagicPreferences | null {
       prefs.selectedBackground = PRESET_BACKGROUNDS[0];
     }
 
-    // Also heal model if invalid
+    // Heal model if invalid
     if (prefs.selectedModel && prefs.selectedModel.category !== "custom") {
       const foundModel = PRESET_MODELS.find(
         (m) => m.id === prefs.selectedModel?.id || m.imageUrl === prefs.selectedModel?.imageUrl
@@ -1077,9 +1089,9 @@ export function getSavedMagicPreferences(): SavedMagicPreferences | null {
       }
     }
 
-    // Persist healed preferences back to localStorage so stale URLs never get reused
-    localStorage.setItem(MAGIC_PREFERENCES_KEY, JSON.stringify(prefs));
-
+    // NOTE: this getter is intentionally side-effect free. Healed values are
+    // returned to the caller; persistence happens via saveMagicPreferences()
+    // from the workspace's save effect, never during a render-time read.
     return prefs;
   } catch (e) {
     console.error("Failed to load magic workspace preferences:", e);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Database,
@@ -25,6 +25,8 @@ import {
   ImageIcon
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { clearAuthCookie } from "@/lib/authCookie";
+import { creditsFromBalance, CREDIT_PRICE_INR } from "@/lib/pricing";
 import { GenerateWorkspace } from "@/components/GenerateWorkspace";
 import { MagicModeWorkspace } from "@/components/MagicModeWorkspace";
 
@@ -34,6 +36,7 @@ interface Profile {
 }
 
 interface GenerationRecord {
+  id?: string;
   created_at: string;
   prompt: string;
   status: string;
@@ -42,6 +45,7 @@ interface GenerationRecord {
 }
 
 interface PaymentRecord {
+  id?: string;
   upi_txn_id: string;
   amount: number;
   status: string;
@@ -67,7 +71,7 @@ function DashboardContent() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [showApiToken, setShowApiToken] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
 
   // History Tab Enhanced Filtering & Lightbox States
@@ -111,15 +115,17 @@ function DashboardContent() {
     }
   };
 
-  // Fetch live generation history
-  const fetchHistory = async (userId: string) => {
+  // Fetch live generation history (useCallback keeps the identity stable so the
+  // auth/data effect above does not re-run on every render)
+  const fetchHistory = useCallback(async (userId: string) => {
     try {
       setHistoryLoading(true);
       const { data, error } = await supabase
         .from("generations")
-        .select("created_at, prompt, status, cost_inr, output_url")
+        .select("id, created_at, prompt, status, cost_inr, output_url")
         .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(200);
 
       if (error) throw error;
       setHistoryList(data || []);
@@ -128,17 +134,18 @@ function DashboardContent() {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, []);
 
   // Fetch live payments history
-  const fetchPayments = async (userId: string) => {
+  const fetchPayments = useCallback(async (userId: string) => {
     try {
       setPaymentsLoading(true);
       const { data, error } = await supabase
         .from("payments")
-        .select("upi_txn_id, amount, status, created_at")
+        .select("id, upi_txn_id, amount, status, created_at")
         .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(200);
 
       if (error) throw error;
       setPaymentList(data || []);
@@ -147,37 +154,70 @@ function DashboardContent() {
     } finally {
       setPaymentsLoading(false);
     }
-  };
+  }, []);
 
   // Check Supabase Connection & Get Session
   useEffect(() => {
+    let cancelled = false;
+
     async function checkSession() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (user) {
           setProfile({
-            id: session.user.id,
-            email: session.user.email || null,
+            id: user.id,
+            email: user.email || null,
           });
           setDbStatus("connected");
 
+          const { data: balRow } = await supabase
+            .from("profiles")
+            .select("balance_inr")
+            .eq("id", user.id)
+            .single();
+          if (!cancelled && balRow) {
+            setWalletBalance(Number(balRow.balance_inr));
+          }
+
           // Fetch respective records if tabs are active
           if (currentTab === "history") {
-            fetchHistory(session.user.id);
+            fetchHistory(user.id);
           } else if (currentTab === "billing") {
-            fetchPayments(session.user.id);
+            fetchPayments(user.id);
           }
-        } else {
+        } else if (!error) {
+          clearAuthCookie();
           router.replace("/");
         }
       } catch (err) {
+        if (cancelled) return;
         console.error("Session verification check failed:", err);
+        clearAuthCookie();
         router.replace("/");
       }
     }
 
     checkSession();
-  }, [currentTab, router]);
+
+    // Keep the settings wallet figure in sync after a generation spends credits
+    const onProfileUpdated = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("balance_inr")
+        .eq("id", user.id)
+        .single();
+      if (!cancelled && data) setWalletBalance(Number(data.balance_inr));
+    };
+    window.addEventListener("profile-updated", onProfileUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("profile-updated", onProfileUpdated);
+    };
+  }, [currentTab, router, fetchHistory, fetchPayments]);
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 max-w-7xl">
@@ -368,7 +408,7 @@ function DashboardContent() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5 smooth-scroll-grid">
                   {displayedHistory.map((row, i) => (
                     <div
-                      key={i}
+                      key={row.id || `${row.created_at}-${i}`}
                       className="card card-hover overflow-hidden flex flex-col group relative bg-surface border border-line hover:border-fuchsia-accent/50 transition-all shadow-md img-perf-card rounded-2xl"
                     >
                       {/* Image Canvas with 4:5 Aspect Ratio */}
@@ -672,8 +712,8 @@ function DashboardContent() {
                         </td>
                       </tr>
                     ) : (
-                      paymentsList.map((pay, i) => (
-                        <tr key={i}>
+                      paymentsList.map((pay) => (
+                        <tr key={pay.id || pay.upi_txn_id}>
                           <td>
                             <div className="flex flex-col min-w-0">
                               <span className="text-ink font-medium select-all truncate max-w-[140px] sm:max-w-none pr-2" title={pay.upi_txn_id}>{pay.upi_txn_id}</span>
@@ -682,7 +722,7 @@ function DashboardContent() {
                           </td>
                           <td className="text-ink font-semibold whitespace-nowrap">
                             <span className="text-sm font-bold text-fuchsia-accent">
-                              +{(Number(pay.amount) / 49).toFixed(1)} Credits
+                              +{creditsFromBalance(Number(pay.amount)).toFixed(1)} Credits
                             </span>
                           </td>
                           <td className="text-right">
@@ -711,57 +751,49 @@ function DashboardContent() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-            {/* Account Credentials Panel */}
+            {/* Account Panel */}
             <div className="bg-sand border border-muted-purple p-3.5 sm:p-4 rounded-xl flex flex-col gap-3">
               <h4 className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                <Key className="h-4 w-4 text-purple-accent" /> Access Token
+                <Key className="h-4 w-4 text-purple-accent" /> Account
               </h4>
               <div className="flex flex-col gap-1.5 mt-1">
-                <span className="label-caps">Platform Auth Key</span>
-                <div className="flex gap-2">
-                  <input
-                    type={showApiToken ? "text" : "password"}
-                    readOnly
-                    value={`fls_live_${profile?.id?.replace(/-/g, "")}`}
-                    className="input-field flex-1 text-xs select-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiToken(!showApiToken)}
-                    className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer shrink-0"
-                  >
-                    {showApiToken ? "Hide" : "Reveal"}
-                  </button>
-                </div>
+                <span className="label-caps">Email</span>
+                <span className="text-xs text-ink select-all">{profile?.email || "—"}</span>
+              </div>
+              <div className="flex flex-col gap-1.5 mt-1">
+                <span className="label-caps">Account ID</span>
+                <span className="text-xs text-ink select-all break-all">{profile?.id || "—"}</span>
               </div>
               <p className="text-xs text-ink-soft leading-relaxed mt-1">
-                Use this key when integrating Florus with external automation or asset-fetching scripts.
+                Quote your Account ID when contacting support about wallet credits or payments.
               </p>
             </div>
 
-            {/* GPU status and protection */}
+            {/* Pricing & platform info */}
             <div className="bg-sand border border-muted-purple p-3.5 sm:p-4 rounded-xl flex flex-col gap-3 justify-between">
               <div className="flex flex-col gap-2">
                 <h4 className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                  <Zap className="h-4 w-4 text-sage" /> Engine Status
+                  <Zap className="h-4 w-4 text-sage" /> Pricing
                 </h4>
                 <div className="flex flex-col gap-1 mt-1 text-xs text-ink-soft">
                   <div className="flex justify-between border-b border-muted-purple pb-1.5">
-                    <span>Active Cluster Node</span>
-                    <span className="text-sage font-semibold">Node A-12</span>
+                    <span>Credit price</span>
+                    <span className="text-ink font-semibold">₹{CREDIT_PRICE_INR}</span>
                   </div>
                   <div className="flex justify-between border-b border-muted-purple py-1.5">
-                    <span>Average Latency</span>
-                    <span className="text-ink font-semibold">14.8s</span>
+                    <span>Per lookbook</span>
+                    <span className="text-ink font-semibold">1 Credit</span>
                   </div>
                   <div className="flex justify-between pt-1.5">
-                    <span>Network State</span>
-                    <span className="text-sage font-semibold">Online</span>
+                    <span>Wallet</span>
+                    <span className="text-ink font-semibold">
+                      {walletBalance !== null ? `${creditsFromBalance(walletBalance).toFixed(1)} Credits` : "—"}
+                    </span>
                   </div>
                 </div>
               </div>
               <p className="text-[11px] text-ink-faint leading-relaxed">
-                Platform endpoints are distributed globally for reliable generation performance.
+                Top-ups are verified manually and credited to your wallet after approval.
               </p>
             </div>
           </div>

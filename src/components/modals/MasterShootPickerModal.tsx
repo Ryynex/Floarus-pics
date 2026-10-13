@@ -92,8 +92,11 @@ export function MasterShootPickerModal({
     };
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id || "anonymous";
+      // Validate the token instead of trusting the stored session copy; an
+      // "anonymous" storage path would always fail the bucket's folder policy.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Session expired, please sign in again");
+      const userId = user.id;
       const fileName = `shoot-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
       const filePath = `${userId}/custom-shoots/${fileName}`;
 

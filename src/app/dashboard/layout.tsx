@@ -21,6 +21,7 @@ import {
   Menu
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { clearAuthCookie } from "@/lib/authCookie";
 
 interface Profile {
   email: string | null;
@@ -409,14 +410,19 @@ export default function DashboardLayout({
   useEffect(() => {
     async function checkAuth() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
+        // getUser() validates the token with Supabase; getSession() only reads
+        // whatever happens to be in localStorage and would accept a forged or
+        // expired session.
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          clearAuthCookie();
           router.replace("/");
         } else {
           setAuthorized(true);
         }
       } catch (err) {
         console.error("Session verification failed:", err);
+        clearAuthCookie();
         router.replace("/");
       }
     }
@@ -425,6 +431,7 @@ export default function DashboardLayout({
     // Subscribe to auth state changes to redirect on logout
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
+        clearAuthCookie();
         router.replace("/");
       }
     });

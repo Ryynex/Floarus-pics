@@ -53,6 +53,7 @@ export function ModelPickerModal({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [modelNameInput, setModelNameInput] = useState<string>("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Refresh saved custom models and clear the pending draft each time the modal
   // is opened. Adjusting state during render is the React-recommended alternative
@@ -66,16 +67,28 @@ export function ModelPickerModal({
       setPendingFile(null);
       setPendingPreview(null);
       setModelNameInput("");
+      setUploadError(null);
     }
   }
 
   if (!isOpen) return null;
 
+  // Drop the object URL whenever a pending preview is replaced or discarded.
+  const clearPending = () => {
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingFile(null);
+    setPendingPreview(null);
+    setModelNameInput("");
+    setUploadError(null);
+  };
+
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
     setPendingFile(file);
     setPendingPreview(URL.createObjectURL(file));
+    setUploadError(null);
     const cleanDefaultName = file.name
       .replace(/\.[^/.]+$/, "")
       .replace(/[-_]/g, " ")
@@ -115,20 +128,22 @@ export function ModelPickerModal({
 
       // Immediately select as the permanent active model
       onSelect(newModel);
-      setPendingFile(null);
-      setPendingPreview(null);
+      clearPending();
       onClose();
     } catch (err) {
       console.error("Custom model upload failed:", err);
+      setUploadError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not save the model photo. Please try again."
+      );
     } finally {
       setUploading(false);
     }
   };
 
   const handleCancelPending = () => {
-    setPendingFile(null);
-    setPendingPreview(null);
-    setModelNameInput("");
+    clearPending();
   };
 
   const handleDeleteCustomModel = (e: React.MouseEvent, id: string) => {
@@ -202,6 +217,12 @@ export function ModelPickerModal({
                 Uploaded models stay saved to your account permanently until removed
               </span>
             </div>
+
+            {uploadError && (
+              <div className="px-3 py-2 rounded-lg border border-brick/30 bg-brick-soft text-brick text-xs font-medium">
+                {uploadError}
+              </div>
+            )}
 
             {pendingFile && pendingPreview ? (
               /* Inline Form: Set Model Name & Save */
