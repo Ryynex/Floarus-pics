@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Layers, Scissors } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { creditsFromBalance } from "@/lib/pricing";
 import {
@@ -48,6 +49,18 @@ import {
   WorkflowSwitcher,
   useToasts
 } from "./lookbook/ui";
+import {
+  StructuredGarmentUploader,
+  StructuredGarmentSlot
+} from "./lookbook/StructuredGarmentUploader";
+import {
+  StructuredSuitUploader,
+  SuitEntry,
+  SuitSlotKey,
+  SUIT_SILHOUETTES,
+  DUPATTA_DRAPING_STYLES,
+  SLOT_URL_KEYS
+} from "./lookbook/StructuredSuitUploader";
 import { compressImageClient } from "@/lib/imageCompression";
 
 interface UploadedPhoto {
@@ -62,6 +75,35 @@ const DEFAULT_SLOT_LABELS = [
   "Main body fabric / Saree",
   "Pallu / Border accent",
   "Blouse / Contrast fabric"
+];
+
+const INITIAL_STRUCTURED_SLOTS: StructuredGarmentSlot[] = [
+  {
+    id: "main_drape",
+    role: "main_drape",
+    label: "Main Saree Body",
+    subtitle: "Overall saree fabric and main body color"
+  },
+  {
+    id: "pallu",
+    role: "pallu",
+    label: "Pallu / Border",
+    subtitle: "Pallu end piece & decorative border detail"
+  },
+  {
+    id: "blouse",
+    role: "blouse",
+    label: "Blouse (Optional)",
+    subtitle: "Blouse piece or contrasting fabric swatch",
+    isOptional: true
+  }
+];
+
+const INITIAL_SUITS: SuitEntry[] = [
+  {
+    id: "suit_1",
+    suitNumber: 1
+  }
 ];
 
 const OUTFIT_TYPES = [
@@ -81,49 +123,31 @@ const GENERATION_STEPS = [
 ];
 
 export function MagicModeWorkspace() {
-  // Hydrate once per mount: all localStorage reads and preset validation live
-  // in this lazy initializer so ordinary re-renders never touch storage.
   const [hydration] = useState(() => {
     const prefs = getSavedMagicPreferences();
     const models = getSavedCustomModels();
     const garments = getSavedGarments("magic");
 
-    const pose = !prefs?.selectedPose
-      ? PRESET_POSES[0]
-      : prefs.selectedPose.id === "custom"
-        ? prefs.selectedPose
-        : PRESET_POSES.find(
-            (p) => p.id === prefs.selectedPose?.id || p.imageUrl === prefs.selectedPose?.imageUrl
-          ) || PRESET_POSES[0];
-
-    const background = !prefs?.selectedBackground
-      ? PRESET_BACKGROUNDS[0]
-      : prefs.selectedBackground.id === "custom"
-        ? prefs.selectedBackground
-        : PRESET_BACKGROUNDS.find(
-            (b) => b.id === prefs.selectedBackground?.id || b.imageUrl === prefs.selectedBackground?.imageUrl
-          ) || PRESET_BACKGROUNDS[0];
-
-    const model = !prefs?.selectedModel
-      ? (models.length > 0 ? models[0] : PRESET_MODELS[0])
-      : prefs.selectedModel.category === "custom"
-        ? prefs.selectedModel
-        : PRESET_MODELS.find(
-            (m) => m.id === prefs.selectedModel?.id || m.imageUrl === prefs.selectedModel?.imageUrl
-          ) || (models.length > 0 ? models[0] : PRESET_MODELS[0]);
-
-    return { prefs, garments, pose, background, model };
+    return {
+      prefs,
+      models,
+      garments
+    };
   });
 
-  const { prefs: initialPrefs, pose: validatedPose, background: validatedBackground, model: validatedModel } = hydration;
-  const initialGarments = hydration.garments;
+  const { prefs: initialPrefs, models: initialCustomModels, garments: initialGarments } = hydration;
 
-  // 1. Creative Direction Selectors
-  const [selectedModel, setSelectedModel] = useState<CatalogModel>(validatedModel);
-  const [selectedPose, setSelectedPose] = useState<CatalogPose>(validatedPose);
-  const [selectedBackground, setSelectedBackground] = useState<CatalogBackground>(validatedBackground);
+  const [selectedModel, setSelectedModel] = useState<CatalogModel>(
+    () => initialPrefs?.selectedModel ?? PRESET_MODELS[0]
+  );
+  const [selectedPose, setSelectedPose] = useState<CatalogPose>(
+    () => initialPrefs?.selectedPose ?? PRESET_POSES[0]
+  );
+  const [selectedBackground, setSelectedBackground] = useState<CatalogBackground>(
+    () => initialPrefs?.selectedBackground ?? PRESET_BACKGROUNDS[0]
+  );
   const [backgroundMode, setBackgroundMode] = useState<"fixed" | "inspiration">(
-    () => initialPrefs?.backgroundMode ?? "inspiration"
+    () => (initialPrefs?.backgroundMode === "inspiration" ? "inspiration" : "fixed")
   );
   const [selectedHairstyle, setSelectedHairstyle] = useState<CatalogHairstyle>(
     () => initialPrefs?.selectedHairstyle ?? PRESET_HAIRSTYLES[0]
@@ -132,12 +156,9 @@ export function MagicModeWorkspace() {
     () => initialPrefs?.selectedJewellery ?? PRESET_JEWELLERY[0]
   );
   const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
-    () => initialPrefs?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
+    () => getSavedFabricPreference() ?? initialPrefs?.selectedFabric ?? PRESET_FABRICS[0]
   );
 
-  const [showAdvancedStyling, setShowAdvancedStyling] = useState(false);
-
-  // Modal Visibility States
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [isPoseModalOpen, setIsPoseModalOpen] = useState(false);
   const [isBgModalOpen, setIsBgModalOpen] = useState(false);
@@ -145,10 +166,42 @@ export function MagicModeWorkspace() {
   const [isJewelModalOpen, setIsJewelModalOpen] = useState(false);
   const [isFabricModalOpen, setIsFabricModalOpen] = useState(false);
 
-  // 2. Outfit Type & Garment Uploads
+  // Category Routing & Outfit Type
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const category = searchParams.get("category") || "saree";
+
+  // Suit Specific States
+  const [suits, setSuits] = useState<SuitEntry[]>(INITIAL_SUITS);
+  const [suitSilhouette, setSuitSilhouette] = useState(SUIT_SILHOUETTES[0].name);
+  const [dupattaDrape, setDupattaDrape] = useState(DUPATTA_DRAPING_STYLES[0].name);
+
+  // Batch generation states
+  const [batchCount, setBatchCount] = useState<number>(1);
+  const [loadingLabel, setLoadingLabel] = useState<string>("Generating...");
+
   const [outfitType, setOutfitType] = useState<string>(
     () => initialPrefs?.outfitType ?? "Wholesale Saree (6-Yard)"
   );
+  const [drapingStyle, setDrapingStyle] = useState<string>(
+    () => initialPrefs?.drapingStyle ?? "Default drape"
+  );
+  const [blouseStyle, setBlouseStyle] = useState<string>(
+    () => initialPrefs?.blouseStyle ?? "Auto-coordinate with border & zari (Default)"
+  );
+  const [structuredSlots, setStructuredSlots] = useState<StructuredGarmentSlot[]>(() => {
+    return INITIAL_STRUCTURED_SLOTS.map((slot: StructuredGarmentSlot, idx: number) => {
+      const match = initialGarments.find(g => (g as any).role === slot.role || g.id === slot.id) || initialGarments[idx];
+      if (match) {
+        return {
+          ...slot,
+          url: match.url,
+          note: match.note || ""
+        };
+      }
+      return slot;
+    });
+  });
   const [photos, setPhotos] = useState<UploadedPhoto[]>(() =>
     initialGarments.slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
       id: g.id,
@@ -161,21 +214,15 @@ export function MagicModeWorkspace() {
   const [customStylingNotes, setCustomStylingNotes] = useState<string>(
     () => initialPrefs?.customStylingNotes ?? ""
   );
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
 
-  // 3. Execution & Output States
   const [loading, setLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
-  const [outputUrl, setOutputUrl] = useState<string | null>(
-    () => initialPrefs?.outputUrl ?? null
-  );
+  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [recentGenerations, setRecentGenerations] = useState<string[]>([]);
   const [showLightbox, setShowLightbox] = useState(false);
-  const [recentGenerations, setRecentGenerations] = useState<string[]>(
-    () => initialPrefs?.recentGenerations ?? []
-  );
+  const [showAdvancedStyling, setShowAdvancedStyling] = useState(false);
 
-  // Auto-save user selections locally
   useEffect(() => {
     saveMagicPreferences({
       selectedModel,
@@ -186,11 +233,12 @@ export function MagicModeWorkspace() {
       selectedJewellery,
       selectedFabric,
       outfitType,
+      drapingStyle,
+      blouseStyle,
       customStylingNotes,
       outputUrl,
       recentGenerations
     });
-    saveFabricPreference(selectedFabric);
   }, [
     selectedModel,
     selectedPose,
@@ -200,15 +248,15 @@ export function MagicModeWorkspace() {
     selectedJewellery,
     selectedFabric,
     outfitType,
+    drapingStyle,
+    blouseStyle,
     customStylingNotes,
     outputUrl,
     recentGenerations
   ]);
 
-  // Toast Notifications
   const { toasts, toast: addToast, dismiss: dismissToast } = useToasts();
 
-  // Custom Model Upload Handler (passed to ModelPickerModal)
   const handleCustomModelUpload = async (file: File): Promise<string | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -229,7 +277,6 @@ export function MagicModeWorkspace() {
         }
       }
 
-      // Base64 fallback if storage bucket has issue
       return await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -241,276 +288,183 @@ export function MagicModeWorkspace() {
     }
   };
 
-  // Upload Garment Photos with Compression & Storage + Data URL Fallback
-  const processFiles = async (files: File[]) => {
-    const remainingSlots = Math.max(0, MAX_GARMENT_REFERENCES - photos.length);
-    if (remainingSlots <= 0) {
-      addToast("error", `Maximum of ${MAX_GARMENT_REFERENCES} garment photos allowed. Remove a photo to upload another.`);
-      return;
-    }
+  const syncSlotsToStorage = (updated: StructuredGarmentSlot[]) => {
+    const active = updated
+      .filter((s) => Boolean(s.url))
+      .map((s) => ({
+        id: s.id,
+        url: s.url!,
+        note: s.note || "",
+        name: s.label,
+        slotLabel: s.label,
+        role: s.role,
+      }));
+    setPhotos(active);
+    saveGarmentsToStorage(
+      "magic",
+      active.map((p) => ({
+        id: p.id,
+        url: p.url,
+        note: p.note,
+        name: p.name,
+        slotLabel: p.slotLabel,
+      }))
+    );
+  };
 
-    const filesToUpload = files.slice(0, remainingSlots);
-    if (files.length > remainingSlots) {
-      addToast("info", `Taking ${remainingSlots} photo(s) to respect the maximum limit of ${MAX_GARMENT_REFERENCES}.`);
-    }
-
+  const handleUploadSlot = async (role: string, file: File) => {
     setIsUploading(true);
-
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const folder = session?.user?.id || "guest";
-      const newPhotos: UploadedPhoto[] = [];
+      const compressedFile = await compressImageClient(file, 640, 0.85);
+      let finalUrl = "";
 
-      for (let i = 0; i < filesToUpload.length; i++) {
-        const rawFile = filesToUpload[i];
-        const compressedFile = await compressImageClient(rawFile, 640, 0.85);
-        let finalUrl = "";
+      if (session?.user) {
+        try {
+          const fileName = `${folder}/uploads/magic-${Date.now()}-${role}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+          const { error: uploadErr } = await supabase.storage
+            .from("generated-lookbooks")
+            .upload(fileName, compressedFile, {
+              contentType: compressedFile.type,
+              upsert: true
+            });
 
-        if (session?.user) {
-          try {
-            const fileName = `${folder}/uploads/magic-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
-            const { error: uploadErr } = await supabase.storage
+          if (!uploadErr) {
+            const { data: { publicUrl } } = supabase.storage
               .from("generated-lookbooks")
-              .upload(fileName, compressedFile, {
-                contentType: compressedFile.type,
-                upsert: true
-              });
-
-            if (!uploadErr) {
-              const { data: { publicUrl } } = supabase.storage
-                .from("generated-lookbooks")
-                .getPublicUrl(fileName);
-              finalUrl = publicUrl;
-            }
-          } catch (storageErr) {
-            console.warn("Storage upload notice, using client buffer fallback:", storageErr);
+              .getPublicUrl(fileName);
+            finalUrl = publicUrl;
           }
+        } catch (storageErr) {
+          console.warn("Storage upload notice:", storageErr);
         }
+      }
 
-        // Fallback to base64 Data URL if storage is unavailable
-        if (!finalUrl) {
-          finalUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.readAsDataURL(compressedFile);
-          });
-        }
-
-        const slotIndex = photos.length + i;
-        newPhotos.push({
-          id: `photo-${Date.now()}-${i}`,
-          url: finalUrl,
-          note: "",
-          name: rawFile.name || `Outfit Photo ${slotIndex + 1}`,
-          slotLabel: DEFAULT_SLOT_LABELS[slotIndex] || `Layer ${slotIndex + 1}`
+      if (!finalUrl) {
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(compressedFile);
         });
       }
 
-      setPhotos((prev) => {
-        const merged = [...prev, ...newPhotos];
-        saveGarmentsToStorage("magic", 
-          merged.map((p) => ({
-            id: p.id,
-            url: p.url,
-            note: p.note,
-            name: p.name,
-            slotLabel: p.slotLabel
-          }))
-        );
-        return merged;
+      setStructuredSlots((prev) => {
+        const next = prev.map((s) => (s.role === role ? { ...s, url: finalUrl } : s));
+        syncSlotsToStorage(next);
+        return next;
       });
 
-      addToast("success", `Added ${newPhotos.length} garment reference photo(s).`);
+      addToast("success", `Uploaded ${role.replace("_", " ")} photo.`);
     } catch (err) {
-      console.error("Garment upload error:", err);
-      addToast("error", "Failed to upload photo. Please try again.");
+      console.error("Slot upload error:", err);
+      addToast("error", "Failed to upload photo.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleFileUpload = (fileList: FileList) => {
-    if (fileList && fileList.length > 0) {
-      processFiles(Array.from(fileList));
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(Array.from(e.dataTransfer.files));
-    }
-  };
-
-  const clearPhotos = () => {
-    setPhotos([]);
-    saveGarmentsToStorage("magic", []);
-  };
-
-  const handleRemovePhoto = (id: string) => {
-    setPhotos((prev) => {
-      const filtered = prev.filter((p) => p.id !== id);
-      saveGarmentsToStorage("magic", 
-        filtered.map((p) => ({
-          id: p.id,
-          url: p.url,
-          note: p.note,
-          name: p.name,
-          slotLabel: p.slotLabel
-        }))
-      );
-      return filtered;
+  const handleRemoveSlot = (role: string) => {
+    setStructuredSlots((prev) => {
+      const next = prev.map((s) => (s.role === role ? { ...s, url: undefined, note: "" } : s));
+      syncSlotsToStorage(next);
+      return next;
     });
   };
 
-  const handleUpdateNote = (id: string, note: string) => {
-    setPhotos((prev) => {
-      const updated = prev.map((p) => (p.id === id ? { ...p, note } : p));
-      saveGarmentsToStorage("magic", 
-        updated.map((p) => ({
-          id: p.id,
-          url: p.url,
-          note: p.note,
-          name: p.name,
-          slotLabel: p.slotLabel
-        }))
-      );
-      return updated;
+  const handleUpdateSlotNote = (role: string, note: string) => {
+    setStructuredSlots((prev) => {
+      const next = prev.map((s) => (s.role === role ? { ...s, note } : s));
+      syncSlotsToStorage(next);
+      return next;
     });
   };
 
-  // Generate Lookbook Action
-  const handleGenerateAll = async () => {
-    if (photos.length === 0) {
-      addToast("error", "Please upload at least 1 garment photo to generate a lookbook.");
-      return;
-    }
-
-    setLoading(true);
-    setOutputUrl(null);
-
-    // Advance the progress indicator on a best-effort cadence while the
-    // render runs - the API does not stream real stage updates.
-    const stageTimers = GENERATION_STEPS.map((_, i) =>
-      setTimeout(() => setActiveStep(i), 2000 + i * 2500)
-    );
-
+  const handleUploadSuitSlot = async (suitId: string, slotKey: SuitSlotKey, file: File) => {
+    setIsUploading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Session expired, please sign in again");
+      const folder = session?.user?.id || "guest";
+      const compressedFile = await compressImageClient(file, 640, 0.85);
+      let finalUrl = "";
 
-      // One idempotency key per logical generation: a network retry of this
-      // exact request cannot charge the wallet twice.
-      const idempotencyKey =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-0000-4000-8000-000000000000`.replace(/[^0-9a-f-]/gi, "0");
+      if (session?.user) {
+        try {
+          const fileName = `${folder}/uploads/suit-${Date.now()}-${suitId}-${slotKey}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+          const { error: uploadErr } = await supabase.storage
+            .from("generated-lookbooks")
+            .upload(fileName, compressedFile, {
+              contentType: compressedFile.type,
+              upsert: true
+            });
 
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token || ""}`
-        },
-        body: JSON.stringify({
-          mode: "magic",
-          idempotencyKey,
-          outfitType,
-          aspectRatio: "4:5",
-
-          // 1. Model Persona
-          modelId: selectedModel.id,
-          modelName: selectedModel.name,
-          modelFaceUrl: selectedModel.imageUrl || null,
-          customFaceUrl: selectedModel.category === "custom" ? selectedModel.imageUrl : null,
-          faceMode: selectedModel.category === "custom" ? "custom_face" : "keep_original",
-
-          // 2. Editorial Pose
-          poseId: selectedPose.id,
-          poseName: selectedPose.name,
-          poseImageUrl: selectedPose.imageUrl,
-          poseDescription: selectedPose.description,
-
-          // 3. Setting & Background
-          backgroundId: selectedBackground.id,
-          backgroundName: selectedBackground.name,
-          backgroundUrl: selectedBackground.imageUrl,
-          backgroundDescription: selectedBackground.description,
-          backgroundMode,
-
-          // 4. Styling
-          hairstyle: selectedHairstyle.name,
-          hairstyleDescription: selectedHairstyle.description,
-          jewellery: selectedJewellery.name,
-          jewelleryDescription: selectedJewellery.description,
-          fabric: selectedFabric.name,
-          fabricDescription: selectedFabric.description,
-          fabricDrapePhysics: selectedFabric.drapePhysics,
-
-          // 5. Garment References
-          customNotes: customStylingNotes,
-          garments: photos.slice(0, MAX_GARMENT_REFERENCES).map((p, idx) => ({
-            url: p.url,
-            note: p.note,
-            slotId: `layer-${idx + 1}`,
-            slotLabel: p.slotLabel || `Garment Photo ${idx + 1}`
-          }))
-        })
-      });
-
-      stageTimers.forEach(clearTimeout);
-
-      const result = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const message = result?.error || "Generation request failed";
-        // 5xx (engine unavailable / reference failed to load) never reaches
-        // billing, so make that explicit instead of leaving users guessing.
-        if (response.status >= 500) {
-          addToast("error", `${message} No credits were deducted.`);
-        } else {
-          addToast("error", message);
+          if (!uploadErr) {
+            const { data: { publicUrl } } = supabase.storage
+              .from("generated-lookbooks")
+              .getPublicUrl(fileName);
+            finalUrl = publicUrl;
+          }
+        } catch (storageErr) {
+          console.warn("Storage upload notice:", storageErr);
         }
-        return;
       }
 
-      setOutputUrl(result.outputUrl);
-      if (result.outputUrl) {
-        setRecentGenerations((prev) => [result.outputUrl, ...prev.slice(0, 5)]);
+      if (!finalUrl) {
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(compressedFile);
+        });
       }
-      const remaining =
-        typeof result.remainingCredits === "number"
-          ? result.remainingCredits
-          : typeof result.newBalance === "number"
-            ? creditsFromBalance(result.newBalance)
-            : null;
-      addToast(
-        "success",
-        `Lookbook generated! Deducted 1 Credit.${remaining !== null ? ` Balance: ${remaining} Credits.` : ""}`
+
+      const propKey = SLOT_URL_KEYS[slotKey];
+      setSuits((prev) =>
+        prev.map((s) => (s.id === suitId ? { ...s, [propKey]: finalUrl, [`${slotKey}Url`]: finalUrl } : s))
       );
 
-      window.dispatchEvent(new Event("profile-updated"));
+      addToast("success", `Uploaded ${slotKey.replace("_", " ")} photo.`);
     } catch (err) {
-      console.error("Magic Generation error:", err);
-      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred during synthesis.";
-      addToast("error", errMsg);
+      console.error("Suit slot upload error:", err);
+      addToast("error", "Failed to upload photo.");
     } finally {
-      stageTimers.forEach(clearTimeout);
-      setLoading(false);
-      setActiveStep(0);
+      setIsUploading(false);
     }
   };
+
+  const handleRemoveSuitSlot = (suitId: string, slotKey: SuitSlotKey) => {
+    const propKey = SLOT_URL_KEYS[slotKey];
+    setSuits((prev) =>
+      prev.map((s) => (s.id === suitId ? { ...s, [propKey]: undefined, [`${slotKey}Url`]: undefined } : s))
+    );
+  };
+
+  const handleAddSuit = () => {
+    setSuits((prev) => {
+      if (prev.length >= 20) return prev;
+      const nextNum = prev.length + 1;
+      return [
+        ...prev,
+        {
+          id: `suit_${Date.now()}_${nextNum}`,
+          suitNumber: nextNum
+        }
+      ];
+    });
+  };
+
+  const handleRemoveSuit = (suitId: string) => {
+    setSuits((prev) => {
+      if (prev.length <= 1) return prev;
+      const filtered = prev.filter((s) => s.id !== suitId);
+      return filtered.map((s, idx) => ({ ...s, suitNumber: idx + 1 }));
+    });
+  };
+
+  // Active suits helper
+  const activeSuits = suits.filter(
+    (s) => s.kameezUrl || s.completeSetUrl || s.chestDesignUrl || s.bottomUrl || s.dupattaUrl
+  );
+  const isMultiSuit = category === "suits" && activeSuits.length > 1;
 
   // Download Output Image
   const downloadImage = async (url: string, filename: string) => {
@@ -530,6 +484,196 @@ export function MagicModeWorkspace() {
     }
   };
 
+  // Download All Images Helper
+  const downloadAllImages = async () => {
+    for (let i = 0; i < recentGenerations.length; i++) {
+      const url = recentGenerations[i];
+      await downloadImage(url, `florus-custom-lookbook-${i + 1}-${Date.now()}.png`);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  };
+
+  // Generate Lookbook Action (Supports Single & Multi-Image / Multi-Suit Batch)
+  const handleGenerateAll = async () => {
+    setTimeout(() => {
+      document.getElementById("magic-preview-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    const isSuitCategory = category === "suits";
+
+    interface GenerationTask {
+      garments: Array<{ url: string; note: string; slotId: string; slotLabel: string; role?: string }>;
+      label: string;
+      suitNumber?: number;
+    }
+
+    let tasks: GenerationTask[] = [];
+
+    if (isSuitCategory) {
+      if (activeSuits.length === 0) {
+        addToast(
+          "error",
+          "Please upload at least 1 fabric photo (Kameez, Chest Design, Dupatta, Bottom, or Complete Set) to generate."
+        );
+        return;
+      }
+
+      if (activeSuits.length > 1) {
+        // Multi-Suit batch: Generate each configured suit!
+        tasks = activeSuits.map((s) => {
+          const gList: GenerationTask["garments"] = [];
+          if (s.kameezUrl) gList.push({ url: s.kameezUrl, note: "Kameez / Kurta Top Fabric", slotId: "kameez", slotLabel: "Kameez / Top", role: "kameez" });
+          if (s.chestDesignUrl) gList.push({ url: s.chestDesignUrl, note: "Chest Design / Neckline", slotId: "chest_design", slotLabel: "Chest Design / Neckline", role: "chest_design" });
+          if (s.dupattaUrl) gList.push({ url: s.dupattaUrl, note: "Dupatta Drape", slotId: "dupatta", slotLabel: "Dupatta", role: "dupatta" });
+          if (s.bottomUrl) gList.push({ url: s.bottomUrl, note: "Bottom / Pants", slotId: "bottom", slotLabel: "Bottom Fabric", role: "bottom" });
+          if (s.completeSetUrl) gList.push({ url: s.completeSetUrl, note: "Complete Ensemble Reference", slotId: "complete_set", slotLabel: "Complete Set", role: "complete_set" });
+          return { garments: gList, label: `Suit ${s.suitNumber}`, suitNumber: s.suitNumber };
+        });
+      } else {
+        // Single suit: Generate batchCount variations
+        const targetSuit = activeSuits[0] || suits[0];
+        const gList: GenerationTask["garments"] = [];
+        if (targetSuit.kameezUrl) gList.push({ url: targetSuit.kameezUrl, note: "Kameez / Kurta Top Fabric", slotId: "kameez", slotLabel: "Kameez / Top", role: "kameez" });
+        if (targetSuit.chestDesignUrl) gList.push({ url: targetSuit.chestDesignUrl, note: "Chest Design / Neckline", slotId: "chest_design", slotLabel: "Chest Design / Neckline", role: "chest_design" });
+        if (targetSuit.dupattaUrl) gList.push({ url: targetSuit.dupattaUrl, note: "Dupatta Drape", slotId: "dupatta", slotLabel: "Dupatta", role: "dupatta" });
+        if (targetSuit.bottomUrl) gList.push({ url: targetSuit.bottomUrl, note: "Bottom / Pants", slotId: "bottom", slotLabel: "Bottom Fabric", role: "bottom" });
+        if (targetSuit.completeSetUrl) gList.push({ url: targetSuit.completeSetUrl, note: "Complete Ensemble Reference", slotId: "complete_set", slotLabel: "Complete Set", role: "complete_set" });
+
+        tasks = Array.from({ length: batchCount }, (_, i) => ({
+          garments: gList,
+          label: batchCount > 1 ? `Suit Lookbook (${i + 1}/${batchCount})` : "Suit Lookbook"
+        }));
+      }
+    } else {
+      // Wholesale Saree
+      const sGarments: GenerationTask["garments"] = structuredSlots
+        .filter((s) => Boolean(s.url))
+        .map((s) => ({
+          url: s.url!,
+          note: s.note || "",
+          slotId: s.id,
+          slotLabel: s.label,
+          role: s.role,
+        }));
+
+      if (sGarments.length === 0 && photos.length === 0) {
+        addToast("error", "Please upload at least 1 saree / garment photo to generate a lookbook.");
+        return;
+      }
+
+      tasks = Array.from({ length: batchCount }, (_, i) => ({
+        garments: sGarments.length > 0 ? sGarments : photos.map((p, idx) => ({
+          url: p.url,
+          note: p.note,
+          slotId: `layer-${idx + 1}`,
+          slotLabel: p.slotLabel || `Garment Photo ${idx + 1}`
+        })),
+        label: batchCount > 1 ? `Saree Lookbook (${i + 1}/${batchCount})` : "Saree Lookbook"
+      }));
+    }
+
+    setLoading(true);
+    let successCount = 0;
+    const stageTimers: NodeJS.Timeout[] = [];
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Session expired, please sign in again");
+
+      for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+        setLoadingLabel(
+          tasks.length > 1
+            ? `Generating ${task.label} (${i + 1} of ${tasks.length})...`
+            : "Generating..."
+        );
+
+        setActiveStep(0);
+        stageTimers.push(
+          ...GENERATION_STEPS.map((_, sIdx) =>
+            setTimeout(() => setActiveStep(sIdx), 2000 + sIdx * 2500)
+          )
+        );
+
+        const idempotencyKey =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${i}-4000-8000-${Math.random().toString(36).slice(2, 10)}`;
+
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token || ""}`
+          },
+          body: JSON.stringify({
+            mode: "magic",
+            category,
+            suitSilhouette,
+            dupattaDrape,
+            necklineCut: "Auto-detected from Chest Design photo",
+            idempotencyKey,
+            outfitType: isSuitCategory ? (suitSilhouette || "Unstitched Suit Set") : outfitType,
+            drapingStyle,
+            blouseStyle,
+            aspectRatio: "4:5",
+            modelId: selectedModel.id,
+            modelName: selectedModel.name,
+            modelFaceUrl: selectedModel.imageUrl || null,
+            customFaceUrl: selectedModel.category === "custom" ? selectedModel.imageUrl : null,
+            faceMode: selectedModel.category === "custom" ? "custom_face" : "keep_original",
+            poseId: selectedPose.id,
+            poseName: selectedPose.name,
+            poseImageUrl: selectedPose.imageUrl,
+            poseDescription: selectedPose.description,
+            backgroundId: selectedBackground.id,
+            backgroundName: selectedBackground.name,
+            backgroundUrl: selectedBackground.imageUrl,
+            backgroundDescription: selectedBackground.description,
+            backgroundMode,
+            hairstyle: selectedHairstyle.name,
+            hairstyleDescription: selectedHairstyle.description,
+            jewellery: selectedJewellery.name,
+            jewelleryDescription: selectedJewellery.description,
+            fabric: selectedFabric.name,
+            fabricDescription: selectedFabric.description,
+            fabricDrapePhysics: selectedFabric.drapePhysics,
+            customNotes: tasks.length > 1 ? `${customStylingNotes} (Variation ${i + 1})` : customStylingNotes,
+            garments: task.garments.slice(0, MAX_GARMENT_REFERENCES)
+          })
+        });
+
+        stageTimers.forEach(clearTimeout);
+
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok || !result?.outputUrl) {
+          const message = result?.error || "Generation request failed";
+          addToast("error", `Failed ${task.label}: ${message}`);
+        } else {
+          successCount++;
+          setOutputUrl(result.outputUrl);
+          setRecentGenerations((prev) => [result.outputUrl, ...prev.filter((u) => u !== result.outputUrl)]);
+        }
+      }
+
+      if (successCount > 0) {
+        addToast(
+          "success",
+          `Generated ${successCount} lookbook photo${successCount > 1 ? "s" : ""} successfully! Deducted ${successCount} Credit${successCount > 1 ? "s" : ""}.`
+        );
+        window.dispatchEvent(new Event("profile-updated"));
+      }
+    } catch (err) {
+      console.error("Batch generation error:", err);
+      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred during synthesis.";
+      addToast("error", errMsg);
+    } finally {
+      stageTimers.forEach(clearTimeout);
+      setLoading(false);
+      setLoadingLabel("Generating...");
+    }
+  };
+
   const viewportStatus = loading ? "loading" : outputUrl ? "ready" : "idle";
 
   return (
@@ -537,45 +681,88 @@ export function MagicModeWorkspace() {
       <LookbookHeader
         icon={<Sparkles className="h-[18px] w-[18px]" />}
         title="Custom Lookbooks"
-        description="Direct the shoot yourself: model, pose, setting and styling, then render a catalog-ready frame from your garment photos."
+        description="Bespoke luxury model lookbooks tailored from your unstitched suit sets and wholesale saree fabrics."
         actions={<WorkflowSwitcher active="custom" />}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* ------------------------------------------------------------ */}
-        {/* Configuration                                                   */}
-        {/* ------------------------------------------------------------ */}
-        <section className="card flex flex-col gap-6 p-4 sm:p-6 lg:col-span-7">
-          <Step index={1} title="Garment references" hint={`Up to ${MAX_GARMENT_REFERENCES} angles`}>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap gap-1.5">
-                {OUTFIT_TYPES.map((type) => (
-                  <OptionChip key={type} active={outfitType === type} onClick={() => setOutfitType(type)}>
-                    {type}
-                  </OptionChip>
-                ))}
+      {/* Category Tabs: Wholesale Saree vs Unstitched Suits */}
+      <div className="flex items-center gap-2 border-b border-line pb-3">
+        <span className="text-xs font-semibold text-ink-faint mr-2">Category:</span>
+        <div className="flex items-center gap-1.5 bg-sand/60 p-1 rounded-xl border border-line">
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard?tab=magic&category=saree")}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              category !== "suits"
+                ? "bg-surface text-ink shadow-xs border border-line"
+                : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            <span>Wholesale Saree</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard?tab=magic&category=suits")}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              category === "suits"
+                ? "bg-surface text-ink shadow-xs border border-line"
+                : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            <span>Unstitched Suits (Build your suits)</span>
+            <span className="pill-neutral text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-fuchsia-accent/15 text-fuchsia-accent border border-fuchsia-accent/30">
+              1 Credit
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Workspace container */}
+      <div className="flex flex-col gap-6 w-full">
+        {/* 1. Garment / Fabric Uploader */}
+        <section className="card p-4 sm:p-6 shadow-sm">
+          {category === "suits" ? (
+            <StructuredSuitUploader
+              suits={suits}
+              onUploadSlot={handleUploadSuitSlot}
+              onRemoveSlot={handleRemoveSuitSlot}
+              onAddSuit={handleAddSuit}
+              onRemoveSuit={handleRemoveSuit}
+              uploading={isUploading}
+              suitSilhouette={suitSilhouette}
+              onSelectSilhouette={setSuitSilhouette}
+              dupattaDrape={dupattaDrape}
+              onSelectDupattaDrape={setDupattaDrape}
+            />
+          ) : (
+            <Step index={1} title="Garment & Blouse Reference" hint="Saree drape, close-ups & dedicated blouse">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {OUTFIT_TYPES.map((type) => (
+                    <OptionChip key={type} active={outfitType === type} onClick={() => setOutfitType(type)}>
+                      {type}
+                    </OptionChip>
+                  ))}
+                </div>
+
+                <StructuredGarmentUploader
+                  slots={structuredSlots}
+                  onUploadSlot={handleUploadSlot}
+                  onRemoveSlot={handleRemoveSlot}
+                  onUpdateNote={handleUpdateSlotNote}
+                  uploading={isUploading}
+                  drapingStyle={drapingStyle}
+                  onSelectDrapingStyle={setDrapingStyle}
+                  blouseStyle={blouseStyle}
+                  onSelectBlouseStyle={setBlouseStyle}
+                />
               </div>
+            </Step>
+          )}
+        </section>
 
-              <GarmentUploader
-                items={photos}
-                max={MAX_GARMENT_REFERENCES}
-                uploading={isUploading}
-                dragActive={isDragOver}
-                onFiles={handleFileUpload}
-                onNote={handleUpdateNote}
-                onRemove={handleRemovePhoto}
-                onClear={clearPhotos}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                emptyLabel="Upload garment photos"
-                emptyHint="Flat-lay, mannequin or folded fabric"
-                addLabel="Add another angle"
-                notePlaceholder="e.g. Silk body drape, zari border detail"
-              />
-            </div>
-          </Step>
-
+        {/* 2. Creative Direction & Advanced Styling */}
+        <section className="card flex flex-col gap-6 p-4 sm:p-6 shadow-sm">
           <Step index={2} title="Creative direction">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <MediaCard
@@ -651,55 +838,78 @@ export function MagicModeWorkspace() {
           </AdvancedPanel>
 
           <GenerateBar
-            note="Costs 1 credit (Rs 49), deducted only on a successful render."
-            loadingLabel="Generating..."
-            disabled={photos.length === 0 || isUploading}
+            note={
+              isMultiSuit
+                ? `Costs ${activeSuits.length} credits (${activeSuits.length} suits), deducted only on successful render.`
+                : `Costs ${batchCount} credit${batchCount > 1 ? "s" : ""} (Rs ${batchCount * 49}), deducted only on successful render.`
+            }
+            loadingLabel={loadingLabel}
+            imageCount={isMultiSuit ? activeSuits.length : batchCount}
+            onImageCountChange={isMultiSuit ? undefined : setBatchCount}
+            countOptions={[1, 2, 3, 4]}
+            batchDescription={
+              category === "suits"
+                ? isMultiSuit
+                  ? `Batch multi-suit: Generating all ${activeSuits.length} configured suits`
+                  : "Generate multiple suit variations or add another suit above"
+                : "Generate multiple unique lookbook variations at a time"
+            }
+            customButtonLabel={
+              isMultiSuit
+                ? `Generate All ${activeSuits.length} Suits (${activeSuits.length} Credits)`
+                : batchCount > 1
+                ? `Generate ${batchCount} Lookbooks (${batchCount} Credits)`
+                : "Generate Lookbook"
+            }
+            disabled={
+              (category === "suits"
+                ? activeSuits.length === 0
+                : structuredSlots.filter((s) => Boolean(s.url)).length === 0 && photos.length === 0) || isUploading
+            }
             loading={loading}
             onGenerate={handleGenerateAll}
           />
         </section>
 
-        {/* ------------------------------------------------------------ */}
-        {/* Preview                                                        */}
-        {/* ------------------------------------------------------------ */}
-        <section className="lg:col-span-5">
-          <div className="lg:sticky lg:top-24">
-            <PreviewViewport
-              status={viewportStatus}
-              url={outputUrl}
-              title="Synthesising your lookbook"
-              hint="Rendering usually takes 8-14 seconds. Keep this tab open."
-              steps={GENERATION_STEPS}
-              activeStep={activeStep}
-              caption={`${selectedModel.name} - ${selectedPose.name}`}
-              summaryTitle="Look recipe"
-              summary={[
-                { label: "Model", value: selectedModel.name },
-                { label: "Pose", value: selectedPose.name },
-                { label: "Setting", value: selectedBackground.name },
-                { label: "Hair", value: selectedHairstyle.name },
-                { label: "Jewellery", value: selectedJewellery.name },
-                { label: "Fabric", value: selectedFabric.name }
-              ]}
-              thumbUrls={recentGenerations}
-              activeThumb={outputUrl}
-              onSelectThumb={setOutputUrl}
-              actions={
-                outputUrl && !loading ? (
-                  <OutputActions
-                    onExpand={() => setShowLightbox(true)}
-                    onDownload={() =>
-                      downloadImage(outputUrl, `florus-custom-lookbook-${Date.now()}.png`)
-                    }
-                    onCopy={() => {
-                      navigator.clipboard.writeText(outputUrl);
-                      addToast("success", "Public lookbook URL copied to clipboard.");
-                    }}
-                  />
-                ) : null
-              }
-            />
-          </div>
+        {/* 3. Rendered Lookbook Preview at the Last */}
+        <section id="magic-preview-section" className="w-full max-w-2xl mx-auto pt-2">
+          <PreviewViewport
+            status={viewportStatus}
+            url={outputUrl}
+            title="Synthesising your lookbook"
+            hint="Rendering usually takes 8-14 seconds. Keep this tab open."
+            steps={GENERATION_STEPS}
+            activeStep={activeStep}
+            caption={`${selectedModel.name} - ${selectedPose.name}`}
+            summaryTitle="Look recipe"
+            summary={[
+              { label: "Model", value: selectedModel.name },
+              { label: "Pose", value: selectedPose.name },
+              { label: "Setting", value: selectedBackground.name },
+              { label: "Hair", value: selectedHairstyle.name },
+              { label: "Jewellery", value: selectedJewellery.name },
+              { label: "Fabric", value: selectedFabric.name }
+            ]}
+            thumbUrls={recentGenerations}
+            activeThumb={outputUrl}
+            onSelectThumb={setOutputUrl}
+            actions={
+              outputUrl && !loading ? (
+                <OutputActions
+                  onExpand={() => setShowLightbox(true)}
+                  onDownload={() =>
+                    downloadImage(outputUrl, `florus-custom-lookbook-${Date.now()}.png`)
+                  }
+                  onDownloadAll={recentGenerations.length > 1 ? downloadAllImages : undefined}
+                  totalCount={recentGenerations.length}
+                  onCopy={() => {
+                    navigator.clipboard.writeText(outputUrl);
+                    addToast("success", "Public lookbook URL copied to clipboard.");
+                  }}
+                />
+              ) : null
+            }
+          />
         </section>
       </div>
 

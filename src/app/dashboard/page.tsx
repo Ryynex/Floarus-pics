@@ -29,6 +29,7 @@ import { clearAuthCookie } from "@/lib/authCookie";
 import { creditsFromBalance, CREDIT_PRICE_INR } from "@/lib/pricing";
 import { GenerateWorkspace } from "@/components/GenerateWorkspace";
 import { MagicModeWorkspace } from "@/components/MagicModeWorkspace";
+import { FlatlayStudioWorkspace } from "@/components/FlatlayStudioWorkspace";
 
 interface Profile {
   id: string;
@@ -262,6 +263,10 @@ function DashboardContent() {
 
       {currentTab === "magic" && (
         <MagicModeWorkspace />
+      )}
+
+      {currentTab === "flatlay" && (
+        <FlatlayStudioWorkspace />
       )}
 
       {currentTab === "history" && (() => {

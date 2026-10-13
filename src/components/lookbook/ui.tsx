@@ -14,6 +14,7 @@ import {
   Info,
   Layers,
   Loader2,
+  Package,
   RefreshCw,
   Sparkles,
   UploadCloud,
@@ -105,11 +106,12 @@ export function ToastStack({
 /* Workflow switcher                                                   */
 /* ------------------------------------------------------------------ */
 
-export type WorkflowKey = "studio" | "custom";
+export type WorkflowKey = "studio" | "custom" | "flatlay";
 
 const WORKFLOWS: { key: WorkflowKey; tab: string; label: string }[] = [
   { key: "studio", tab: "generate", label: "Studio Lookbooks" },
   { key: "custom", tab: "magic", label: "Custom Lookbooks" },
+  { key: "flatlay", tab: "flatlay", label: "Flat-Lay Studio" },
 ];
 
 export function WorkflowSwitcher({ active }: { active: WorkflowKey }) {
@@ -123,7 +125,7 @@ export function WorkflowSwitcher({ active }: { active: WorkflowKey }) {
     >
       {WORKFLOWS.map((wf) => {
         const isActive = wf.key === active;
-        const Icon = wf.key === "studio" ? Layers : Sparkles;
+        const Icon = wf.key === "studio" ? Layers : wf.key === "flatlay" ? Package : Sparkles;
         return (
           <button
             key={wf.key}
@@ -573,34 +575,87 @@ export function GenerateBar({
   disabled,
   loading,
   onGenerate,
+  imageCount,
+  onImageCountChange,
+  countOptions = [1, 2, 3, 4],
+  customButtonLabel,
+  batchDescription,
 }: {
   note: string;
   loadingLabel: string;
   disabled?: boolean;
   loading: boolean;
   onGenerate: () => void;
+  imageCount?: number;
+  onImageCountChange?: (count: number) => void;
+  countOptions?: number[];
+  customButtonLabel?: string;
+  batchDescription?: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-[11px] leading-relaxed text-ink-faint sm:max-w-[14rem]">{note}</p>
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={disabled || loading}
-        className="btn-primary flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold shadow-sm disabled:cursor-not-allowed sm:w-auto"
-      >
-        {loading ? (
-          <>
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            <span>{loadingLabel}</span>
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" />
-            <span>Generate Lookbook</span>
-          </>
-        )}
-      </button>
+    <div className="flex flex-col gap-4 border-t border-line pt-4">
+      {onImageCountChange && countOptions && countOptions.length > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-sand/40 border border-line p-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-fuchsia-accent/15 text-fuchsia-accent">
+              <Sparkles className="h-3.5 w-3.5" />
+            </span>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-ink">
+                Batch Generation
+              </span>
+              <span className="text-[11px] text-ink-faint">
+                {batchDescription || "Generate multiple unique variations at a time"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-surface/80 p-1 rounded-xl border border-line">
+            {countOptions.map((n) => {
+              const active = imageCount === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => onImageCountChange(n)}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    active
+                      ? "bg-fuchsia-accent text-white shadow-xs"
+                      : "text-ink-soft hover:text-ink hover:bg-sand"
+                  }`}
+                >
+                  {n}x
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] leading-relaxed text-ink-faint sm:max-w-md">{note}</p>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={disabled || loading}
+          className="btn-primary flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold shadow-sm disabled:cursor-not-allowed sm:w-auto"
+        >
+          {loading ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              <span>{loadingLabel}</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              <span>
+                {customButtonLabel || (imageCount && imageCount > 1 ? `Generate ${imageCount} Lookbooks` : "Generate Lookbook")}
+              </span>
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -896,34 +951,50 @@ export function OutputActions({
   onExpand,
   onDownload,
   onCopy,
+  onDownloadAll,
+  totalCount,
 }: {
   onExpand: () => void;
   onDownload: () => void;
   onCopy?: () => void;
+  onDownloadAll?: () => void;
+  totalCount?: number;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <button
-        type="button"
-        onClick={onExpand}
-        className="btn-secondary flex cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold"
-      >
-        <Expand className="h-3.5 w-3.5" />
-        Fullscreen
-      </button>
-      <button
-        type="button"
-        onClick={onDownload}
-        className="btn-primary flex cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold shadow-sm"
-      >
-        <Download className="h-3.5 w-3.5" />
-        Download
-      </button>
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onExpand}
+          className="btn-secondary flex cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold"
+        >
+          <Expand className="h-3.5 w-3.5" />
+          Fullscreen
+        </button>
+        <button
+          type="button"
+          onClick={onDownload}
+          className="btn-primary flex cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold shadow-sm"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download
+        </button>
+      </div>
+      {onDownloadAll && totalCount && totalCount > 1 ? (
+        <button
+          type="button"
+          onClick={onDownloadAll}
+          className="btn-secondary flex cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold border-fuchsia-accent/30 text-fuchsia-accent hover:bg-fuchsia-accent/10"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download All {totalCount} Images
+        </button>
+      ) : null}
       {onCopy ? (
         <button
           type="button"
           onClick={onCopy}
-          className="btn-secondary col-span-2 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-medium"
+          className="btn-secondary flex cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-medium"
         >
           <Copy className="h-3.5 w-3.5" />
           Copy shareable link

@@ -73,314 +73,214 @@ const FACE_MODES: {
 ];
 
 export function GenerateWorkspace() {
-  // Hydrate lazily inside useState initializers: localStorage is read once per
-  // mount, never during ordinary re-renders.
-  // 1. Master Photoshoot Reference Anchor (Pose, Hands & Environment)
   const [selectedShoot, setSelectedShoot] = useState<MasterShoot>(
     () => getSavedStudioPreferences()?.selectedShoot ?? MASTER_SHOOTS[0]
   );
-  const [isShootModalOpen, setIsShootModalOpen] = useState(false);
-
-  // 2. Model Face Option: "keep_original" | "custom_face" | "random_face"
+  const [selectedModel, setSelectedModel] = useState<CatalogModel>(
+    () => getSavedStudioPreferences()?.selectedModel ?? PRESET_MODELS[0]
+  );
   const [faceMode, setFaceMode] = useState<"keep_original" | "custom_face" | "random_face">(
     () => getSavedStudioPreferences()?.faceMode ?? "keep_original"
   );
-  const [selectedModel, setSelectedModel] = useState<CatalogModel>(
-    () => {
-      const prefs = getSavedStudioPreferences();
-      const models = getSavedCustomModels();
-      return prefs?.selectedModel ?? (models.length > 0 ? models[0] : PRESET_MODELS[0]);
-    }
-  );
-  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
-
-  // 3. Garment Fabric Selection (15 Main Saree Weaves)
   const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
-    () => getSavedStudioPreferences()?.selectedFabric ?? getSavedFabricPreference() ?? PRESET_FABRICS[0]
+    () => getSavedFabricPreference() ?? getSavedStudioPreferences()?.selectedFabric ?? PRESET_FABRICS[0]
   );
-  const [isFabricModalOpen, setIsFabricModalOpen] = useState(false);
-
-  // 3. Outfit & Product Garment Uploads
-  // Studio mode has no outfit-type selector, so this is read-only and persisted.
-  const [outfitType] = useState<string>(
-    () => getSavedStudioPreferences()?.outfitType ?? "Wholesale Saree (6-Yard)"
-  );
-  const [garments, setGarments] = useState<UploadedGarment[]>(() =>
-    getSavedGarments("studio").slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
+  const [garments, setGarments] = useState<UploadedGarment[]>(() => {
+    return getSavedGarments("studio").slice(0, MAX_GARMENT_REFERENCES).map((g, idx) => ({
       id: g.id,
       url: g.url,
       note: g.note || "",
-      slotLabel: g.slotLabel || `Fabric Angle ${idx + 1}`
-    }))
-  );
+      slotId: (g as any).slotId || `slot-${idx + 1}`,
+      slotLabel: (g as any).slotLabel || DEFAULT_SLOT_LABELS[idx] || `Fabric Layer ${idx + 1}`
+    }));
+  });
+  const [outfitType] = useState<string>("Wholesale Saree");
   const [customStylingNotes, setCustomStylingNotes] = useState<string>(
     () => getSavedStudioPreferences()?.customStylingNotes ?? ""
   );
+
+  // Batch Generation State
+  const [batchCount, setBatchCount] = useState<number>(1);
+  const [loadingLabel, setLoadingLabel] = useState<string>("Generating...");
+
+  const [isShootModalOpen, setIsShootModalOpen] = useState(false);
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
+  const [isFabricModalOpen, setIsFabricModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
+  const [recentGenerations, setRecentGenerations] = useState<string[]>([]);
+  const [showLightbox, setShowLightbox] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [isStylingOpen, setIsStylingOpen] = useState(false);
 
-  // Execution & Output States
-  const [loading, setLoading] = useState(false);
-  const [outputUrl, setOutputUrl] = useState<string | null>(
-    () => getSavedStudioPreferences()?.outputUrl ?? null
-  );
-  const [showLightbox, setShowLightbox] = useState(false);
-  const [blurPlaceholderUrl, setBlurPlaceholderUrl] = useState<string | null>(null);
-
-  // Automatically save all user choices locally whenever any option changes
   useEffect(() => {
     saveStudioPreferences({
       selectedShoot,
-      faceMode,
       selectedModel,
+      faceMode,
       selectedFabric,
-      outfitType,
-      customStylingNotes,
-      outputUrl
+      customStylingNotes
     });
-    saveFabricPreference(selectedFabric);
-  }, [
-    selectedShoot,
-    faceMode,
-    selectedModel,
-    selectedFabric,
-    outfitType,
-    customStylingNotes,
-    outputUrl
-  ]);
+  }, [selectedShoot, selectedModel, faceMode, selectedFabric, customStylingNotes]);
 
-  // Toast Notifications
   const { toasts, toast: addToast, dismiss: dismissToast } = useToasts();
 
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  // Upload Garment Photos to Supabase Storage with Client Compression (Max MAX_GARMENT_REFERENCES)
-  const handleFiles = async (fileList: FileList) => {
-    const files = Array.from(fileList);
-    if (files.length === 0) return;
-
-    const remainingSlots = Math.max(0, MAX_GARMENT_REFERENCES - garments.length);
-    if (remainingSlots <= 0) {
-      addToast("error", `Maximum ${MAX_GARMENT_REFERENCES} garment reference photos reached. Please remove a photo to upload another.`);
-      return;
-    }
-
-    const filesToUpload = files.slice(0, remainingSlots);
-    if (files.length > remainingSlots) {
-      addToast("info", `Uploading ${remainingSlots} photo(s) to respect the maximum limit of ${MAX_GARMENT_REFERENCES} garments.`);
-    }
-
-    setIsUploading(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error("Unauthorized: Session is required");
-      const folder = session.user.id;
-
-      const newGarments: UploadedGarment[] = [];
-
-      for (let i = 0; i < filesToUpload.length; i++) {
-        const rawFile = filesToUpload[i];
-        // Automatically compress garment photo client-side before upload
-        const compressedFile = await compressImageClient(rawFile, 640, 0.85);
-        const fileName = `${folder}/uploads/garment-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
-
-        const { error } = await supabase.storage
-          .from("generated-lookbooks")
-          .upload(fileName, compressedFile, {
-            contentType: compressedFile.type,
-            upsert: true
-          });
-
-        if (error) throw error;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from("generated-lookbooks")
-          .getPublicUrl(fileName);
-
-        newGarments.push({
-          id: `garm-${Date.now()}-${i}`,
-          url: publicUrl,
-          note: "",
-          slotLabel: DEFAULT_SLOT_LABELS[garments.length + i] || `Fabric Angle ${garments.length + i + 1}`
-        });
-      }
-
-      setGarments((prev) => {
-        const updated = [...prev, ...newGarments].slice(0, MAX_GARMENT_REFERENCES);
-        saveGarmentsToStorage("studio", 
-          updated.map((g) => ({
-            id: g.id,
-            url: g.url,
-            note: g.note,
-            slotLabel: g.slotLabel
-          }))
-        );
-        return updated;
-      });
-      addToast("success", `Compressed & saved ${newGarments.length} fabric photo(s) permanently!`);
-    } catch (err) {
-      console.error("Upload error:", err);
-      const errMsg = err instanceof Error ? err.message : "Upload failed";
-      addToast("error", errMsg);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleUpdateNote = (id: string, note: string) => {
-    setGarments((prev) => {
-      const updated = prev.map((g) => (g.id === id ? { ...g, note } : g));
-      saveGarmentsToStorage("studio", 
-        updated.map((g) => ({
-          id: g.id,
-          url: g.url,
-          note: g.note,
-          slotLabel: g.slotLabel
-        }))
-      );
-      return updated;
-    });
-  };
-
-  const handleRemoveGarment = (id: string) => {
-    setGarments((prev) => {
-      const updated = prev.filter((g) => g.id !== id);
-      saveGarmentsToStorage("studio", 
-        updated.map((g) => ({
-          id: g.id,
-          url: g.url,
-          note: g.note,
-          slotLabel: g.slotLabel
-        }))
-      );
-      return updated;
-    });
-  };
-
-  // Custom Model Upload Handler (passed to ModelPickerModal)
   const handleCustomModelUpload = async (file: File): Promise<string | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return null;
-      const folder = session.user.id;
       const compressedFile = await compressImageClient(file, 640, 0.85);
-      const fileName = `${folder}/models/custom-model-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
 
-      const { error } = await supabase.storage
-        .from("generated-lookbooks")
-        .upload(fileName, compressedFile, { contentType: compressedFile.type, upsert: true });
+      if (session?.user) {
+        const folder = session.user.id;
+        const fileName = `${folder}/models/custom-model-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+        const { error } = await supabase.storage
+          .from("generated-lookbooks")
+          .upload(fileName, compressedFile, { contentType: compressedFile.type, upsert: true });
 
-      if (error) throw error;
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage
+            .from("generated-lookbooks")
+            .getPublicUrl(fileName);
+          return publicUrl;
+        }
+      }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("generated-lookbooks")
-        .getPublicUrl(fileName);
-
-      return publicUrl;
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(compressedFile);
+      });
     } catch (err) {
       console.error("Custom model upload failed:", err);
       return null;
     }
   };
 
-  // Generate Catalog Lookbook via Florus AI Multi-Image Engine
-  const handleGenerate = async () => {
-    if (garments.length === 0) {
-      addToast("error", "Please upload at least one garment fabric reference photo.");
+  const handleFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const available = MAX_GARMENT_REFERENCES - garments.length;
+    if (available <= 0) {
+      addToast("info", `Maximum ${MAX_GARMENT_REFERENCES} garment photos allowed.`);
       return;
     }
 
-    setLoading(true);
-    setOutputUrl(null);
-    setBlurPlaceholderUrl(null);
+    const toProcess = fileArray.slice(0, available);
+    setIsUploading(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Session expired, please sign in again");
+      const folder = session?.user?.id || "guest";
+      const uploaded: UploadedGarment[] = [];
 
-      // One idempotency key per logical generation: a network retry of this
-      // exact request cannot charge the wallet twice.
-      const idempotencyKey =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-0000-4000-8000-000000000000`.replace(/[^0-9a-f-]/gi, "0");
+      for (let i = 0; i < toProcess.length; i++) {
+        const file = toProcess[i];
+        const compressedFile = await compressImageClient(file, 640, 0.85);
+        let finalUrl = "";
 
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token || ""}`
-        },
-        body: JSON.stringify({
-          mode: "sarees",
-          idempotencyKey,
-          outfitType,
-          aspectRatio: "4:5",
-          
-          // Master photoshoot reference (Anchors hands, pose, and ambient lighting)
-          shootId: selectedShoot.id,
-          shootTitle: selectedShoot.title,
-          shootImageUrl: selectedShoot.imageUrl,
-          shootSetting: selectedShoot.settingTitle,
-          shootPose: selectedShoot.poseDescription,
+        if (session?.user) {
+          try {
+            const fileName = `${folder}/uploads/studio-${Date.now()}-${i}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+            const { error: uploadErr } = await supabase.storage
+              .from("generated-lookbooks")
+              .upload(fileName, compressedFile, {
+                contentType: compressedFile.type,
+                upsert: true
+              });
 
-          // Face Mode
-          faceMode,
-          customFaceUrl: faceMode === "custom_face" ? (selectedModel.imageUrl || null) : null,
+            if (!uploadErr) {
+              const { data: { publicUrl } } = supabase.storage
+                .from("generated-lookbooks")
+                .getPublicUrl(fileName);
+              finalUrl = publicUrl;
+            }
+          } catch (storageErr) {
+            console.warn("Storage upload notice:", storageErr);
+          }
+        }
 
-          // Fabric Specification
-          fabric: selectedFabric.name,
-          fabricDescription: selectedFabric.description,
-          fabricDrapePhysics: selectedFabric.drapePhysics,
+        if (!finalUrl) {
+          finalUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(compressedFile);
+          });
+        }
 
-          customNotes: customStylingNotes,
-          // Strictly limit to the maximum garment reference count
-          garments: garments.slice(0, MAX_GARMENT_REFERENCES).map((g) => ({
+        const slotIndex = garments.length + i;
+        uploaded.push({
+          id: `garment-${Date.now()}-${i}`,
+          url: finalUrl,
+          note: "",
+          slotId: `slot-${slotIndex + 1}`,
+          slotLabel: DEFAULT_SLOT_LABELS[slotIndex] || `Fabric Layer ${slotIndex + 1}`
+        });
+      }
+
+      setGarments((prev) => {
+        const next = [...prev, ...uploaded];
+        saveGarmentsToStorage(
+          "studio",
+          next.map((g) => ({
+            id: g.id,
             url: g.url,
             note: g.note,
             slotId: g.slotId,
             slotLabel: g.slotLabel
           }))
-        })
+        );
+        return next;
       });
 
-      const result = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const message = result?.error || "Generation request failed";
-        if (response.status === 503) {
-          addToast("error", `${message} No credits were deducted.`);
-        } else {
-          addToast("error", message);
-        }
-        return;
-      }
-
-      setOutputUrl(result.outputUrl);
-      setBlurPlaceholderUrl(result.blurPlaceholderUrl ?? null);
-      const remaining =
-        typeof result.remainingCredits === "number"
-          ? result.remainingCredits
-          : typeof result.newBalance === "number"
-            ? creditsFromBalance(result.newBalance)
-            : null;
-      addToast(
-        "success",
-        `Lookbook generated successfully! Deducted 1 Credit.${remaining !== null ? ` Balance: ${remaining} Credits.` : ""}`
-      );
-
-      window.dispatchEvent(new Event("profile-updated"));
+      addToast("success", `Uploaded ${uploaded.length} garment photo${uploaded.length > 1 ? "s" : ""}.`);
     } catch (err) {
-      console.error("Generation error:", err);
-      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred during synthesis.";
-      addToast("error", errMsg);
+      console.error("Garment upload error:", err);
+      addToast("error", "Failed to upload garment photo.");
     } finally {
-      setLoading(false);
+      setIsUploading(false);
     }
   };
 
-  // Download Lossless PNG
+  const handleRemoveGarment = (id: string) => {
+    setGarments((prev) => {
+      const next = prev.filter((g) => g.id !== id);
+      saveGarmentsToStorage(
+        "studio",
+        next.map((g) => ({
+          id: g.id,
+          url: g.url,
+          note: g.note,
+          slotId: g.slotId,
+          slotLabel: g.slotLabel
+        }))
+      );
+      return next;
+    });
+  };
+
+  const handleUpdateNote = (id: string, note: string) => {
+    setGarments((prev) => {
+      const next = prev.map((g) => (g.id === id ? { ...g, note } : g));
+      saveGarmentsToStorage(
+        "studio",
+        next.map((g) => ({
+          id: g.id,
+          url: g.url,
+          note: g.note,
+          slotId: g.slotId,
+          slotLabel: g.slotLabel
+        }))
+      );
+      return next;
+    });
+  };
+
+  const clearGarments = () => {
+    setGarments([]);
+    saveGarmentsToStorage("studio", []);
+  };
+
   const downloadImage = async (url: string, filename: string) => {
     try {
       const res = await fetch(url);
@@ -398,9 +298,102 @@ export function GenerateWorkspace() {
     }
   };
 
-  const clearGarments = () => {
-    setGarments([]);
-    saveGarmentsToStorage("studio", []);
+  const downloadAllImages = async () => {
+    for (let i = 0; i < recentGenerations.length; i++) {
+      const url = recentGenerations[i];
+      await downloadImage(url, `florus-studio-lookbook-${i + 1}-${Date.now()}.png`);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  };
+
+  // Submit generation request (Supports Multiple Images Batch)
+  const handleGenerate = async () => {
+    if (garments.length === 0) {
+      addToast("error", "Please upload at least one garment fabric reference photo.");
+      return;
+    }
+
+    setLoading(true);
+    setTimeout(() => {
+      document.getElementById("studio-preview-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+
+    let successCount = 0;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Session expired, please sign in again");
+
+      for (let i = 0; i < batchCount; i++) {
+        setLoadingLabel(
+          batchCount > 1
+            ? `Rendering photo ${i + 1} of ${batchCount}...`
+            : "Generating..."
+        );
+
+        const idempotencyKey =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${i}-4000-8000-${Math.random().toString(36).slice(2, 10)}`;
+
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token || ""}`
+          },
+          body: JSON.stringify({
+            mode: "sarees",
+            idempotencyKey,
+            outfitType,
+            aspectRatio: "4:5",
+            shootId: selectedShoot.id,
+            shootTitle: selectedShoot.title,
+            shootImageUrl: selectedShoot.imageUrl,
+            shootSetting: selectedShoot.settingTitle,
+            shootPose: selectedShoot.poseDescription,
+            faceMode,
+            customFaceUrl: faceMode === "custom_face" ? (selectedModel.imageUrl || null) : null,
+            fabric: selectedFabric.name,
+            fabricDescription: selectedFabric.description,
+            customNotes: batchCount > 1 ? `${customStylingNotes} (Angle variation ${i + 1})` : customStylingNotes,
+            garments: garments.slice(0, MAX_GARMENT_REFERENCES).map((g) => ({
+              url: g.url,
+              note: g.note,
+              slotId: g.slotId,
+              slotLabel: g.slotLabel
+            }))
+          })
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok || !result?.outputUrl) {
+          const message = result?.error || "Generation request failed";
+          addToast("error", `Photo ${i + 1} failed: ${message}`);
+        } else {
+          successCount++;
+          setOutputUrl(result.outputUrl);
+          setBlurPlaceholderUrl(result.blurPlaceholderUrl ?? null);
+          setRecentGenerations((prev) => [result.outputUrl, ...prev.filter((u) => u !== result.outputUrl)]);
+        }
+      }
+
+      if (successCount > 0) {
+        addToast(
+          "success",
+          `Generated ${successCount} studio photo${successCount > 1 ? "s" : ""} successfully! Deducted ${successCount} Credit${successCount > 1 ? "s" : ""}.`
+        );
+        window.dispatchEvent(new Event("profile-updated"));
+      }
+    } catch (err) {
+      console.error("Studio generation error:", err);
+      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred during synthesis.";
+      addToast("error", errMsg);
+    } finally {
+      setLoading(false);
+      setLoadingLabel("Generating...");
+    }
   };
 
   const viewportStatus = loading ? "loading" : outputUrl ? "ready" : "idle";
@@ -414,11 +407,12 @@ export function GenerateWorkspace() {
         actions={<WorkflowSwitcher active="studio" />}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* ------------------------------------------------------------ */}
-        {/* Configuration                                                   */}
-        {/* ------------------------------------------------------------ */}
-        <section className="card flex flex-col gap-6 p-4 sm:p-6 lg:col-span-7">
+      {/* ------------------------------------------------------------ */}
+      {/* Unified Studio Layout (Preview Rendered at the Last)         */}
+      {/* ------------------------------------------------------------ */}
+      <div className="flex flex-col gap-6 w-full">
+        {/* 1. Garment References */}
+        <section className="card p-4 sm:p-6 shadow-sm">
           <Step
             index={1}
             title="Garment references"
@@ -452,7 +446,10 @@ export function GenerateWorkspace() {
               notePlaceholder="e.g. Front pallu close-up, contrast blouse"
             />
           </Step>
+        </section>
 
+        {/* 2. Creative Direction & Styling */}
+        <section className="card flex flex-col gap-6 p-4 sm:p-6 shadow-sm">
           <Step index={2} title="Photoshoot reference" hint={outfitType}>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -551,46 +548,56 @@ export function GenerateWorkspace() {
           </AdvancedPanel>
 
           <GenerateBar
-            note="Costs 1 credit, deducted only on a successful render."
-            loadingLabel="Generating..."
+            note={`Costs ${batchCount} credit${batchCount > 1 ? "s" : ""}, deducted only on successful render.`}
+            loadingLabel={loadingLabel}
+            imageCount={batchCount}
+            onImageCountChange={setBatchCount}
+            countOptions={[1, 2, 3, 4]}
+            batchDescription="Generate multiple unique angles & poses at a time"
+            customButtonLabel={
+              batchCount > 1
+                ? `Generate ${batchCount} Studio Photos (${batchCount} Credits)`
+                : "Generate Lookbook"
+            }
             disabled={garments.length === 0 || isUploading}
             loading={loading}
             onGenerate={handleGenerate}
           />
         </section>
 
-        {/* ------------------------------------------------------------ */}
-        {/* Preview                                                        */}
-        {/* ------------------------------------------------------------ */}
-        <section className="lg:col-span-5">
-          <div className="lg:sticky lg:top-24">
-            <PreviewViewport
-              status={viewportStatus}
-              url={outputUrl}
-              placeholderUrl={blurPlaceholderUrl}
-              title="Synthesising your lookbook"
-              hint="Rendering usually takes 8-14 seconds. Keep this tab open."
-              steps={GENERATION_STEPS}
-              caption={selectedShoot.title}
-              summaryTitle="Look recipe"
-              summary={[
-                { label: "Shoot", value: selectedShoot.title },
-                { label: "Setting", value: selectedShoot.settingTitle },
-                { label: "Lighting", value: selectedShoot.lighting },
-                { label: "Fabric", value: selectedFabric.name },
-                { label: "Face", value: FACE_MODES.find((m) => m.value === faceMode)?.label ?? "-" },
-                { label: "References", value: `${garments.length} photo${garments.length === 1 ? "" : "s"}` }
-              ]}
-              actions={
-                outputUrl && !loading ? (
-                  <OutputActions
-                    onExpand={() => setShowLightbox(true)}
-                    onDownload={() => downloadImage(outputUrl, "florus-studio-lookbook.png")}
-                  />
-                ) : null
-              }
-            />
-          </div>
+        {/* 3. Rendered Studio Preview at the Last */}
+        <section id="studio-preview-section" className="w-full max-w-2xl mx-auto pt-2">
+          <PreviewViewport
+            status={viewportStatus}
+            url={outputUrl}
+            placeholderUrl={blurPlaceholderUrl}
+            title="Synthesising your lookbook"
+            hint="Rendering usually takes 8-14 seconds. Keep this tab open."
+            steps={GENERATION_STEPS}
+            caption={selectedShoot.title}
+            summaryTitle="Look recipe"
+            summary={[
+              { label: "Shoot", value: selectedShoot.title },
+              { label: "Setting", value: selectedShoot.settingTitle },
+              { label: "Lighting", value: selectedShoot.lighting },
+              { label: "Fabric", value: selectedFabric.name },
+              { label: "Face", value: FACE_MODES.find((m) => m.value === faceMode)?.label ?? "-" },
+              { label: "References", value: `${garments.length} photo${garments.length === 1 ? "" : "s"}` }
+            ]}
+            thumbUrls={recentGenerations}
+            activeThumb={outputUrl}
+            onSelectThumb={setOutputUrl}
+            actions={
+              outputUrl && !loading ? (
+                <OutputActions
+                  onExpand={() => setShowLightbox(true)}
+                  onDownload={() => downloadImage(outputUrl, "florus-studio-lookbook.png")}
+                  onDownloadAll={recentGenerations.length > 1 ? downloadAllImages : undefined}
+                  totalCount={recentGenerations.length}
+                />
+              ) : null
+            }
+          />
         </section>
       </div>
 

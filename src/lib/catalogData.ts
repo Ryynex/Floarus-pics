@@ -272,6 +272,8 @@ export interface SavedMagicPreferences {
   selectedJewellery?: CatalogJewellery;
   selectedFabric?: CatalogFabric;
   outfitType?: string;
+  drapingStyle?: string;
+  blouseStyle?: string;
   customStylingNotes?: string;
   outputUrl?: string | null;
   recentGenerations?: string[];

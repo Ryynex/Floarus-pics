@@ -9,6 +9,7 @@ import dns from "dns/promises";
 import sharp from "sharp";
 import { MAX_GARMENT_REFERENCES } from "@/lib/catalogData";
 import { CREDIT_PRICE_INR, creditsFromBalance } from "@/lib/pricing";
+import { STAGING_TEMPLATES } from "@/lib/flatlayData";
 
 // No silent placeholder fallbacks: a missing env var must fail loudly as a 503
 // instead of building a client that points at "placeholder.supabase.co".
@@ -293,7 +294,7 @@ async function readBodyCapped(res: Response): Promise<Buffer> {
 // so it is length-capped and stripped of control characters, and the enum-like
 // fields are validated rather than silently falling through to defaults.
 // ---------------------------------------------------------------------------
-const VALID_MODES = new Set(["sarees", "magic"]);
+const VALID_MODES = new Set(["sarees", "magic", "flatlay"]);
 const VALID_FACE_MODES = new Set(["keep_original", "custom_face", "random_face"]);
 const VALID_ASPECT_RATIOS = new Set(["4:5", "3:4", "9:16", "1:1"]);
 const VALID_BACKGROUND_MODES = new Set(["inspiration", "custom"]);
@@ -712,6 +713,14 @@ export async function POST(req: NextRequest) {
       customNotes: rawCustomNotes = "",
       garments = [],
       idempotencyKey = null,
+
+      // Category & Suit specific directives
+      stagingTemplateUrl: rawStagingTemplateUrl = "/reference_suits/dark-teak.jpg",
+      stagingTemplateName: rawStagingTemplateName = "Dark teak",
+      category: rawCategory = "saree",
+      suitSilhouette: rawSuitSilhouette = "Straight Cut Kurta Set",
+      dupattaDrape: rawDupattaDrape = "Pinned on One Shoulder",
+      necklineCut: rawNecklineCut = "Round Neck with Slit (Signature)",
     } = body as Record<string, unknown>;
 
     // 2b. Enum validation: unknown values must not silently fall through to defaults.
@@ -736,7 +745,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 2c. Free text is interpolated into the paid prompt: cap and sanitise it.
-    const outfitType = clampText(rawOutfitType, 200, "ethnic outfit");
+    const stagingTemplateUrl = clampText(rawStagingTemplateUrl, 8000, "/reference_suits/dark-teak.jpg");
+    const stagingTemplateName = clampText(rawStagingTemplateName, 200, "Dark teak");
+    const category = typeof rawCategory === "string" && rawCategory === "suits" ? "suits" : "saree";
+    const suitSilhouette = clampText(rawSuitSilhouette, 200, "Straight Cut Kurta Set");
+    const dupattaDrape = clampText(rawDupattaDrape, 200, "Pinned on One Shoulder");
+    const necklineCut = clampText(rawNecklineCut, 200, "Round Neck with Slit (Signature)");
+    const outfitType = clampText(rawOutfitType, 200, category === "suits" ? "Unstitched Suit Set" : "Wholesale Saree (6-Yard)");
     const shootTitle = clampText(rawShootTitle, 200, "Morning Sun Botanical Garden");
     const shootSetting = clampText(rawShootSetting, 400, "");
     const shootImageUrl = clampText(rawShootImageUrl, 8000, "");
@@ -759,13 +774,15 @@ export async function POST(req: NextRequest) {
     const modelFaceUrl = optionalText(rawModelFaceUrl, 8000);
     const poseId = clampText(rawPoseId, 100, "");
     const backgroundId = clampText(rawBackgroundId, 100, "");
-
+    const drapingStyle = clampText((body as any).drapingStyle, 200, "Default drape");
+    const blouseStyle = clampText((body as any).blouseStyle, 200, "Auto-coordinate with border & zari (Default)");
 
     interface GarmentItem {
       url: string;
       note?: string;
       slotId?: string;
       slotLabel?: string;
+      role?: string;
     }
 
     const rawGarmentList: unknown[] = Array.isArray(garments) ? (garments as unknown[]) : [];
@@ -776,6 +793,7 @@ export async function POST(req: NextRequest) {
         note: typeof g.note === "string" ? clampText(g.note, 400, "") : "",
         slotId: typeof g.slotId === "string" ? clampText(g.slotId, 60, "") : undefined,
         slotLabel: typeof g.slotLabel === "string" ? clampText(g.slotLabel, 60, "") : undefined,
+        role: typeof g.role === "string" ? clampText(g.role, 60, "") : undefined,
       }));
 
     // Strictly enforce the garment reference ceiling
@@ -834,6 +852,7 @@ export async function POST(req: NextRequest) {
       url: string;
       note: string;
       slotLabel: string;
+      role?: string;
     }
     const garmentFailures: string[] = [];
     const preparedGarments: PreparedGarment[] = (
@@ -841,7 +860,12 @@ export async function POST(req: NextRequest) {
         activeGarments.map(async (g, idx): Promise<PreparedGarment | null> => {
           try {
             const url = await retryOperation(() => getCompressedFalUrl(g.url, 640), 2, 1000);
-            return { url, note: g.note || "", slotLabel: g.slotLabel || "Garment" };
+            return {
+              url,
+              note: g.note || "",
+              slotLabel: g.slotLabel || "Garment",
+              role: g.role,
+            };
           } catch (err) {
             const reason = err instanceof Error ? err.message : "unknown error";
             console.error(`Garment reference ${idx + 1} failed to prepare:`, reason);
@@ -892,6 +916,7 @@ export async function POST(req: NextRequest) {
         index: number;
         note?: string;
         slotLabel?: string;
+        role?: string;
       }
       const refList: RefEntry[] = [];
 
@@ -966,6 +991,7 @@ export async function POST(req: NextRequest) {
           index: idx,
           note: garment.note,
           slotLabel: garment.slotLabel,
+          role: garment.role,
         });
         garmentIndices.push(idx);
       }
@@ -999,8 +1025,12 @@ export async function POST(req: NextRequest) {
       const fabricTitleDescriptor = isAutoDetectFabric ? "" : `${fabric} `;
 
 
+      const isSuitMode = category === "suits" || outfitType.toLowerCase().includes("suit") || outfitType.toLowerCase().includes("kurta");
+
       const promptParts: string[] = [
-        `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || "ethnic outfit"}.`
+        bgRef
+          ? `High-end luxury Indian fashion catalog editorial photograph captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+          : `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
       ];
 
       // Identity. flux-2-pro/edit transforms its FIRST image, so this section
@@ -1011,15 +1041,17 @@ export async function POST(req: NextRequest) {
       //    dominate the output — the model cannot un-see a face in the base)
       if (faceRef) {
         promptParts.push(
-          `Identity & Face Anchor: The person in @image${faceRef.index} is the ONLY identity for this lookbook. Preserve her exact facial features, facial structure, eye shape, skin tone, and expression with zero drift. Compose the complete head-to-toe full-body editorial portrait around this identity — @image${faceRef.index} is the anchor to transform, not a face to average with anyone else.`
+          `Identity & Facial Realism: The person in @image${faceRef.index} is the ONLY facial identity for this lookbook. Preserve her exact bone structure, facial contours, almond eye shape, nose bridge, lip fullness, skin undertone, and warm expression with zero drift. ` +
+          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism. Authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering (translucent real skin). Expressive, living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine natural creases. Absolutely ZERO plastic airbrushing, ZERO waxy AI smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness. She must look 100% like a real living human woman photographed in real life.`
         );
       } else if (poseRef) {
         promptParts.push(
-          `IDENTITY REPLACEMENT (MANDATORY): The woman visible in @image${poseRef.index} is a body-geometry stand-in only. REPLACE her face, hairstyle, and entire physical identity with a newly synthesized ${modelName || "Indian fashion model"} — natural radiant skin, refined features, confident elegant catalog expression. RETAIN ONLY her skeletal posture, limb angles, and hand placement. Do NOT retain, blend, or leak any facial features, hair, or identity from @image${poseRef.index} into the output.`
+          `IDENTITY REPLACEMENT & LIFELIKE FACIAL REALISM (MANDATORY): The woman visible in @image${poseRef.index} is a body-geometry stand-in only. REPLACE her face, hairstyle, and entire physical identity with a newly synthesized ${modelName || "Indian fashion model"}. ` +
+          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render her face with photorealistic, breathtaking human realism: natural radiant skin with fine visible pores, natural epidermal texture, soft matte finish with subtle skin moisture, expressive lifelike eyes with realistic iris depth and catchlights, individual eyelashes and natural eyebrow hairs, and natural lip texture. Zero plastic airbrushing, zero waxy smoothing, zero artificial filters. RETAIN ONLY her skeletal posture, limb angles, and hand placement from @image${poseRef.index}. Do NOT retain, blend, or leak any facial features, hair, or identity from @image${poseRef.index} into the output.`
         );
       } else {
         promptParts.push(
-          `Model Characteristics: Beautiful Indian woman (${modelName || "Indian fashion model"}) with natural radiant skin, refined features, and a confident elegant catalog expression.`
+          `Model Characteristics & Lifelike Facial Realism: Beautiful Indian woman (${modelName || "Indian fashion model"}) with stunning lifelike facial detailing: authentic skin texture with visible micro-pores, fine natural epidermal grain, natural subsurface light scattering, warm radiant eyes with detailed iris reflection and individual eyelashes, natural eyebrow hair definition, and soft matte non-plastic skin. Confident, elegant, authentic catalog expression.`
         );
       }
 
@@ -1028,14 +1060,16 @@ export async function POST(req: NextRequest) {
         // Pose is a secondary reference (identity lives at image 1): pull the
         // body geometry only, never the scene or the person.
         promptParts.push(
-          `Pose & Body Posture: Adopt the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
-          `Use @image${poseRef.index} strictly as a pose and hand-anatomy reference: do not reproduce its studio setting, its background, or its casual clothing, and do not adopt the identity of the person in it.`
+          `Pose & Body Posture: Adopt the physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
+          `Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity of the person in it. ` +
+          `MANDATORY SCALE & FRAMING DECOUPLING: Extract ONLY the skeletal posture and hand gestures from @image${poseRef.index}. Do NOT inherit or copy the tight studio cropping, close magnification, or canvas scaling from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
         );
       } else if (poseRef) {
         // Pose photo is the edit base: keep the strong discard directive.
         promptParts.push(
           `Pose & Body Posture: Extract and replicate the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
-          `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output.`
+          `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output. ` +
+          `MANDATORY SCALE & FRAMING DECOUPLING: Extract ONLY the skeletal posture and hand gestures from @image${poseRef.index}. Do NOT inherit or copy the tight studio cropping, close magnification, or canvas scaling from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
         );
       } else if (poseDescription) {
         promptParts.push(
@@ -1045,19 +1079,20 @@ export async function POST(req: NextRequest) {
         promptParts.push(`Pose: Elegant natural standing pose with graceful hand placement.`);
       }
 
-      // Background & Realistic Environmental Placement
+      // Background & Seamless On-Location Integration
       if (bgRef) {
         promptParts.push(
-          `MANDATORY BACKGROUND & SCENE REPLACEMENT: Completely remove, discard, and replace the background, backdrop, and surroundings from @image1. ` +
-          `AUTHENTIC ENVIRONMENTAL PLACEMENT & REALISTIC INTEGRATION: Place the model naturally and convincingly inside the scene, location, and environment of @image${bgRef.index}. ` +
-          `The background must be the same setting, location, architecture or landscape, materials, textures, and ambiance as @image${bgRef.index}, adapted naturally to accommodate the model in her pose. ` +
-          `REALISTIC 3D PRESENCE (NO CUTOUT EFFECT): The model must look genuinely present and physically occupying the space in @image${bgRef.index} — authentic interaction with the scene, true spatial depth, matching perspective, and correct scale. ` +
-          `NATURAL LIGHTING & SHADOW COHESION: The ambient environment lighting, sun or key light direction, and color temperature from @image${bgRef.index} must wrap realistically around the model, illuminating her face, skin, and draped fabric. Her body, feet, and garment must cast soft, physically accurate contact shadows and ambient occlusion onto the ground or seating surfaces, making her look captured entirely in-camera on location. ` +
-          `CRISP, IN-FOCUS BACKGROUND: Deep depth of field (f/8 to f/11), keeping the background environment, architecture, landscape, and scenery sharp, clear, and rich in texture without excessive or artificial blur.`
+          `AUTHENTIC IN-CAMERA ON-LOCATION PHOTOGRAPHY (ZERO CUTOUT / ZERO GREEN-SCREEN EFFECT): This entire image is captured as a single, authentic photograph taken entirely in-camera on location in the real-world setting of @image${bgRef.index}. The model is physically present, standing directly inside this space. Completely remove and discard any studio backdrop, floor, or walls from other reference images. ` +
+          `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, key lighting angle, and warm color temperature from @image${bgRef.index} must illuminate the model completely. The sun casts authentic directional highlights on her face, shoulders, hair, and draped outfit, with shadows falling in the exact same angle and softness as the architectural shadows in @image${bgRef.index}. The surrounding stone walls and floor plane must bounce warm ambient light onto her skin, chin, and lower fabric folds. Never light the model with mismatched studio flash. ` +
+          `PHYSICAL GROUND CONTACT & CAST SHADOWS (ELIMINATE FLOATING): The model is firmly planted on the ground or floor surface of @image${bgRef.index}. Directly beneath her feet, sandals, and hemline, there must be dark, sharp contact ambient occlusion shadows physically anchoring her to the ground, accompanied by a realistic directional cast shadow stretching across the floor matching the angle, length, and softness of the shadows in @image${bgRef.index}. She must NEVER appear floating or pasted on top of the ground. ` +
+          `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light and air of @image${bgRef.index} wrap softly around her silhouette, shoulders, and individual hair strands (subtle optical edge light wrap), completely eliminating harsh cutout outlines, halos, or sticker effects. The camera lens optics, exposure, color grading, warm atmospheric tone, and sensor grain are 100% unified across both the model and the background. ` +
+          `PROPORTIONAL HUMAN SCALE & ARCHITECTURAL GRANDEUR: The model possesses realistic, natural human stature (approx. 170 cm / 5'7") naturally proportioned within the architectural space of @image${bgRef.index}. Palace archways, carved pillars, doorways, and staircases retain their authentic grand real-world scale, towering naturally above the standing model. The model must NOT appear giant or oversized. ` +
+          `EYE-LEVEL HORIZON & NATURAL EDITORIAL COMPOSITION: Shot at natural eye-level / chest-level elevation (approx. 1.5m) from a 4 to 5 meter distance (50mm–85mm lens perspective), aligned with the horizon and vanishing point of @image${bgRef.index}. The model stands comfortably in the foreground/midground with natural headroom above and grounded floor space below, never cropped edge-to-edge.`
         );
       } else if (backgroundDescription) {
         promptParts.push(
-          `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}. Sharp in-focus background with zero blur, deep f/8 aperture, realistic physical grounding with authentic floor contact shadows, and seamless ambient lighting integration.`
+          `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}. Sharp in-focus background with zero blur, deep f/8 aperture. ` +
+          `REALISTIC HUMAN SCALE & EDITORIAL PROPORTION: The model must have realistic, natural human stature (170 cm / 5'7") correctly proportioned to the architectural surroundings (doors, arches, and walls towering realistically above the model, avoiding any oversized giant appearance). Natural editorial framing with comfortable headroom and floor breathing room, authentic ground contact shadows, directional sun matching scene shadows, and seamless ambient lighting integration.`
         );
       }
 
@@ -1074,17 +1109,100 @@ export async function POST(req: NextRequest) {
         promptParts.push(`Jewellery: Harmonized fine ethnic gold bangles and delicate earrings.`);
       }
 
-      // Garment & Draping
+      // Garment & Tailoring / Draping
       if (garmentIndices.length > 0) {
         const garmentTokens = garmentIndices.map(i => `@image${i}`).join(", ");
         const fabricDirective = isAutoDetectFabric
           ? `MANDATORY FABRIC EXTRACTION: Extract and replicate the exact authentic fabric material, textile weave density, yarn thread sheen, and drape physics directly from ${garmentTokens}. Faithfully reproduce its exact tactile texture, surface luster, and true physical drape gravity and pleats as seen in ${garmentTokens}.`
           : `SPECIFIED FABRIC OVERRIDE: Fabric weave: ${fabric}. Drapery physics: ${fabricDrapePhysics || fabric}. Mirror this weave density and surface reflection while keeping all patterns, prints, and colors true to ${garmentTokens}.`;
 
-        promptParts.push(
-          `MANDATORY GARMENT & FABRIC EXTRACTION: Drape the authentic ethnic outfit from ${garmentTokens} directly onto the model. Transfer the exact intricate embroidery, zari borders, prints, motif placement, fabric colors, and pallu/pleat drape directly from ${garmentTokens} onto her outfit with 100% visual fidelity.`,
-          fabricDirective
-        );
+        if (isSuitMode) {
+          // =====================================================================
+          // NON-SAREE GARMENTS & UNSTITCHED SUITS (AI AUTO-DETECT PIPELINE)
+          // =====================================================================
+          const kameezRef = refList.find(r => r.type === "garment" && (r.role === "kameez" || r.role === "kurta_top" || r.slotLabel?.toLowerCase().includes("kameez") || r.slotLabel?.toLowerCase().includes("kurta") || r.slotLabel?.toLowerCase().includes("top")));
+          const chestRef = refList.find(r => r.type === "garment" && (r.role === "chest_design" || r.role === "neckline_detail" || r.slotLabel?.toLowerCase().includes("chest") || r.slotLabel?.toLowerCase().includes("neckline") || r.slotLabel?.toLowerCase().includes("detail")));
+          const dupattaRef = refList.find(r => r.type === "garment" && (r.role === "dupatta" || r.slotLabel?.toLowerCase().includes("dupatta")));
+          const bottomRef = refList.find(r => r.type === "garment" && (r.role === "bottom" || r.role === "salwar_bottom" || r.slotLabel?.toLowerCase().includes("salwar") || r.slotLabel?.toLowerCase().includes("bottom") || r.slotLabel?.toLowerCase().includes("pants")));
+          const completeSetRef = refList.find(r => r.type === "garment" && (r.role === "complete_set" || r.slotLabel?.toLowerCase().includes("complete") || r.slotLabel?.toLowerCase().includes("ensemble")));
+
+          const isAutoSilhouette = !suitSilhouette || suitSilhouette.includes("Auto-Detect") || suitSilhouette.includes("auto");
+          const isAutoDrape = !dupattaDrape || dupattaDrape.includes("Auto-Coordinate") || dupattaDrape.includes("auto");
+
+          promptParts.push(
+            `MANDATORY NON-SAREE GARMENT SYNTHESIS & AUTO-DETECTION (STRICTLY NO SAREE / NO CHOLI): The model is wearing a fully tailored, bespoke designer ethnic outfit synthesized from the garment fabric references in ${garmentTokens}. ` +
+            `AI AUTOMATIC GARMENT & SILHOUETTE DETECTION: Analyze the reference images (${garmentTokens}) to automatically identify and reconstruct the exact garment ensemble (such as a tailored Salwar Kameez, Pakistani Lawn Kurta Set, Flared Anarkali Suit, Sharara/Gharara, Kurti with Trousers, or Co-ord Set). ` +
+            `Assemble and tailor the unstitched components directly onto the model with publication-grade bespoke tailoring. STRICTLY PROHIBIT 6-yard sarees, saree pleats, saree pallu drapes, and bare midriffs.`
+          );
+
+          if (completeSetRef) {
+            promptParts.push(
+              `COMPLETE ENSEMBLE MASTER TEMPLATE: Use @image${completeSetRef.index} as the master visual guide for the overall silhouette, cut proportions, sleeve length, hemline style, and styling coordination of the outfit.`
+            );
+          }
+
+          if (kameezRef) {
+            promptParts.push(
+              `KAMEEZ / TOP FABRIC TAILORING: Cut and tailor the model's top/kameez directly from @image${kameezRef.index}. Faithfully transfer its exact base fabric color, woven motifs, digital prints, and daman hemline borders onto the garment.`
+            );
+          } else if (completeSetRef) {
+            promptParts.push(
+              `TOP / KURTA SPECIFICATION: Cut and tailor the top matching the garment shown in @image${completeSetRef.index}.`
+            );
+          }
+
+          if (chestRef) {
+            promptParts.push(
+              `CHEST DESIGN & NECKLINE EMBROIDERY: Replicate the intricate neck embroidery, threadwork, gala patch, and zari detailing visible in @image${chestRef.index} precisely centered on the model's upper torso and neckline with needlework realism.`
+            );
+          }
+
+          if (bottomRef) {
+            promptParts.push(
+              `BOTTOM / PANTS TAILORING: Tailor the matching bottom trousers (cigarette pants, salwar, or palazzo) directly from the fabric in @image${bottomRef.index}, cleanly fitted beneath the top.`
+            );
+          }
+
+          if (dupattaRef) {
+            const drapeStyle = isAutoDrape ? "graceful natural drape" : dupattaDrape;
+            promptParts.push(
+              `DUPATTA DRAPING: Style the authentic dupatta from @image${dupattaRef.index} in a ${drapeStyle}, faithfully displaying its borders, prints, and lightweight translucent fabric drape physics.`
+            );
+          }
+
+          promptParts.push(fabricDirective);
+
+        } else {
+          // =====================================================================
+          // WHOLESALE SAREE PIPELINE (6-YARD DRAPES & BLOUSE)
+          // =====================================================================
+          promptParts.push(
+            `MANDATORY GARMENT & FABRIC EXTRACTION: Drape the authentic 6-yard ethnic saree from ${garmentTokens} directly onto the model. Transfer the exact intricate embroidery, zari borders, prints, motif placement, fabric colors, and pallu/pleat drape directly from ${garmentTokens} onto her outfit with 100% visual fidelity.`,
+            fabricDirective
+          );
+
+          // Explicit Draping Style Directive
+          if (drapingStyle && drapingStyle !== "Default drape") {
+            promptParts.push(`Draping Style: Authentic ${drapingStyle} with clean graceful pleats and shoulder drape.`);
+          }
+
+          // Dedicated Blouse Requirement
+          const blouseGarment = refList.find(
+            (r) =>
+              r.type === "garment" &&
+              (r.slotLabel?.toLowerCase().includes("blouse") || (r as any).role === "blouse")
+          );
+
+          if (blouseGarment) {
+            promptParts.push(
+              `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a fully tailored, beautifully fitted ethnic blouse (choli) crafted directly from @image${blouseGarment.index}. Faithfully transfer its exact fabric, color, neckline, and sleeves neatly fitted beneath the saree pallu drape. The blouse must be clearly visible, crisp, and properly structured around the torso and shoulders.`
+            );
+          } else {
+            promptParts.push(
+              `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant ethnic saree blouse (choli) properly fitted beneath the saree pallu drape (${blouseStyle || "tailored matching ethnic blouse"}). Coordinate its fabric color, sleeve cuffs, and neckline harmoniously with the saree border and zari accents. Never generate the model without a blouse or with an ambiguous bare chest drape.`
+            );
+          }
+        }
       }
 
       if (notesSummary) {
@@ -1097,10 +1215,117 @@ export async function POST(req: NextRequest) {
 
       // Quality, Skin Realism & Deep Focus Photography
       promptParts.push(
-        `Photographic Realism & Deep Focus: Shot on medium format camera at f/8 aperture with edge-to-edge sharpness across both the model and the entire background environment. No artificial background blurring, no shallow depth of field blur, crisp architectural textures. Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief, and realistic fabric gravity drape. Natural human anatomy with slender five-finger hands, Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
+        `Photographic Realism, Facial Clarity & Deep Focus: Shot on medium format camera with 50mm to 85mm full-length editorial lens at f/8 aperture with edge-to-edge sharpness across the model, face, and background environment. Extreme facial clarity with visible natural human skin pores, authentic fine skin texture, soft natural skin highlights, expressive living eyes with crisp catchlights, and photorealistic five-finger hand anatomy. Balanced full-length editorial composition with realistic human stature and harmonious spatial scale relative to the architecture. No artificial background blurring, no shallow depth of field blur, crisp architectural textures. Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief, and realistic fabric gravity drape. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
       );
 
       fluxPrompt = promptParts.filter(Boolean).join(" ");
+
+    } else if (mode === "flatlay") {
+      // =========================================================================
+      // FLAT-LAY STUDIO (UNSTITCHED SUITS) PIPELINE
+      // Zero Hallucination Anchor: [Staging Template, ...Garments]
+      // =========================================================================
+      const rawTemplateUrl = String(rawStagingTemplateUrl || "/reference_suits/dark-teak.jpg");
+      const compressedTemplateUrl = await getCompressedFalUrl(rawTemplateUrl, 640);
+
+      imageUrls = [compressedTemplateUrl, ...compressedGarmentUrls];
+
+      const matchedTemplate =
+        STAGING_TEMPLATES.find(
+          (t) =>
+            t.image === rawTemplateUrl ||
+            t.id === rawTemplateUrl ||
+            t.name.toLowerCase() === stagingTemplateName.toLowerCase() ||
+            rawTemplateUrl.includes(t.id)
+        ) || STAGING_TEMPLATES[0];
+
+      const kameezIndex = preparedGarments.findIndex(
+        (g) => g.role === "kameez" || g.slotLabel?.toLowerCase().includes("kameez")
+      );
+      const chestIndex = preparedGarments.findIndex(
+        (g) => g.role === "chest_design" || g.slotLabel?.toLowerCase().includes("chest")
+      );
+      const dupattaIndex = preparedGarments.findIndex(
+        (g) => g.role === "dupatta" || g.slotLabel?.toLowerCase().includes("dupatta")
+      );
+      const bottomIndex = preparedGarments.findIndex(
+        (g) => g.role === "bottom" || g.slotLabel?.toLowerCase().includes("bottom")
+      );
+      const completeIndex = preparedGarments.findIndex(
+        (g) => g.role === "complete_set" || g.slotLabel?.toLowerCase().includes("complete")
+      );
+
+      const isMannequin =
+        matchedTemplate.category === "mannequin" ||
+        matchedTemplate.name.toLowerCase().includes("mannequin");
+
+      const promptParts: string[] = [
+        `Commercial luxury e-commerce catalog photograph.`,
+        `CRITICAL ZERO-HALLUCINATION STAGING TEMPLATE MANDATE: Preserve the exact staging surface, tabletop texture, background environment, and camera angle from @image1 (${matchedTemplate.surface} — ${matchedTemplate.description}) with 100% precision.`,
+        `SURFACE & PROPS RETENTION MANDATE: The exact surface texture (${matchedTemplate.surface}), wood grain, marble veining, tiles, tabletop edge, lighting direction, and ALL styling props/accessories visible in @image1 (such as brass bowls, urli, marigold flower petals, books, magnifying glasses, dishes, or tassels) MUST BE PRESERVED IN PLACE as shown in @image1. Absolutely zero alteration to the background tabletop surface.`,
+      ];
+
+      if (isMannequin) {
+        promptParts.push(
+          `MANNEQUIN TAILORING MANDATE: Maintain the exact dressmaker mannequin torso form and stand from @image1. Tailor and drape the unstitched suit fabric components onto the mannequin form with bespoke couture tailoring. Strictly NO human head, NO human face, NO living model.`
+        );
+      } else {
+        promptParts.push(
+          `OVERHEAD FLAT-LAY PERSPECTIVE: Maintain the exact overhead flat-lay perspective, elevation, and framing from @image1. Strictly NO human models, NO human bodies, NO faces, NO hands, NO mannequins. Only neatly folded and artfully staged unstitched ethnic fabric pieces laid out on the surface.`
+        );
+      }
+
+      // Garment Fabric Inpainting
+      const garmentTokens = compressedGarmentUrls.map((_, i) => `@image${2 + i}`).join(", ");
+      promptParts.push(
+        `FABRIC INPAINTING & REPLACEMENT: Replace ONLY the folded ethnic garment fabrics arranged on @image1 with the authentic unstitched designer suit fabric pieces from ${garmentTokens}. Transfer their exact textile weave density, yarn sheen, fabric colors, and authentic prints/motifs directly onto the folded layout.`
+      );
+
+      if (compressedGarmentUrls.length === 1) {
+        promptParts.push(
+          `SUIT ENSEMBLE TRANSFER: The unstitched designer ethnic suit is completely crafted from @image2. Faithfully extract and transfer all colors, textile patterns, prints, woven motifs, daman borders, and fabric textures visible in @image2, arranging the suit fabric in the clean, elegant commercial flat-lay fold onto the staging surface of @image1.`
+        );
+      } else {
+        if (kameezIndex >= 0) {
+          promptParts.push(
+            `KAMEEZ / KURTA FABRIC: The central folded unstitched kurta/kameez length is crafted directly from @image${kameezIndex + 2}. Faithfully transfer its exact base fabric color, woven motifs, digital prints, and daman hemline borders into the folded arrangement.`
+          );
+        } else {
+          promptParts.push(
+            `KAMEEZ FABRIC: Central folded ethnic kurta fabric reproducing the uploaded fabric color, weave texture, and border work.`
+          );
+        }
+
+        if (chestIndex >= 0) {
+          promptParts.push(
+            `CHEST EMBROIDERY & GALA DETAIL: The intricate neckline embroidery, gala patch, needlework, and zari threadwork from @image${chestIndex + 2} is prominently showcased centered on the upper portion of the folded kameez with tactile stitch relief.`
+          );
+        }
+
+        if (dupattaIndex >= 0) {
+          promptParts.push(
+            `DUPATTA SCARF DRAPING: The authentic dupatta scarf from @image${dupattaIndex + 2} is artfully folded, draped, or fanned out across the staging surface alongside the kameez, displaying its delicate borders, lace, printed motifs, and soft fabric folds.`
+          );
+        }
+
+        if (bottomIndex >= 0) {
+          promptParts.push(
+            `BOTTOM / SALWAR FABRIC: The coordinating bottom fabric from @image${bottomIndex + 2} is neatly folded and arranged in the set, faithfully matching its true fabric hue and texture.`
+          );
+        }
+
+        if (completeIndex >= 0) {
+          promptParts.push(
+            `ENSEMBLE ARRANGEMENT HARMONY: The overall styling layout and component positioning harmoniously mirrors the ensemble reference in @image${completeIndex + 2}.`
+          );
+        }
+      }
+
+      promptParts.push(
+        `REALISTIC LIGHTING & AMBIENT CONTACT SHADOWS: Soft uniform daylight studio illumination. The folded fabric pieces must cast authentic, subtle contact ambient occlusion shadows directly onto the ${matchedTemplate.surface} surface of @image1, grounding them physically and naturally into the scene with zero cutout halo, zero floating effect, and zero green-screen artifact. Crisp tack-sharp focus edge-to-edge (f/8 aperture), visible fabric micro-texture, 8k resolution, publication-grade commercial product catalog lookbook.`
+      );
+
+      fluxPrompt = promptParts.join(" ");
 
     } else {
       // =========================================================================
@@ -1214,9 +1439,11 @@ export async function POST(req: NextRequest) {
       dimensions = { width: 2160, height: 2160 }; // 1:1 High-Res Square (4,665,600 pixels = ~4.67 MP)
     }
 
-    console.log(`DEBUG: Calling fal-ai/flux-2-pro/edit (FaceMode: ${faceMode}, References: ${imageUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP)`);
+    const FAL_PRIMARY_MODEL = process.env.FAL_EDIT_ENDPOINT || "openai/gpt-image-2.5/sunburst/edit";
+    const validAspectRatio = ["4:5", "3:4", "9:16", "1:1"].includes(aspectRatio) ? aspectRatio : "4:5";
+    console.log(`DEBUG: Calling ${FAL_PRIMARY_MODEL} (FaceMode: ${faceMode}, References: ${imageUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP, AR: ${validAspectRatio})`);
 
-    // 5. Execute Fal.ai FLUX 2 Pro Multi-Image Edit Pipeline (Native 4.5MP-5.0MP Ultra-Sharp Asset)
+    // 5. Execute Fal.ai OpenAI GPT-Image 2.5 Sunburst Edit Pipeline (Native 4.6 MP with automatic fallback)
     // Bounded by a global concurrency gate and a hard per-run timeout. If Fal
     // fails we return 503 WITHOUT touching the wallet: money is only ever taken
     // after an image actually exists.
@@ -1226,16 +1453,50 @@ export async function POST(req: NextRequest) {
     let falResult: FalRunResult;
     try {
       falResult = await retryOperation(async () => {
-        return await fal.run("fal-ai/flux-2-pro/edit", {
-          input: {
+        try {
+          const isSunburst = FAL_PRIMARY_MODEL.includes("sunburst") || FAL_PRIMARY_MODEL.includes("gpt-image");
+          const isSeedream = FAL_PRIMARY_MODEL.includes("seedream");
+          const isNanoBanana = FAL_PRIMARY_MODEL.includes("nano-banana");
+          const isFlux = FAL_PRIMARY_MODEL.includes("flux");
+
+          const inputPayload: Record<string, any> = {
             image_urls: imageUrls,
             prompt: fluxPrompt,
             image_size: dimensions,
-            output_format: "png",
-            safety_tolerance: "2"
-          },
-          abortSignal: AbortSignal.timeout(FAL_RUN_TIMEOUT_MS)
-        });
+            output_format: "png"
+          };
+
+          // Specific parameters for models that require custom schema
+          if (isSunburst) {
+            inputPayload.quality = "high"; // Fast, native 4.61 MP editorial resolution
+          } else if (isFlux) {
+            inputPayload.safety_tolerance = "2";
+          } else if (!isSeedream) {
+            inputPayload.resolution = isNanoBanana ? "2K" : "2k";
+            inputPayload.aspect_ratio = validAspectRatio;
+            inputPayload.safety_tolerance = "2";
+          }
+
+          return await fal.run(FAL_PRIMARY_MODEL, {
+            input: inputPayload,
+            abortSignal: AbortSignal.timeout(FAL_RUN_TIMEOUT_MS)
+          });
+        } catch (primaryErr) {
+          if (FAL_PRIMARY_MODEL !== "fal-ai/flux-2-pro/edit") {
+            console.warn(`Primary model ${FAL_PRIMARY_MODEL} encountered an error, falling back to fal-ai/flux-2-pro/edit:`, primaryErr);
+            return await fal.run("fal-ai/flux-2-pro/edit", {
+              input: {
+                image_urls: imageUrls,
+                prompt: fluxPrompt,
+                image_size: dimensions,
+                output_format: "png",
+                safety_tolerance: "2"
+              },
+              abortSignal: AbortSignal.timeout(FAL_RUN_TIMEOUT_MS)
+            });
+          }
+          throw primaryErr;
+        }
       }, 2, 3000);
     } catch (falErr) {
       console.warn("Outbound Fal.ai call failed after retries:", falErr);
@@ -1269,6 +1530,8 @@ export async function POST(req: NextRequest) {
           p_cost: cost,
           p_prompt: mode === "magic"
             ? `CUSTOM LOOKBOOK: ${outfitType} | Pose: ${poseName} | Setting: ${backgroundName}`
+            : mode === "flatlay"
+            ? `FLATLAY STUDIO: ${stagingTemplateName}`
             : `STUDIO LOOKBOOK: ${shootTitle} | Face: ${faceMode} | Setting: ${shootSetting || backgroundName}`,
           p_garment_url: activeGarments.map(g => g.url).join(","),
           p_face_url: customFaceUrl || modelFaceUrl || null,
@@ -1326,6 +1589,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       outputUrl: generatedImageUrl,
+      output_url: generatedImageUrl,
       // No fake LQIP: a real blur placeholder would mean downloading the whole
       // image a second time, so we return null and let the preview render the
       // final asset directly.

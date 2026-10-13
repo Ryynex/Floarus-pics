@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   Layers,
   Sparkles,
+  Package,
   History,
   CreditCard,
   Settings,
@@ -18,7 +19,9 @@ import {
   Lock,
   Copy,
   Check,
-  Menu
+  Menu,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { clearAuthCookie } from "@/lib/authCookie";
@@ -32,6 +35,14 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
   const searchParams = useSearchParams();
   const router = useRouter();
   const currentTab = searchParams.get("tab") || "generate";
+  const currentCategory = searchParams.get("category") || "saree";
+  const [isCustomLookbooksOpen, setIsCustomLookbooksOpen] = useState(true);
+
+  useEffect(() => {
+    if (currentTab === "magic") {
+      setIsCustomLookbooksOpen(true);
+    }
+  }, [currentTab]);
 
   // State
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -162,6 +173,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
   const navItems: NavItem[] = [
     { id: "generate", label: "Studio Lookbooks", icon: Layers },
     { id: "magic", label: "Custom Lookbooks", icon: Sparkles },
+    { id: "flatlay", label: "Build Your Suits", icon: Package, badge: "1 Credit" },
     { id: "history", label: "Catalog History", icon: History },
     { id: "billing", label: "Billing & Payments", icon: CreditCard },
     { id: "settings", label: "Settings", icon: Settings },
@@ -207,10 +219,108 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
         </div>
 
         {/* Middle: Navigation Links */}
-        <nav className="flex-1 px-4 py-6 flex flex-col gap-1.5">
+        <nav className="flex-1 px-4 py-6 flex flex-col gap-1.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
+
+            if (item.id === "magic") {
+              const isFolderOpen = isCustomLookbooksOpen;
+              return (
+                <div key={item.id} className="flex flex-col">
+                  {/* Parent Collapsible Item */}
+                  <div
+                    onClick={() => {
+                      if (!isActive) {
+                        setIsCustomLookbooksOpen(true);
+                        router.push(`/dashboard?tab=magic&category=${currentCategory}`);
+                      } else {
+                        setIsCustomLookbooksOpen(!isCustomLookbooksOpen);
+                      }
+                    }}
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group border-l-[3px] cursor-pointer select-none ${
+                      isActive
+                        ? "bg-clay-soft border-fuchsia-accent text-ink"
+                        : "border-transparent text-ink-soft hover:text-ink hover:bg-sand/70"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsCustomLookbooksOpen(!isCustomLookbooksOpen);
+                        }}
+                        className="p-0.5 rounded text-ink-faint hover:text-ink transition-transform cursor-pointer"
+                        title={isFolderOpen ? "Collapse" : "Expand"}
+                      >
+                        <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${
+                          isFolderOpen ? "rotate-90 text-fuchsia-accent" : "text-ink-faint"
+                        }`} />
+                      </button>
+                      <Icon className={`h-[18px] w-[18px] transition-colors ${
+                        isActive ? "text-fuchsia-accent" : "text-ink-faint group-hover:text-ink-soft"
+                      }`} />
+                      <span>{item.label}</span>
+                    </div>
+                  </div>
+
+                  {/* Sub-items Tree */}
+                  {isFolderOpen && (
+                    <div className="ml-6 pl-3 my-1 border-l border-muted-purple/70 flex flex-col gap-1 py-0.5 transition-all">
+                      {/* Sub-item 1: Wholesale Saree */}
+                      <Link
+                        href="/dashboard?tab=magic&category=saree"
+                        onClick={onClose}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
+                          isActive && currentCategory === "saree"
+                            ? "bg-fuchsia-accent/15 text-fuchsia-accent font-semibold border-l-2 border-fuchsia-accent shadow-xs"
+                            : "text-ink-soft hover:text-ink hover:bg-sand/60"
+                        }`}
+                      >
+                        <span>Wholesale Saree</span>
+                        <span className="text-[10px] text-ink-faint group-hover:text-ink-soft">
+                          6-Yard
+                        </span>
+                      </Link>
+
+                      {/* Sub-item 2: Unstitched Suits */}
+                      <Link
+                        href="/dashboard?tab=magic&category=suits"
+                        onClick={onClose}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
+                          isActive && currentCategory === "suits"
+                            ? "bg-fuchsia-accent/15 text-fuchsia-accent font-semibold border-l-2 border-fuchsia-accent shadow-xs"
+                            : "text-ink-soft hover:text-ink hover:bg-sand/60"
+                        }`}
+                      >
+                        <span>Unstitched Suits</span>
+                        <span className="text-[10px] text-ink-faint group-hover:text-ink-soft">
+                          3-Piece
+                        </span>
+                      </Link>
+
+                      {/* Sub-item 3: Flat-Lay Studio */}
+                      <Link
+                        href="/dashboard?tab=flatlay"
+                        onClick={onClose}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
+                          currentTab === "flatlay"
+                            ? "bg-fuchsia-accent/15 text-fuchsia-accent font-semibold border-l-2 border-fuchsia-accent shadow-xs"
+                            : "text-ink-soft hover:text-ink hover:bg-sand/60"
+                        }`}
+                      >
+                        <span>Flat-Lay Studio</span>
+                        <span className="text-[10px] text-fuchsia-accent font-semibold">
+                          1 Credit
+                        </span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.id}
