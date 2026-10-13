@@ -1481,9 +1481,12 @@ export async function POST(req: NextRequest) {
       dimensions = { width: 2160, height: 2160 }; // 1:1 High-Res Square (4,665,600 pixels = ~4.67 MP)
     }
 
-    const FAL_PRIMARY_MODEL = process.env.FAL_EDIT_ENDPOINT || "openai/gpt-image-2.5/sunburst/edit";
+    const FAL_PRIMARY_MODEL =
+      mode === "flatlay"
+        ? (process.env.FAL_FLATLAY_ENDPOINT || "fal-ai/flux-2-pro/edit")
+        : (process.env.FAL_EDIT_ENDPOINT || "openai/gpt-image-2.5/sunburst/edit");
     const validAspectRatio = ["4:5", "3:4", "9:16", "1:1"].includes(aspectRatio) ? aspectRatio : "4:5";
-    console.log(`DEBUG: Calling ${FAL_PRIMARY_MODEL} (FaceMode: ${faceMode}, References: ${imageUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP, AR: ${validAspectRatio})`);
+    console.log(`DEBUG: Calling ${FAL_PRIMARY_MODEL} (Mode: ${mode}, FaceMode: ${faceMode}, References: ${imageUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP, AR: ${validAspectRatio})`);
 
     // 5. Execute Fal.ai OpenAI GPT-Image 2.5 Sunburst Edit Pipeline (Native 4.6 MP with automatic fallback)
     // Bounded by a global concurrency gate and a hard per-run timeout. If Fal
