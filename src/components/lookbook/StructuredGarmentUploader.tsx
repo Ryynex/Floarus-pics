@@ -6,7 +6,7 @@ import { FALLBACK_IMAGE } from "./ui";
 
 export interface StructuredGarmentSlot {
   id: string;
-  role: "main_drape" | "pallu" | "body" | "chest" | "blouse" | "extra";
+  role: "main_drape" | "pallu" | "pallu_secondary" | "body" | "chest" | "blouse" | "extra";
   label: string;
   subtitle: string;
   url?: string;
@@ -31,8 +31,15 @@ export const INITIAL_STRUCTURED_SLOTS: StructuredGarmentSlot[] = [
   {
     id: "pallu",
     role: "pallu",
-    label: "Pallu / Border Detail (Optional)",
-    subtitle: "Pallu end piece & decorative border detail",
+    label: "Pallu / Border Detail 1 (Optional)",
+    subtitle: "Primary pallu end piece & decorative border detail",
+    isOptional: true
+  },
+  {
+    id: "pallu_secondary",
+    role: "pallu_secondary",
+    label: "Pallu / Border Detail 2 (Optional)",
+    subtitle: "Secondary border close-up, zari motif or pleat detail",
     isOptional: true
   }
 ];
@@ -281,18 +288,18 @@ export function StructuredGarmentUploader({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-ink">
-                Optional Blouse & Accent Details
+                Optional Blouse & Pallu / Border Details
               </span>
-              <span className="text-[10px] font-medium text-ink-faint bg-sand px-2 py-0.5 rounded-full border border-line">
-                Optional
+              <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                All 3 Optional
               </span>
             </div>
             <span className="text-[11px] text-ink-faint">
-              Only 1 photo above is needed to generate
+              Only 1 saree photo above is needed to generate
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {subSlots.map((slot) => {
               const isBlouse = slot.role === "blouse";
               const isDrag = dragOverRole === slot.role;

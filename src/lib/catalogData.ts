@@ -226,7 +226,7 @@ export interface SavedGarment {
  * Lowering this reduces Fal input megapixels and reference-competition between
  * fabrics, which sharpens garment fidelity at the cost of coverage.
  */
-export const MAX_GARMENT_REFERENCES = 3;
+export const MAX_GARMENT_REFERENCES = 4;
 
 const LEGACY_SAVED_GARMENTS_KEY = "florus_permanent_saved_garments";
 const SAVED_GARMENTS_KEYS = {

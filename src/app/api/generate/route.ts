@@ -1202,6 +1202,20 @@ export async function POST(req: NextRequest) {
               `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant ethnic saree blouse (choli) properly fitted beneath the saree pallu drape (${blouseStyle || "tailored matching ethnic blouse"}). Coordinate its fabric color, sleeve cuffs, and neckline harmoniously with the saree border and zari accents. Never generate the model without a blouse or with an ambiguous bare chest drape.`
             );
           }
+
+          const palluGarments = refList.filter(
+            (r) =>
+              r.type === "garment" &&
+              (r.slotLabel?.toLowerCase().includes("pallu") ||
+                r.slotLabel?.toLowerCase().includes("border") ||
+                (r as any).role?.includes("pallu"))
+          );
+          if (palluGarments.length > 0) {
+            const palluTokens = palluGarments.map((p) => `@image${p.index}`).join(" and ");
+            promptParts.push(
+              `MANDATORY PALLU & BORDER SPECIFICATION: Faithfully replicate the intricate zari embroidery, end-piece motifs, and decorative border detailing visible in ${palluTokens} across the flowing shoulder pallu drape and hemline.`
+            );
+          }
         }
       }
 
@@ -1362,6 +1376,22 @@ export async function POST(req: NextRequest) {
         ? `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a fully tailored, beautifully fitted ethnic saree blouse (choli) crafted directly from the uploaded blouse reference photo (${blouseGarment.slotLabel}). Faithfully transfer its exact fabric, color, neckline, and sleeves neatly fitted beneath the saree pallu drape.`
         : `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant ethnic saree blouse (choli) properly fitted beneath the saree pallu drape, harmonizing with the saree border and zari.`;
 
+      const buildPalluDirective = (firstGarmentIndex: number): string => {
+        const palluGarments = preparedGarments
+          .map((g, i) => ({ g, i }))
+          .filter(
+            ({ g }) =>
+              g.role?.includes("pallu") ||
+              g.slotLabel?.toLowerCase().includes("pallu") ||
+              g.slotLabel?.toLowerCase().includes("border")
+          );
+        if (palluGarments.length > 0) {
+          const tokens = palluGarments.map(({ i }) => `@image${firstGarmentIndex + i}`).join(" and ");
+          return `PALLU & BORDER SPECIFICATION: Replicate the intricate zari embroidery, end-piece motifs, and decorative border detailing visible in ${tokens} precisely along the pallu drape and hemline borders.`;
+        }
+        return "";
+      };
+
       const studioFaceUrl = customFaceUrl || modelFaceUrl;
       if (faceMode === "custom_face" && studioFaceUrl) {
         // CUSTOM FACE MODE:
@@ -1383,6 +1413,7 @@ export async function POST(req: NextRequest) {
           `Garment Draping: Drape the model in the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
           blouseDirective,
+          buildPalluDirective(3),
           studioNotes ? `Product specifications & layer notes: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile weave texture, and authentic pleats/pallu drape directly onto the outfit.`,
@@ -1406,6 +1437,7 @@ export async function POST(req: NextRequest) {
           `Garment Draping: Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
           blouseDirective,
+          buildPalluDirective(2),
           studioNotes ? `Product specifications: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, yarn weave texture, and authentic drape directly onto her outfit.`,
@@ -1429,6 +1461,7 @@ export async function POST(req: NextRequest) {
           `Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment shown in ${garmentTokens}.`,
           fabricDirective,
           blouseDirective,
+          buildPalluDirective(2),
           studioNotes ? `Product specifications & layer notes: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
           `Transfer the exact intricate embroidery, zari borders, fabric color, tactile thread weave texture, and pallu drape directly onto the draped outfit.`,

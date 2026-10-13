@@ -55,9 +55,10 @@ interface UploadedGarment {
 }
 
 const DEFAULT_SLOT_LABELS = [
-  "Main body / fabric",
-  "Pallu / border",
-  "Blouse / contrast"
+  "Saree Photo / Fabric",
+  "Blouse Photo (Optional)",
+  "Pallu / Border Detail 1 (Optional)",
+  "Pallu / Border Detail 2 (Optional)"
 ];
 
 const GENERATION_STEPS = [

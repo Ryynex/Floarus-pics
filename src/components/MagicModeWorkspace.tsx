@@ -75,9 +75,10 @@ interface UploadedPhoto {
 }
 
 const DEFAULT_SLOT_LABELS = [
-  "Main body fabric / Saree",
-  "Pallu / Border accent",
-  "Blouse / Contrast fabric"
+  "Saree Photo / Fabric",
+  "Blouse Photo (Optional)",
+  "Pallu / Border Detail 1 (Optional)",
+  "Pallu / Border Detail 2 (Optional)"
 ];
 
 const INITIAL_SUITS: SuitEntry[] = [
