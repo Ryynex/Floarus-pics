@@ -1048,12 +1048,12 @@ export async function POST(req: NextRequest) {
       // Background & Realistic Environmental Placement
       if (bgRef) {
         promptParts.push(
-          `MANDATORY BACKGROUND & ROOM REPLACEMENT: Completely remove, discard, and replace the background, walls, and floor from @image1. ` +
-          `AUTHENTIC ENVIRONMENTAL PLACEMENT & REALISTIC INTEGRATION: Place the model naturally and convincingly inside the scene and architectural environment of @image${bgRef.index}. ` +
-          `The background must be the same setting, architectural style, interior decor, materials, and ambiance as @image${bgRef.index}, adapted naturally to accommodate the model in her pose. ` +
-          `REALISTIC 3D PRESENCE (NO CUTOUT EFFECT): The model must look genuinely present and physically occupying the room in @image${bgRef.index} — authentic interaction with the scene, true spatial depth, matching perspective, and correct scale. ` +
-          `NATURAL LIGHTING & SHADOW COHESION: The ambient light, window light, and color temperature from @image${bgRef.index} must wrap realistically around the model, illuminating her face, skin, and draped fabric. Her body, feet, and garment must cast soft, physically accurate contact shadows and ambient occlusion onto the floor and surrounding surfaces, making her look captured entirely in-camera on location. ` +
-          `CRISP, IN-FOCUS BACKGROUND: Deep depth of field (f/8 to f/11), keeping the background architecture and room details sharp, clear, and rich in texture without excessive or artificial blur.`
+          `MANDATORY BACKGROUND & SCENE REPLACEMENT: Completely remove, discard, and replace the background, backdrop, and surroundings from @image1. ` +
+          `AUTHENTIC ENVIRONMENTAL PLACEMENT & REALISTIC INTEGRATION: Place the model naturally and convincingly inside the scene, location, and environment of @image${bgRef.index}. ` +
+          `The background must be the same setting, location, architecture or landscape, materials, textures, and ambiance as @image${bgRef.index}, adapted naturally to accommodate the model in her pose. ` +
+          `REALISTIC 3D PRESENCE (NO CUTOUT EFFECT): The model must look genuinely present and physically occupying the space in @image${bgRef.index} — authentic interaction with the scene, true spatial depth, matching perspective, and correct scale. ` +
+          `NATURAL LIGHTING & SHADOW COHESION: The ambient environment lighting, sun or key light direction, and color temperature from @image${bgRef.index} must wrap realistically around the model, illuminating her face, skin, and draped fabric. Her body, feet, and garment must cast soft, physically accurate contact shadows and ambient occlusion onto the ground or seating surfaces, making her look captured entirely in-camera on location. ` +
+          `CRISP, IN-FOCUS BACKGROUND: Deep depth of field (f/8 to f/11), keeping the background environment, architecture, landscape, and scenery sharp, clear, and rich in texture without excessive or artificial blur.`
         );
       } else if (backgroundDescription) {
         promptParts.push(
