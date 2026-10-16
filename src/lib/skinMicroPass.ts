@@ -118,10 +118,11 @@ export async function applySkinMicroPass(options: SkinPassOptions): Promise<Skin
         image_url: imageUrl,
         mask_url: maskUrl,
         strength: clampedStrength,
+        num_inference_steps: 12, // Optimal for micro-skin texture refinement; avoids 50s+ execution
         ...(dimensions ? { image_size: dimensions } : {}),
         output_format: "png",
       },
-      abortSignal: AbortSignal.timeout(60_000),
+      abortSignal: AbortSignal.timeout(120_000),
     });
 
     const inpaintUrl =
@@ -149,13 +150,14 @@ export async function applySkinMicroPass(options: SkinPassOptions): Promise<Skin
       maskUrl,
       elapsedMs,
     };
-  } catch (err) {
-    console.warn(`[SkinMicroPass] Notice: Micro-pass failed safely, retaining base image:`, err);
+  } catch (err: any) {
+    const errorDetail = err?.body?.detail || err?.message || String(err);
+    console.warn(`[SkinMicroPass] Notice: Micro-pass failed safely (${errorDetail}), retaining base image.`);
     return {
       applied: false,
       finalImageUrl: imageUrl,
       elapsedMs: Date.now() - startTime,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorDetail,
     };
   }
 }
