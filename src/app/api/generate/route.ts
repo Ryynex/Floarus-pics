@@ -1568,18 +1568,17 @@ export async function POST(req: NextRequest) {
     console.log(`DEBUG: Fal.ai generation successful. Resolution: ${actualWidth}x${actualHeight} (${actualMP} MP).`);
 
     // =========================================================================
-    // Phase 2 & Phase 3: Automated Local Face & Skin Isolation + Skin Micro-Pass
-    // Intercepts the Sunburst generation before display. Detects only the face
-    // and exposed neck locally (<80ms CPU, Cost ₹0.00), then injects authentic
-    // micro-pores (Option A: fal.ai micro-inpaint with strength ~0.30 or Option B).
+    // Phase 2 & Phase 3: Cloud SAM 2 Face/Skin Isolation + Skin Micro-Pass
+    // Intercepts Sunburst generation before display. Uses fal-ai/evf-sam (SAM 2)
+    // to isolate face & neck, then injects authentic micro-pores via
+    // fal-ai/flux-general/inpainting (strength 0.30) to eliminate waxy AI skin.
     // =========================================================================
-    let skinPassMeta: { applied: boolean; route: string; faceDetected: boolean } | null = null;
+    let skinPassMeta: { applied: boolean; maskUrl?: string | null; elapsedMs?: number } | null = null;
     if (mode !== "flatlay") {
       try {
         const microPassResult = await applySkinMicroPass({
           imageUrl: generatedImageUrl,
           mode,
-          route: (body.skinPassRoute as any) || (process.env.SKIN_PASS_ROUTE as any) || "option_a",
           inpaintStrength: typeof body.skinStrength === "number" ? body.skinStrength : undefined,
           dimensions,
         });
@@ -1590,8 +1589,8 @@ export async function POST(req: NextRequest) {
 
         skinPassMeta = {
           applied: microPassResult.applied,
-          route: microPassResult.route,
-          faceDetected: microPassResult.faceDetected,
+          maskUrl: microPassResult.maskUrl,
+          elapsedMs: microPassResult.elapsedMs,
         };
       } catch (skinErr) {
         console.warn("Skin micro-pass execution notice:", skinErr);

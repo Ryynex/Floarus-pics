@@ -1,17 +1,8 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { promises as fsp } from "fs";
-import path from "path";
-import os from "os";
-import crypto from "crypto";
 import { fal } from "@fal-ai/client";
-
-const execFileAsync = promisify(execFile);
 
 export interface SkinPassOptions {
   imageUrl: string;
   mode?: string;
-  route?: "option_a" | "option_b";
   inpaintStrength?: number;
   inpaintPrompt?: string;
   dimensions?: { width: number; height: number };
@@ -19,9 +10,7 @@ export interface SkinPassOptions {
 
 export interface SkinPassResult {
   applied: boolean;
-  route: "option_a" | "option_b" | "none";
   finalImageUrl: string;
-  faceDetected: boolean;
   maskUrl?: string | null;
   elapsedMs?: number;
   error?: string | null;
@@ -30,257 +19,143 @@ export interface SkinPassResult {
 export const DEFAULT_MICRO_INPAINT_PROMPT =
   "Extreme close-up authentic skin texture, visible natural pores, fine facial hair, subtle skin imperfections, raw photography, 8k, photorealistic.";
 
-export const DEFAULT_INPAINT_STRENGTH = 0.30; // Optimal range: 0.28 to 0.35
+export const DEFAULT_INPAINT_STRENGTH = 0.30; // 0.28 to 0.35: retains eye shape/expression while injecting micro-pores
 
 /**
- * Executes the Python script to isolate face and exposed neck, returning a soft feathered mask.
+ * Phase 2: Automated Face & Skin Isolation using fal.ai EVF-SAM 2
+ * Uses language-guided segmentation to isolate only face and exposed neck,
+ * with explicit negative prompting to protect the saree, blouse, jewelry, and hair.
  */
-async function runPythonSkinDetector(
-  imageInput: string,
-  outputMaskPath: string,
-  options?: { localPass?: boolean; enhancedOutput?: string }
-): Promise<{
-  faceDetected: boolean;
-  bbox?: number[] | null;
-  dimensions?: { width: number; height: number };
-  elapsedMs?: number;
-}> {
-  // 1. If a remote microservice is configured (e.g. on Vercel connecting to Render/Modal/Railway), use HTTP
-  const remoteApiUrl = (process.env.SKIN_DETECTOR_API_URL || "").trim();
-  if (remoteApiUrl) {
-    const res = await fetch(remoteApiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        image_url: imageInput,
-        local_pass: options?.localPass,
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
+async function generateSkinMaskWithSam2(imageUrl: string): Promise<string | null> {
+  const samEndpoint = process.env.FAL_SAM_ENDPOINT || "fal-ai/evf-sam";
 
-    if (!res.ok) {
-      throw new Error(`Remote skin detector HTTP ${res.status}: ${await res.text()}`);
-    }
-
-    const data = await res.json();
-    if (data.mask_base64) {
-      await fsp.writeFile(outputMaskPath, Buffer.from(data.mask_base64, "base64"));
-    }
-    if (data.enhanced_base64 && options?.enhancedOutput) {
-      await fsp.writeFile(options.enhancedOutput, Buffer.from(data.enhanced_base64, "base64"));
-    }
-
-    return {
-      faceDetected: Boolean(data.face_detected),
-      bbox: data.bbox || null,
-      dimensions: data.dimensions,
-      elapsedMs: data.elapsed_ms,
-    };
-  }
-
-  // 2. Otherwise execute local Python script (Local dev, Docker, or VPS)
-  const pythonScript = path.resolve(process.cwd(), "scripts", "generate_skin_mask.py");
-  const pythonBinary = process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
-
-  const args: string[] = [pythonScript, "--input", imageInput, "--output_mask", outputMaskPath];
-
-  if (options?.localPass && options?.enhancedOutput) {
-    args.push("--local_pass", "--enhanced_output", options.enhancedOutput);
-  }
-
-  const { stdout, stderr } = await execFileAsync(pythonBinary, args, {
-    timeout: 30_000,
-    maxBuffer: 4 * 1024 * 1024,
+  const samRes: any = await fal.run(samEndpoint, {
+    input: {
+      image_url: imageUrl,
+      prompt: "face and exposed neck skin",
+      negative_prompt: "saree, fabric, clothes, blouse, jewelry, necklace, earrings, hair, background",
+      mask_only: true,
+      expand_mask: 12, // Dilation to cover the edge cleanly
+      blur_mask: 18,   // Feathering for seamless blending
+      fill_holes: true,
+    },
+    abortSignal: AbortSignal.timeout(45_000),
   });
 
-  if (stderr && !stdout) {
-    throw new Error(`Python detector stderr: ${stderr}`);
-  }
+  const maskUrl =
+    samRes?.image?.url ||
+    samRes?.data?.image?.url ||
+    samRes?.images?.[0]?.url ||
+    samRes?.data?.images?.[0]?.url;
 
-  // Parse JSON response line from stdout
-  const jsonLine = stdout
-    .trim()
-    .split("\n")
-    .map((l) => l.trim())
-    .find((l) => l.startsWith("{") && l.endsWith("}"));
-
-  if (!jsonLine) {
-    throw new Error(`Failed to parse detector JSON output: ${stdout}`);
-  }
-
-  const parsed = JSON.parse(jsonLine);
-  if (parsed.status === "error") {
-    throw new Error(parsed.error || "Detector returned error status");
-  }
-
-  return {
-    faceDetected: Boolean(parsed.face_detected),
-    bbox: parsed.bbox || null,
-    dimensions: parsed.dimensions,
-    elapsedMs: parsed.elapsed_ms,
-  };
+  return maskUrl || null;
 }
 
 /**
- * Phase 2 & Phase 3: Skin Micro-Pass Engine
+ * Phase 2 & 3: Cloud-Native Skin Micro-Pass via fal.ai SAM 2 + FLUX Inpainting
  *
- * 1. Checks if generation mode permits facial micro-pass (skipped for flatlays).
- * 2. Intercepts the generated Sunburst image and runs local face & neck isolation (<80ms CPU, Cost: ₹0.00).
- * 3. Applies the chosen Skin Micro-Pass:
- *    - Option A: fal.ai Micro-Inpaint Pass (~₹0.25) with strength 0.28-0.35 on the masked face/neck.
- *    - Option B: 100% Local High-Frequency Frequency Separation & Micro-Pore Injection (Cost: ₹0.00).
- * 4. Fallback safe: If face isolation or inpainting encounters an issue, gracefully retains the base generation.
+ * 1. Automatically skipped for flatlays (no human models).
+ * 2. Uses fal-ai/evf-sam (SAM 2) to generate an isolated, feathered mask of face & neck.
+ * 3. Sends the base Sunburst image and mask to fal-ai/flux-general/inpainting at strength 0.30
+ *    to inject authentic skin pores, fine natural texture, and eliminate the waxy AI sheen.
+ * 4. 100% Vercel Serverless native — zero local Python dependencies.
+ * 5. Fallback safe — if segmentation or inpainting fails, gracefully retains the base generation.
  */
 export async function applySkinMicroPass(options: SkinPassOptions): Promise<SkinPassResult> {
   const {
     imageUrl,
     mode = "sarees",
-    route = (process.env.SKIN_PASS_ROUTE as "option_a" | "option_b") || "option_a",
     inpaintStrength = Number(process.env.SKIN_INPAINT_STRENGTH) || DEFAULT_INPAINT_STRENGTH,
     inpaintPrompt = process.env.SKIN_INPAINT_PROMPT || DEFAULT_MICRO_INPAINT_PROMPT,
     dimensions,
   } = options;
 
-  // Global disable switch
+  // Global toggle
   if (process.env.ENABLE_SKIN_MICRO_PASS === "false") {
     return {
       applied: false,
-      route: "none",
       finalImageUrl: imageUrl,
-      faceDetected: false,
     };
   }
 
-  // Flat-lays have no human models or faces; pass through
+  // Flat-lays have no human models or faces; pass through untouched
   if (mode === "flatlay") {
     return {
       applied: false,
-      route: "none",
       finalImageUrl: imageUrl,
-      faceDetected: false,
     };
   }
 
-  const runId = crypto.randomBytes(6).toString("hex");
-  const tempDir = os.tmpdir();
-  const maskFile = path.join(tempDir, `florus_mask_${runId}.png`);
-  const enhancedFile = path.join(tempDir, `florus_enhanced_${runId}.png`);
+  const startTime = Date.now();
 
   try {
-    const isLocalPass = route === "option_b";
+    console.log(`[SkinMicroPass] Step 1: Isolating face & neck using fal.ai SAM 2...`);
+    const maskUrl = await generateSkinMaskWithSam2(imageUrl);
 
-    // Step 1: Automated Local Face & Skin Isolation
-    const detectResult = await runPythonSkinDetector(imageUrl, maskFile, {
-      localPass: isLocalPass,
-      enhancedOutput: isLocalPass ? enhancedFile : undefined,
-    });
-
-    if (!detectResult.faceDetected) {
-      console.log(`[SkinMicroPass] No face detected in generated image. Retaining base generation.`);
+    if (!maskUrl) {
+      console.warn(`[SkinMicroPass] SAM 2 did not produce a mask, falling back to base image.`);
       return {
         applied: false,
-        route: "none",
         finalImageUrl: imageUrl,
-        faceDetected: false,
-        elapsedMs: detectResult.elapsedMs,
+        elapsedMs: Date.now() - startTime,
       };
     }
+
+    console.log(`[SkinMicroPass] SAM 2 mask generated: ${maskUrl}`);
+
+    // Denoising strength clamped to optimal range (0.28 to 0.35)
+    const clampedStrength = Math.min(0.45, Math.max(0.20, inpaintStrength));
+    const inpaintEndpoint =
+      process.env.FAL_INPAINT_ENDPOINT || "fal-ai/flux-general/inpainting";
 
     console.log(
-      `[SkinMicroPass] Face & neck detected (${detectResult.dimensions?.width}x${detectResult.dimensions?.height}, ${detectResult.elapsedMs}ms). Route: ${route}`
+      `[SkinMicroPass] Step 2: Injecting authentic pores via ${inpaintEndpoint} (strength ${clampedStrength})...`
     );
 
-    // Step 2: Option A — fal.ai Micro-Inpaint Pass
-    if (route === "option_a") {
-      const maskBuffer = await fsp.readFile(maskFile);
-      const maskBlob = new Blob([new Uint8Array(maskBuffer)], { type: "image/png" });
-      const maskFalUrl = await fal.storage.upload(maskBlob);
+    const inpaintRes: any = await fal.run(inpaintEndpoint, {
+      input: {
+        prompt: inpaintPrompt,
+        image_url: imageUrl,
+        mask_url: maskUrl,
+        strength: clampedStrength,
+        ...(dimensions ? { image_size: dimensions } : {}),
+        output_format: "png",
+      },
+      abortSignal: AbortSignal.timeout(60_000),
+    });
 
-      const inpaintEndpoint =
-        process.env.FAL_INPAINT_ENDPOINT || "fal-ai/flux-general/inpainting";
+    const inpaintUrl =
+      inpaintRes?.data?.images?.[0]?.url ||
+      inpaintRes?.images?.[0]?.url ||
+      inpaintRes?.data?.image?.url ||
+      inpaintRes?.image?.url;
 
-      // Clamp strength between 0.20 and 0.45 per technical specification
-      const clampedStrength = Math.min(0.45, Math.max(0.20, inpaintStrength));
-
-      console.log(
-        `[SkinMicroPass] Executing fal.ai inpaint on ${inpaintEndpoint} with strength ${clampedStrength}...`
-      );
-
-      const inpaintRes: any = await fal.run(inpaintEndpoint, {
-        input: {
-          prompt: inpaintPrompt,
-          image_url: imageUrl,
-          mask_url: maskFalUrl,
-          strength: clampedStrength,
-          ...(dimensions ? { image_size: dimensions } : {}),
-          output_format: "png",
-        },
-        abortSignal: AbortSignal.timeout(60_000),
-      });
-
-      const inpaintUrl =
-        inpaintRes?.data?.images?.[0]?.url ||
-        inpaintRes?.images?.[0]?.url ||
-        inpaintRes?.data?.image?.url ||
-        inpaintRes?.image?.url;
-
-      if (!inpaintUrl) {
-        console.warn("[SkinMicroPass] Inpaint returned no image URL, falling back to base image.");
-        return {
-          applied: false,
-          route: "option_a",
-          finalImageUrl: imageUrl,
-          faceDetected: true,
-          maskUrl: maskFalUrl,
-          elapsedMs: detectResult.elapsedMs,
-        };
-      }
-
-      console.log(`[SkinMicroPass] Successfully injected authentic pores & micro-texture!`);
+    if (!inpaintUrl) {
+      console.warn(`[SkinMicroPass] Inpaint returned no output URL, retaining base image.`);
       return {
-        applied: true,
-        route: "option_a",
-        finalImageUrl: inpaintUrl,
-        faceDetected: true,
-        maskUrl: maskFalUrl,
-        elapsedMs: detectResult.elapsedMs,
+        applied: false,
+        finalImageUrl: imageUrl,
+        maskUrl,
+        elapsedMs: Date.now() - startTime,
       };
     }
 
-    // Step 3: Option B — 100% Local Micro-Pass (Cost: ₹0.00)
-    if (route === "option_b") {
-      const enhancedBuffer = await fsp.readFile(enhancedFile);
-      const enhancedBlob = new Blob([new Uint8Array(enhancedBuffer)], { type: "image/png" });
-      const hostedEnhancedUrl = await fal.storage.upload(enhancedBlob);
-
-      console.log(`[SkinMicroPass] Applied Option B local pore micro-pass (Cost: ₹0.00).`);
-      return {
-        applied: true,
-        route: "option_b",
-        finalImageUrl: hostedEnhancedUrl,
-        faceDetected: true,
-        elapsedMs: detectResult.elapsedMs,
-      };
-    }
+    const elapsedMs = Date.now() - startTime;
+    console.log(`[SkinMicroPass] Complete in ${elapsedMs}ms. Skin micro-texture successfully injected!`);
 
     return {
-      applied: false,
-      route: "none",
-      finalImageUrl: imageUrl,
-      faceDetected: true,
+      applied: true,
+      finalImageUrl: inpaintUrl,
+      maskUrl,
+      elapsedMs,
     };
   } catch (err) {
-    console.warn(`[SkinMicroPass] Micro-pass failed safely, falling back to base image:`, err);
+    console.warn(`[SkinMicroPass] Notice: Micro-pass failed safely, retaining base image:`, err);
     return {
       applied: false,
-      route: route || "none",
       finalImageUrl: imageUrl,
-      faceDetected: false,
+      elapsedMs: Date.now() - startTime,
       error: err instanceof Error ? err.message : String(err),
     };
-  } finally {
-    // Clean up temporary local files
-    fsp.unlink(maskFile).catch(() => undefined);
-    fsp.unlink(enhancedFile).catch(() => undefined);
   }
 }
