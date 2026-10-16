@@ -10,7 +10,6 @@ import sharp from "sharp";
 import { MAX_GARMENT_REFERENCES } from "@/lib/catalogData";
 import { CREDIT_PRICE_INR, creditsFromBalance } from "@/lib/pricing";
 import { STAGING_TEMPLATES } from "@/lib/flatlayData";
-import { applySkinMicroPass } from "@/lib/skinMicroPass";
 
 // No silent placeholder fallbacks: a missing env var must fail loudly as a 503
 // instead of building a client that points at "placeholder.supabase.co".
@@ -1482,77 +1481,40 @@ export async function POST(req: NextRequest) {
       dimensions = { width: 2160, height: 2160 }; // 1:1 High-Res Square (4,665,600 pixels = ~4.67 MP)
     }
 
-    const FAL_PRIMARY_MODEL =
-      mode === "flatlay"
-        ? (process.env.FAL_FLATLAY_ENDPOINT || "fal-ai/flux-2-pro/edit")
-        : (process.env.FAL_EDIT_ENDPOINT || "openai/gpt-image-2.5/sunburst/edit");
-    const validAspectRatio = ["4:5", "3:4", "9:16", "1:1"].includes(aspectRatio) ? aspectRatio : "4:5";
-    console.log(`DEBUG: Calling ${FAL_PRIMARY_MODEL} (Mode: ${mode}, FaceMode: ${faceMode}, References: ${imageUrls.length}, Output Target: ${dimensions.width}x${dimensions.height} = ${((dimensions.width * dimensions.height) / 1e6).toFixed(2)} MP, AR: ${validAspectRatio})`);
+    const FAL_MODEL = "fal-ai/nano-banana-pro/edit";
+    const validAspectRatio = (["4:5", "3:4", "9:16", "1:1"].includes(aspectRatio)
+      ? aspectRatio
+      : "4:5") as "4:5" | "3:4" | "9:16" | "1:1";
+    console.log(`DEBUG: Calling ${FAL_MODEL} (Mode: ${mode}, References: ${imageUrls.length}, AR: ${validAspectRatio})`);
 
-    // 5. Execute Fal.ai OpenAI GPT-Image 2.5 Sunburst Edit Pipeline (Native 4.6 MP with automatic fallback)
-    // Bounded by a global concurrency gate and a hard per-run timeout. If Fal
-    // fails we return 503 WITHOUT touching the wallet: money is only ever taken
-    // after an image actually exists.
+    // 5. Execute Fal.ai nano-banana-pro/edit for all modes (No other models, no masking, no extra pipelines)
     lastRunStartedAt.set(user.id, Date.now());
     await acquireFalSlot();
 
     let falResult: FalRunResult;
     try {
       falResult = await retryOperation(async () => {
-        try {
-          const isSunburst = FAL_PRIMARY_MODEL.includes("sunburst") || FAL_PRIMARY_MODEL.includes("gpt-image");
-          const isSeedream = FAL_PRIMARY_MODEL.includes("seedream");
-          const isNanoBanana = FAL_PRIMARY_MODEL.includes("nano-banana");
-          const isFlux = FAL_PRIMARY_MODEL.includes("flux");
-
-          const inputPayload: Record<string, any> = {
-            image_urls: imageUrls,
+        return await fal.run(FAL_MODEL, {
+          input: {
             prompt: fluxPrompt,
-            image_size: dimensions,
-            output_format: "png"
-          };
-
-          // Specific parameters for models that require custom schema
-          if (isSunburst) {
-            inputPayload.quality = "high"; // Fast, native 4.61 MP editorial resolution
-          } else if (isFlux) {
-            inputPayload.safety_tolerance = "2";
-          } else if (!isSeedream) {
-            inputPayload.resolution = isNanoBanana ? "2K" : "2k";
-            inputPayload.aspect_ratio = validAspectRatio;
-            inputPayload.safety_tolerance = "2";
-          }
-
-          return await fal.run(FAL_PRIMARY_MODEL, {
-            input: inputPayload,
-            abortSignal: AbortSignal.timeout(FAL_RUN_TIMEOUT_MS)
-          });
-        } catch (primaryErr) {
-          if (FAL_PRIMARY_MODEL !== "fal-ai/flux-2-pro/edit") {
-            console.warn(`Primary model ${FAL_PRIMARY_MODEL} encountered an error, falling back to fal-ai/flux-2-pro/edit:`, primaryErr);
-            return await fal.run("fal-ai/flux-2-pro/edit", {
-              input: {
-                image_urls: imageUrls,
-                prompt: fluxPrompt,
-                image_size: dimensions,
-                output_format: "png",
-                safety_tolerance: "2"
-              },
-              abortSignal: AbortSignal.timeout(FAL_RUN_TIMEOUT_MS)
-            });
-          }
-          throw primaryErr;
-        }
+            image_urls: imageUrls,
+            aspect_ratio: validAspectRatio,
+            resolution: "2K",
+            output_format: "png",
+            safety_tolerance: "4",
+          },
+          abortSignal: AbortSignal.timeout(FAL_RUN_TIMEOUT_MS)
+        });
       }, 2, 3000);
     } catch (falErr) {
-      console.warn("Outbound Fal.ai call failed after retries:", falErr);
+      console.warn("Outbound Fal.ai nano-banana-pro/edit call failed after retries:", falErr);
       return serviceUnavailable("fal inference failed");
     } finally {
       releaseFalSlot();
     }
 
     const imgObj = falResult?.data?.images?.[0] || falResult?.images?.[0];
-    let generatedImageUrl =
+    const generatedImageUrl =
       imgObj?.url ||
       falResult?.data?.image?.url ||
       falResult?.image?.url;
@@ -1565,37 +1527,7 @@ export async function POST(req: NextRequest) {
     const actualWidth = imgObj?.width || dimensions.width;
     const actualHeight = imgObj?.height || dimensions.height;
     const actualMP = ((actualWidth * actualHeight) / 1000000).toFixed(2);
-    console.log(`DEBUG: Fal.ai generation successful. Resolution: ${actualWidth}x${actualHeight} (${actualMP} MP).`);
-
-    // =========================================================================
-    // Phase 2 & Phase 3: Cloud SAM 2 Face/Skin Isolation + Skin Micro-Pass
-    // Intercepts Sunburst generation before display. Uses fal-ai/evf-sam (SAM 2)
-    // to isolate face & neck, then injects authentic micro-pores via
-    // fal-ai/flux-general/inpainting (strength 0.30) to eliminate waxy AI skin.
-    // =========================================================================
-    let skinPassMeta: { applied: boolean; maskUrl?: string | null; elapsedMs?: number } | null = null;
-    if (mode !== "flatlay") {
-      try {
-        const microPassResult = await applySkinMicroPass({
-          imageUrl: generatedImageUrl,
-          mode,
-          inpaintStrength: typeof body.skinStrength === "number" ? body.skinStrength : undefined,
-          dimensions,
-        });
-
-        if (microPassResult.applied && microPassResult.finalImageUrl) {
-          generatedImageUrl = microPassResult.finalImageUrl;
-        }
-
-        skinPassMeta = {
-          applied: microPassResult.applied,
-          maskUrl: microPassResult.maskUrl,
-          elapsedMs: microPassResult.elapsedMs,
-        };
-      } catch (skinErr) {
-        console.warn("Skin micro-pass execution notice:", skinErr);
-      }
-    }
+    console.log(`DEBUG: Fal.ai nano-banana-pro/edit generation successful. Resolution: ${actualWidth}x${actualHeight} (${actualMP} MP).`);
 
     // 6. Deduct balance and log generation atomically in Supabase.
     // p_idempotency_key makes a client retry of the same logical request safe.
@@ -1666,7 +1598,6 @@ export async function POST(req: NextRequest) {
       success: true,
       outputUrl: generatedImageUrl,
       output_url: generatedImageUrl,
-      skinPass: skinPassMeta,
       // No fake LQIP: a real blur placeholder would mean downloading the whole
       // image a second time, so we return null and let the preview render the
       // final asset directly.
