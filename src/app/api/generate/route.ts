@@ -10,6 +10,7 @@ import sharp from "sharp";
 import { MAX_GARMENT_REFERENCES } from "@/lib/catalogData";
 import { CREDIT_PRICE_INR, creditsFromBalance } from "@/lib/pricing";
 import { STAGING_TEMPLATES } from "@/lib/flatlayData";
+import { applySkinMicroPass } from "@/lib/skinMicroPass";
 
 // No silent placeholder fallbacks: a missing env var must fail loudly as a 503
 // instead of building a client that points at "placeholder.supabase.co".
@@ -1551,7 +1552,7 @@ export async function POST(req: NextRequest) {
     }
 
     const imgObj = falResult?.data?.images?.[0] || falResult?.images?.[0];
-    const generatedImageUrl =
+    let generatedImageUrl =
       imgObj?.url ||
       falResult?.data?.image?.url ||
       falResult?.image?.url;
@@ -1564,7 +1565,38 @@ export async function POST(req: NextRequest) {
     const actualWidth = imgObj?.width || dimensions.width;
     const actualHeight = imgObj?.height || dimensions.height;
     const actualMP = ((actualWidth * actualHeight) / 1000000).toFixed(2);
-    console.log(`DEBUG: Fal.ai FLUX 2 Pro generation successful. Resolution: ${actualWidth}x${actualHeight} (${actualMP} MP).`);
+    console.log(`DEBUG: Fal.ai generation successful. Resolution: ${actualWidth}x${actualHeight} (${actualMP} MP).`);
+
+    // =========================================================================
+    // Phase 2 & Phase 3: Automated Local Face & Skin Isolation + Skin Micro-Pass
+    // Intercepts the Sunburst generation before display. Detects only the face
+    // and exposed neck locally (<80ms CPU, Cost ₹0.00), then injects authentic
+    // micro-pores (Option A: fal.ai micro-inpaint with strength ~0.30 or Option B).
+    // =========================================================================
+    let skinPassMeta: { applied: boolean; route: string; faceDetected: boolean } | null = null;
+    if (mode !== "flatlay") {
+      try {
+        const microPassResult = await applySkinMicroPass({
+          imageUrl: generatedImageUrl,
+          mode,
+          route: (body.skinPassRoute as any) || (process.env.SKIN_PASS_ROUTE as any) || "option_a",
+          inpaintStrength: typeof body.skinStrength === "number" ? body.skinStrength : undefined,
+          dimensions,
+        });
+
+        if (microPassResult.applied && microPassResult.finalImageUrl) {
+          generatedImageUrl = microPassResult.finalImageUrl;
+        }
+
+        skinPassMeta = {
+          applied: microPassResult.applied,
+          route: microPassResult.route,
+          faceDetected: microPassResult.faceDetected,
+        };
+      } catch (skinErr) {
+        console.warn("Skin micro-pass execution notice:", skinErr);
+      }
+    }
 
     // 6. Deduct balance and log generation atomically in Supabase.
     // p_idempotency_key makes a client retry of the same logical request safe.
@@ -1635,6 +1667,7 @@ export async function POST(req: NextRequest) {
       success: true,
       outputUrl: generatedImageUrl,
       output_url: generatedImageUrl,
+      skinPass: skinPassMeta,
       // No fake LQIP: a real blur placeholder would mean downloading the whole
       // image a second time, so we return null and let the preview render the
       // final asset directly.
