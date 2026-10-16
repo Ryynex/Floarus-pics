@@ -45,6 +45,40 @@ async function runPythonSkinDetector(
   dimensions?: { width: number; height: number };
   elapsedMs?: number;
 }> {
+  // 1. If a remote microservice is configured (e.g. on Vercel connecting to Render/Modal/Railway), use HTTP
+  const remoteApiUrl = (process.env.SKIN_DETECTOR_API_URL || "").trim();
+  if (remoteApiUrl) {
+    const res = await fetch(remoteApiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_url: imageInput,
+        local_pass: options?.localPass,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Remote skin detector HTTP ${res.status}: ${await res.text()}`);
+    }
+
+    const data = await res.json();
+    if (data.mask_base64) {
+      await fsp.writeFile(outputMaskPath, Buffer.from(data.mask_base64, "base64"));
+    }
+    if (data.enhanced_base64 && options?.enhancedOutput) {
+      await fsp.writeFile(options.enhancedOutput, Buffer.from(data.enhanced_base64, "base64"));
+    }
+
+    return {
+      faceDetected: Boolean(data.face_detected),
+      bbox: data.bbox || null,
+      dimensions: data.dimensions,
+      elapsedMs: data.elapsed_ms,
+    };
+  }
+
+  // 2. Otherwise execute local Python script (Local dev, Docker, or VPS)
   const pythonScript = path.resolve(process.cwd(), "scripts", "generate_skin_mask.py");
   const pythonBinary = process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
 
