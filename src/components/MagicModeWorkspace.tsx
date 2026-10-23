@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Sparkles, Layers, Scissors } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { creditsFromBalance } from "@/lib/pricing";
+import { creditsFromBalance, CREDIT_PRICE_INR } from "@/lib/pricing";
 import {
   CatalogModel,
   CatalogPose,
@@ -843,7 +843,7 @@ export function MagicModeWorkspace() {
             note={
               isMultiSuit
                 ? `Costs ${activeSuits.length} credits (${activeSuits.length} suits), deducted only on successful render.`
-                : `Costs ${batchCount} credit${batchCount > 1 ? "s" : ""} (Rs ${batchCount * 49}), deducted only on successful render.`
+                : `Costs ${batchCount} credit${batchCount > 1 ? "s" : ""} (Rs ${batchCount * CREDIT_PRICE_INR}), deducted only on successful render.`
             }
             loadingLabel={loadingLabel}
             imageCount={isMultiSuit ? activeSuits.length : batchCount}

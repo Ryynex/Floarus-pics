@@ -275,7 +275,7 @@ export default function Home() {
                 </div>
                 <div className="bg-surface/95 backdrop-blur-md border border-line px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl shadow-lg flex flex-col items-end">
                   <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-ink-faint">Catalog Rate</span>
-                  <span className="text-[10px] sm:text-[11px] font-bold text-fuchsia-accent">₹49 / image</span>
+                  <span className="text-[10px] sm:text-[11px] font-bold text-fuchsia-accent">₹40 / image</span>
                 </div>
               </div>
             </div>
@@ -624,7 +624,7 @@ export default function Home() {
               <p>Florus.pics is a specialized business-to-business platform granting non-exclusive, revocable rights to upload design assets and render high-resolution model lookbook designs. Users are solely responsible for ensuring they possess rights to all input graphics and model face references submitted.</p>
 
               <h4 className="text-ink font-semibold">2. Wallet Balances and Manual UPI Refills</h4>
-              <p>Generation services are charged at a flat rate of ₹49.00 INR per successful output. Wallet top-ups are processed manually: users submit their transaction IDs or UTR numbers, which must be verified and approved by the system administrators before wallet credit is incremented. All balance amounts are non-refundable.</p>
+              <p>Generation services are charged at a flat rate of ₹40.00 INR per successful output. Wallet top-ups are processed manually: users submit their transaction IDs or UTR numbers, which must be verified and approved by the system administrators before wallet credit is incremented. All balance amounts are non-refundable.</p>
 
               <h4 className="text-ink font-semibold">3. Generation Policies and AI Disclaimers</h4>
               <p>Generative services are provided on an &quot;as-is&quot; basis using cloud-hosted GPU endpoints. Output quality may fluctuate based on reference complexity, prompts, and server loads. Florus.pics does not guarantee exact color matching for industrial textile manufacturing.</p>

@@ -556,7 +556,7 @@ export function FlatlayStudioWorkspace() {
             note={
               isMultiSuitMode
                 ? `Costs ${suits.length} credits (${suits.length} suits), deducted only on successful render.`
-                : `Costs ${imageCount} credit${imageCount > 1 ? "s" : ""} (Rs ${imageCount * 49}), deducted only on successful render.`
+                : `Costs ${imageCount} credit${imageCount > 1 ? "s" : ""} (Rs ${imageCount * CREDIT_PRICE_INR}), deducted only on successful render.`
             }
             loadingLabel={generationStage || "Staging flat-lays..."}
             imageCount={isMultiSuitMode ? suits.length : imageCount}

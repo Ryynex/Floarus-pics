@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { clearAuthCookie } from "@/lib/authCookie";
+import { creditsFromBalance } from "@/lib/pricing";
 
 interface Profile {
   email: string | null;
@@ -367,7 +368,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                   <span className="h-7 w-20 bg-sand rounded animate-pulse inline-block" />
                 ) : (
                   <>
-                    <span>{((profile?.balance_inr || 0) / 49).toFixed(1)}</span>
+                    <span>{creditsFromBalance(profile?.balance_inr || 0).toFixed(1)}</span>
                     <span className="text-xs font-semibold text-ink-soft">Credits</span>
                   </>
                 )}
@@ -448,7 +449,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                   <div className="flex justify-between items-center">
                     <label className="label-caps">Amount Transferred (INR)</label>
                     <span className="text-[11px] font-bold text-fuchsia-accent">
-                      ≈ {(parseFloat(topUpAmount || "0") / 49).toFixed(1)} Credits
+                      ≈ {creditsFromBalance(parseFloat(topUpAmount || "0")).toFixed(1)} Credits
                     </span>
                   </div>
                   <input
@@ -633,7 +634,7 @@ export default function DashboardLayout({
             <div className="flex items-center gap-2 bg-sand border border-muted-purple px-3 py-1.5 rounded-lg text-sm">
               <Wallet className="h-3.5 w-3.5 text-purple-accent" />
               <span className="text-ink font-semibold">
-                {profileBalance !== null ? `${(profileBalance / 49).toFixed(1)} Credits` : "0.0 Credits"}
+                {profileBalance !== null ? `${creditsFromBalance(profileBalance).toFixed(1)} Credits` : "0.0 Credits"}
               </span>
             </div>
 
@@ -678,7 +679,7 @@ export default function DashboardLayout({
           <div className="flex items-center gap-2 bg-sand border border-muted-purple px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-sm">
             <Wallet className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-accent" />
             <span className="text-ink font-semibold">
-              {profileBalance !== null ? `${(profileBalance / 49).toFixed(1)} Credits` : "0.0 Credits"}
+              {profileBalance !== null ? `${creditsFromBalance(profileBalance).toFixed(1)} Credits` : "0.0 Credits"}
             </span>
           </div>
         </header>

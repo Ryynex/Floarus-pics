@@ -6,7 +6,7 @@
  * `deduct_balance_for_generation` is always read from here, never from the
  * client payload.
  */
-export const CREDIT_PRICE_INR = 49;
+export const CREDIT_PRICE_INR = 40;
 
 /** Convert a rupee balance into whole/fractional credits (1 credit = one generation). */
 export function creditsFromBalance(balanceInr: number): number {
