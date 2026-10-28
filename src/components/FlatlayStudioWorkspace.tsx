@@ -24,7 +24,8 @@ import {
 import {
   StructuredSuitUploader,
   SuitEntry,
-  SuitSlotKey
+  SuitSlotKey,
+  SLOT_URL_KEYS
 } from "@/components/lookbook/StructuredSuitUploader";
 import { creditsFromBalance, CREDIT_PRICE_INR } from "@/lib/pricing";
 
@@ -207,20 +208,12 @@ export function FlatlayStudioWorkspace() {
         });
       }
 
-      const urlKeyMap: Record<SuitSlotKey, keyof SuitEntry> = {
-        kameez: "kameezUrl",
-        chest_design: "chestDesignUrl",
-        dupatta: "dupattaUrl",
-        bottom: "bottomUrl",
-        complete_set: "completeSetUrl"
-      };
-
-      const propKey = urlKeyMap[slotKey];
+      const propKey = SLOT_URL_KEYS[slotKey] || `${slotKey}Url`;
       setSuits((prev) =>
         prev.map((s) => {
           if (s.id !== suitId) return s;
           const updated = { ...s, [propKey]: finalUrl, [`${slotKey}Url`]: finalUrl };
-          if (slotKey === "kameez") {
+          if (slotKey === "kameez" || slotKey === "main_dress") {
             updated.completeSetUrl = finalUrl;
             (updated as any).complete_setUrl = finalUrl;
           }
@@ -238,14 +231,7 @@ export function FlatlayStudioWorkspace() {
   };
 
   const handleRemoveSlot = (suitId: string, slotKey: SuitSlotKey) => {
-    const urlKeyMap: Record<SuitSlotKey, keyof SuitEntry> = {
-      kameez: "kameezUrl",
-      chest_design: "chestDesignUrl",
-      dupatta: "dupattaUrl",
-      bottom: "bottomUrl",
-      complete_set: "completeSetUrl"
-    };
-    const propKey = urlKeyMap[slotKey];
+    const propKey = SLOT_URL_KEYS[slotKey] || `${slotKey}Url`;
     setSuits((prev) =>
       prev.map((s) => {
         if (s.id !== suitId) return s;
@@ -488,8 +474,8 @@ export function FlatlayStudioWorkspace() {
       {/* Standard Header matching Studio & Custom Lookbooks */}
       <LookbookHeader
         icon={<Package className="h-[18px] w-[18px]" />}
-        title="Flat-Lay Studio"
-        description="Commercial staging templates and luxury flat-lay photography for your unstitched suits and fabric sets."
+        title="Build Your Suits"
+        description="Commercial staging templates and luxury flat-lay photography for your suits and fabric sets."
         actions={<WorkflowSwitcher active="flatlay" />}
       />
 

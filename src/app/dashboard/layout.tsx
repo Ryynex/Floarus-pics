@@ -285,7 +285,7 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                         </span>
                       </Link>
 
-                      {/* Sub-item 2: Unstitched Suits */}
+                      {/* Sub-item 2: Readymade Suit */}
                       <Link
                         href="/dashboard?tab=magic&category=suits"
                         onClick={onClose}
@@ -295,24 +295,8 @@ function Sidebar({ isMobile, onClose }: { isMobile?: boolean; onClose?: () => vo
                             : "text-ink-soft hover:text-ink hover:bg-sand/60"
                         }`}
                       >
-                        <span>Unstitched Suits</span>
+                        <span>Readymade Suit</span>
                         <span className="text-[10px] text-ink-faint group-hover:text-ink-soft">
-                          3-Piece
-                        </span>
-                      </Link>
-
-                      {/* Sub-item 3: Flat-Lay Studio */}
-                      <Link
-                        href="/dashboard?tab=flatlay"
-                        onClick={onClose}
-                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
-                          currentTab === "flatlay"
-                            ? "bg-fuchsia-accent/15 text-fuchsia-accent font-semibold border-l-2 border-fuchsia-accent shadow-xs"
-                            : "text-ink-soft hover:text-ink hover:bg-sand/60"
-                        }`}
-                      >
-                        <span>Flat-Lay Studio</span>
-                        <span className="text-[10px] text-fuchsia-accent font-semibold">
                           1 Credit
                         </span>
                       </Link>

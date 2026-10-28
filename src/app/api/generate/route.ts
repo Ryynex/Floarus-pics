@@ -1175,8 +1175,8 @@ export async function POST(req: NextRequest) {
       }
 
       // Slot 2 (when a reference pose was chosen): skeletal posture anchor.
-      // A custom text pose intentionally sends no image.
-      if (poseImageUrl && poseId !== "custom") {
+      const isDummyPoseUrl = !poseImageUrl || poseImageUrl.includes("photo-1515886657613-9f3515b0c78f");
+      if (poseImageUrl && !isDummyPoseUrl) {
         refList.push({
           url: await prepareRequiredRef(poseImageUrl, "Pose"),
           type: "pose",
@@ -1185,9 +1185,10 @@ export async function POST(req: NextRequest) {
       }
 
       // Slot 3 (when a reference background was chosen): environment anchor.
+      const isDummyBgUrl = !backgroundUrl || backgroundUrl.includes("photo-1582650625119-3a31f8418b7d");
       if (
         backgroundUrl &&
-        backgroundId !== "custom" &&
+        !isDummyBgUrl &&
         backgroundUrl !== poseImageUrl
       ) {
         refList.push({
@@ -1352,6 +1353,10 @@ export async function POST(req: NextRequest) {
         promptParts.push(`Pose: Elegant natural standing pose with graceful hand placement.`);
       }
 
+      if (poseRef && poseDescription && poseDescription !== poseName) {
+        promptParts.push(`Pose & Posture Directives: ${poseDescription}.`);
+      }
+
       // Background & Seamless On-Location Integration
       if (framing.isCloseUp) {
         if (bgRef) {
@@ -1385,6 +1390,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      if (bgRef && backgroundDescription && backgroundDescription !== backgroundName) {
+        promptParts.push(`Background Environmental & Lighting Directives: ${backgroundDescription}.`);
+      }
+
       // Hairstyle & Jewellery
       if (hairstyle && hairstyle !== "Default (as before)") {
         promptParts.push(`Hairstyle: ${hairstyle}, polished salon finish.`);
@@ -1407,55 +1416,56 @@ export async function POST(req: NextRequest) {
 
         if (isSuitMode) {
           // =====================================================================
-          // NON-SAREE GARMENTS & UNSTITCHED SUITS (AI AUTO-DETECT PIPELINE)
+          // NON-SAREE GARMENTS & READYMADE SUITS (AI AUTO-DETECT PIPELINE)
           // =====================================================================
-          const kameezRef = refList.find(r => r.type === "garment" && (r.role === "kameez" || r.role === "kurta_top" || r.slotLabel?.toLowerCase().includes("kameez") || r.slotLabel?.toLowerCase().includes("kurta") || r.slotLabel?.toLowerCase().includes("top")));
-          const chestRef = refList.find(r => r.type === "garment" && (r.role === "chest_design" || r.role === "neckline_detail" || r.slotLabel?.toLowerCase().includes("chest") || r.slotLabel?.toLowerCase().includes("neckline") || r.slotLabel?.toLowerCase().includes("detail")));
-          const dupattaRef = refList.find(r => r.type === "garment" && (r.role === "dupatta" || r.slotLabel?.toLowerCase().includes("dupatta")));
-          const bottomRef = refList.find(r => r.type === "garment" && (r.role === "bottom" || r.role === "salwar_bottom" || r.slotLabel?.toLowerCase().includes("salwar") || r.slotLabel?.toLowerCase().includes("bottom") || r.slotLabel?.toLowerCase().includes("pants")));
-          const completeSetRef = refList.find(r => r.type === "garment" && (r.role === "complete_set" || r.slotLabel?.toLowerCase().includes("complete") || r.slotLabel?.toLowerCase().includes("ensemble")));
+          const fullDressRef = refList.find(r => r.type === "garment" && (
+            r.role === "main_dress" || r.role === "full_dress" || r.role === "complete_set" || r.role === "kameez" ||
+            r.slotLabel?.toLowerCase().includes("dress") || r.slotLabel?.toLowerCase().includes("full") || r.slotLabel?.toLowerCase().includes("suit") || r.slotLabel?.toLowerCase().includes("kameez") || r.slotLabel?.toLowerCase().includes("top")
+          ));
+          const detail1Ref = refList.find(r => r.type === "garment" && (
+            r.role === "detail_1" || r.role === "chest_design" || r.role === "neckline_detail" ||
+            r.slotLabel?.toLowerCase().includes("detail 1") || r.slotLabel?.toLowerCase().includes("chest") || r.slotLabel?.toLowerCase().includes("neckline")
+          ));
+          const detail2Ref = refList.find(r => r.type === "garment" && (
+            r.role === "detail_2" || r.role === "dupatta" ||
+            r.slotLabel?.toLowerCase().includes("detail 2") || r.slotLabel?.toLowerCase().includes("dupatta") || r.slotLabel?.toLowerCase().includes("scarf")
+          ));
+          const detail3Ref = refList.find(r => r.type === "garment" && (
+            r.role === "detail_3" || r.role === "bottom" || r.role === "salwar_bottom" ||
+            r.slotLabel?.toLowerCase().includes("detail 3") || r.slotLabel?.toLowerCase().includes("salwar") || r.slotLabel?.toLowerCase().includes("bottom") || r.slotLabel?.toLowerCase().includes("pants") || r.slotLabel?.toLowerCase().includes("trouser")
+          ));
 
           const isAutoSilhouette = !suitSilhouette || suitSilhouette.includes("Auto-Detect") || suitSilhouette.includes("auto");
           const isAutoDrape = !dupattaDrape || dupattaDrape.includes("Auto-Coordinate") || dupattaDrape.includes("auto");
 
           promptParts.push(
-            `MANDATORY NON-SAREE GARMENT SYNTHESIS & AUTO-DETECTION (STRICTLY NO SAREE / NO CHOLI): The model is wearing a fully tailored, bespoke designer ethnic outfit synthesized from the garment fabric references in ${garmentTokens}. ` +
-            `AI AUTOMATIC GARMENT & SILHOUETTE DETECTION: Analyze the reference images (${garmentTokens}) to automatically identify and reconstruct the exact garment ensemble (such as a tailored Salwar Kameez, Pakistani Lawn Kurta Set, Flared Anarkali Suit, Sharara/Gharara, Kurti with Trousers, or Co-ord Set). ` +
-            `Assemble and tailor the unstitched components directly onto the model with publication-grade bespoke tailoring. STRICTLY PROHIBIT 6-yard sarees, saree pleats, saree pallu drapes, and bare midriffs.`
+            `MANDATORY READYMADE SUIT / DRESS SYNTHESIS & AUTO-DETECTION (STRICTLY NO SAREE / NO CHOLI): The model is wearing a fully tailored, bespoke designer ethnic suit or dress synthesized from the garment references in ${garmentTokens}. ` +
+            `AI AUTOMATIC GARMENT & SILHOUETTE DETECTION: Analyze the reference images (${garmentTokens}) to automatically identify and reconstruct the exact garment ensemble (such as a tailored Straight Suit, Pakistani Lawn Kurta Set, Flared Anarkali Suit / Gown, Sharara/Gharara, Kurti with Trousers, or Co-ord Set). ` +
+            `Drape the readymade outfit directly onto the model with publication-grade bespoke tailoring. STRICTLY PROHIBIT 6-yard sarees, saree pleats, saree pallu drapes, and bare midriffs.`
           );
 
-          if (completeSetRef) {
+          if (fullDressRef) {
             promptParts.push(
-              `COMPLETE ENSEMBLE MASTER TEMPLATE: Use @image${completeSetRef.index} as the master visual guide for the overall silhouette, cut proportions, sleeve length, hemline style, and styling coordination of the outfit.`
+              `FULL DRESS & ENSEMBLE MASTER TEMPLATE: Use @image${fullDressRef.index} as the master visual guide for the complete readymade dress/suit ensemble. Transfer its exact base color, overall silhouette, cut proportions, sleeve length, woven motifs, digital prints, and hemline borders onto the model.`
             );
           }
 
-          if (kameezRef) {
+          if (detail1Ref) {
             promptParts.push(
-              `KAMEEZ / TOP FABRIC TAILORING: Cut and tailor the model's top/kameez directly from @image${kameezRef.index}. Faithfully transfer its exact base fabric color, woven motifs, digital prints, and daman hemline borders onto the garment.`
-            );
-          } else if (completeSetRef) {
-            promptParts.push(
-              `TOP / KURTA SPECIFICATION: Cut and tailor the top matching the garment shown in @image${completeSetRef.index}.`
+              `DETAIL 1 (UPPER BODICE & EMBROIDERY): Replicate the intricate neck embroidery, threadwork, collar/bodice patch, and zari detailing visible in @image${detail1Ref.index} precisely centered on the model's upper torso and neckline with needlework realism.`
             );
           }
 
-          if (chestRef) {
-            promptParts.push(
-              `CHEST DESIGN & NECKLINE EMBROIDERY: Replicate the intricate neck embroidery, threadwork, gala patch, and zari detailing visible in @image${chestRef.index} precisely centered on the model's upper torso and neckline with needlework realism.`
-            );
-          }
-
-          if (bottomRef) {
-            promptParts.push(
-              `BOTTOM / PANTS TAILORING: Tailor the matching bottom trousers (cigarette pants, salwar, or palazzo) directly from the fabric in @image${bottomRef.index}, cleanly fitted beneath the top.`
-            );
-          }
-
-          if (dupattaRef) {
+          if (detail2Ref) {
             const drapeStyle = isAutoDrape ? "graceful natural drape" : dupattaDrape;
             promptParts.push(
-              `DUPATTA DRAPING: Style the authentic dupatta from @image${dupattaRef.index} in a ${drapeStyle}, faithfully displaying its borders, prints, and lightweight translucent fabric drape physics.`
+              `DETAIL 2 (DUPATTA / SCARF / SLEEVES): Style the authentic dupatta or scarf from @image${detail2Ref.index} in a ${drapeStyle}, faithfully displaying its delicate borders, lace, prints, and lightweight fabric drape physics.`
+            );
+          }
+
+          if (detail3Ref) {
+            promptParts.push(
+              `DETAIL 3 (BOTTOM / TROUSERS / FLARE): Tailor the lower trousers (cigarette pants, salwar, or palazzo flare) directly from @image${detail3Ref.index}, cleanly finished beneath the outfit.`
             );
           }
 

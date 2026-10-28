@@ -111,7 +111,7 @@ export type WorkflowKey = "studio" | "custom" | "flatlay";
 const WORKFLOWS: { key: WorkflowKey; tab: string; label: string }[] = [
   { key: "studio", tab: "generate", label: "Studio Lookbooks" },
   { key: "custom", tab: "magic", label: "Custom Lookbooks" },
-  { key: "flatlay", tab: "flatlay", label: "Flat-Lay Studio" },
+  { key: "flatlay", tab: "flatlay", label: "Build Your Suits" },
 ];
 
 export function WorkflowSwitcher({ active }: { active: WorkflowKey }) {

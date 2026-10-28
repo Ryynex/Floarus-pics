@@ -11,16 +11,18 @@ export interface CatalogPose {
   id: string;
   name: string;
   imageUrl: string;
-  category: "standing" | "seated" | "motion" | "details" | "regal";
+  category: "standing" | "seated" | "motion" | "details" | "regal" | "custom";
   description: string;
+  isCustom?: boolean;
 }
 
 export interface CatalogBackground {
   id: string;
   name: string;
   imageUrl: string;
-  category: "heritage" | "festive" | "studio" | "gardens" | "luxury_interiors";
+  category: "heritage" | "festive" | "studio" | "gardens" | "luxury_interiors" | "custom";
   description: string;
+  isCustom?: boolean;
 }
 
 export interface CatalogHairstyle {
@@ -74,11 +76,11 @@ export const WORKFLOW_MODES: WorkflowMode[] = [
   },
   {
     id: "suits",
-    title: "Unstitched Suits",
+    title: "Readymade Suits",
     iconName: "Layers",
-    description: "Stitch and drape suit sets on a model from folded fabric photos",
-    outfitTypeDefault: "Unstitched Salwar Kameez (3-Piece)",
-    instructions: "Convert 3-piece unstitched fabrics into tailored royal salwar suits, straight kurtas, or palazzo sets on realistic models."
+    description: "Tailor and drape suits or dresses on a model from product photos",
+    outfitTypeDefault: "Readymade Suit Ensemble",
+    instructions: "Upload full dress photo and optional details (neckline, dupatta, bottom) to generate publication-grade luxury lookbooks."
   },
   {
     id: "magic",
@@ -198,6 +200,164 @@ export function deleteSavedCustomModel(id: string): CatalogModel[] {
     return updated;
   } catch (e) {
     console.error("Failed to delete custom model:", e);
+    return [];
+  }
+}
+
+export function updateCustomModel(
+  id: string,
+  updates: { name?: string; subtitle?: string; description?: string }
+): CatalogModel[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = getSavedCustomModels();
+    const updated = existing.map((m) => (m.id === id ? { ...m, ...updates } : m));
+    localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error("Failed to update custom model:", e);
+    return [];
+  }
+}
+
+// -------------------------------------------------------------
+// LocalStorage Helper for Permanent Custom Poses
+// -------------------------------------------------------------
+const CUSTOM_POSES_STORAGE_KEY = "florus_permanent_custom_poses";
+
+export function getSavedCustomPoses(): CatalogPose[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_POSES_STORAGE_KEY);
+    if (!raw) return [];
+    const list: CatalogPose[] = JSON.parse(raw);
+    let mutated = false;
+    const cleaned = list.map((p) => {
+      if (p.imageUrl && p.imageUrl.includes("photo-1515886657613-9f3515b0c78f")) {
+        mutated = true;
+        return { ...p, imageUrl: "" };
+      }
+      return p;
+    });
+    if (mutated) {
+      localStorage.setItem(CUSTOM_POSES_STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
+  } catch (e) {
+    console.error("Failed to load custom poses from localStorage:", e);
+    return [];
+  }
+}
+
+export function saveCustomPose(pose: CatalogPose): CatalogPose[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = getSavedCustomPoses();
+    const updated = [pose, ...existing.filter((p) => p.id !== pose.id)];
+    localStorage.setItem(CUSTOM_POSES_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error("Failed to save custom pose to localStorage:", e);
+    return [];
+  }
+}
+
+export function updateCustomPose(
+  id: string,
+  updates: { name?: string; description?: string }
+): CatalogPose[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = getSavedCustomPoses();
+    const updated = existing.map((p) => (p.id === id ? { ...p, ...updates } : p));
+    localStorage.setItem(CUSTOM_POSES_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error("Failed to update custom pose:", e);
+    return [];
+  }
+}
+
+export function deleteSavedCustomPose(id: string): CatalogPose[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = getSavedCustomPoses();
+    const updated = existing.filter((p) => p.id !== id);
+    localStorage.setItem(CUSTOM_POSES_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error("Failed to delete custom pose:", e);
+    return [];
+  }
+}
+
+// -------------------------------------------------------------
+// LocalStorage Helper for Permanent Custom Backgrounds
+// -------------------------------------------------------------
+const CUSTOM_BACKGROUNDS_STORAGE_KEY = "florus_permanent_custom_backgrounds";
+
+export function getSavedCustomBackgrounds(): CatalogBackground[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_BACKGROUNDS_STORAGE_KEY);
+    if (!raw) return [];
+    const list: CatalogBackground[] = JSON.parse(raw);
+    let mutated = false;
+    const cleaned = list.map((b) => {
+      if (b.imageUrl && b.imageUrl.includes("photo-1582650625119-3a31f8418b7d")) {
+        mutated = true;
+        return { ...b, imageUrl: "" };
+      }
+      return b;
+    });
+    if (mutated) {
+      localStorage.setItem(CUSTOM_BACKGROUNDS_STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
+  } catch (e) {
+    console.error("Failed to load custom backgrounds from localStorage:", e);
+    return [];
+  }
+}
+
+export function saveCustomBackground(bg: CatalogBackground): CatalogBackground[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = getSavedCustomBackgrounds();
+    const updated = [bg, ...existing.filter((b) => b.id !== bg.id)];
+    localStorage.setItem(CUSTOM_BACKGROUNDS_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error("Failed to save custom background to localStorage:", e);
+    return [];
+  }
+}
+
+export function updateCustomBackground(
+  id: string,
+  updates: { name?: string; description?: string }
+): CatalogBackground[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = getSavedCustomBackgrounds();
+    const updated = existing.map((b) => (b.id === id ? { ...b, ...updates } : b));
+    localStorage.setItem(CUSTOM_BACKGROUNDS_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error("Failed to update custom background:", e);
+    return [];
+  }
+}
+
+export function deleteSavedCustomBackground(id: string): CatalogBackground[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = getSavedCustomBackgrounds();
+    const updated = existing.filter((b) => b.id !== id);
+    localStorage.setItem(CUSTOM_BACKGROUNDS_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error("Failed to delete custom background:", e);
     return [];
   }
 }
@@ -1103,25 +1263,39 @@ export function getSavedMagicPreferences(): SavedMagicPreferences | null {
     if (!raw) return null;
     const prefs: SavedMagicPreferences = JSON.parse(raw);
 
-    // Auto-heal Pose: verify against current PRESET_POSES
+    // Auto-heal Pose: verify against current PRESET_POSES or custom poses
     if (prefs.selectedPose) {
-      if (prefs.selectedPose.id !== "custom") {
+      const isCustomPose =
+        prefs.selectedPose.id === "custom" ||
+        prefs.selectedPose.id.startsWith("custom-") ||
+        (prefs.selectedPose as any).category === "custom" ||
+        Boolean(prefs.selectedPose.isCustom);
+      if (!isCustomPose) {
         const found = PRESET_POSES.find(
           (p) => p.id === prefs.selectedPose?.id || p.imageUrl === prefs.selectedPose?.imageUrl
         );
         prefs.selectedPose = found || PRESET_POSES[0];
+      } else if (prefs.selectedPose.imageUrl?.includes("photo-1515886657613-9f3515b0c78f")) {
+        prefs.selectedPose.imageUrl = "";
       }
     } else {
       prefs.selectedPose = PRESET_POSES[0];
     }
 
-    // Auto-heal Background: verify against current PRESET_BACKGROUNDS
+    // Auto-heal Background: verify against current PRESET_BACKGROUNDS or custom backgrounds
     if (prefs.selectedBackground) {
-      if (prefs.selectedBackground.id !== "custom") {
+      const isCustomBg =
+        prefs.selectedBackground.id === "custom" ||
+        prefs.selectedBackground.id.startsWith("custom-") ||
+        (prefs.selectedBackground as any).category === "custom" ||
+        Boolean(prefs.selectedBackground.isCustom);
+      if (!isCustomBg) {
         const found = PRESET_BACKGROUNDS.find(
           (b) => b.id === prefs.selectedBackground?.id || b.imageUrl === prefs.selectedBackground?.imageUrl
         );
         prefs.selectedBackground = found || PRESET_BACKGROUNDS[0];
+      } else if (prefs.selectedBackground.imageUrl?.includes("photo-1582650625119-3a31f8418b7d")) {
+        prefs.selectedBackground.imageUrl = "";
       }
     } else {
       prefs.selectedBackground = PRESET_BACKGROUNDS[0];

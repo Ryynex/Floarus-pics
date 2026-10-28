@@ -1,13 +1,10 @@
 "use client";
 
-import { STAGING_TEMPLATES } from "@/lib/flatlayData";
-
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   Upload,
   X,
   Plus,
-  Info,
   ChevronDown,
   ChevronUp,
   Check,
@@ -17,11 +14,30 @@ import {
 } from "lucide-react";
 import { FALLBACK_IMAGE } from "./ui";
 
-export type SuitSlotKey = "kameez" | "chest_design" | "dupatta" | "bottom" | "complete_set";
+export type SuitSlotKey =
+  | "main_dress"
+  | "detail_1"
+  | "detail_2"
+  | "detail_3"
+  // Legacy keys retained for backwards compatibility
+  | "kameez"
+  | "chest_design"
+  | "dupatta"
+  | "bottom"
+  | "complete_set";
 
 export interface SuitEntry {
   id: string;
   suitNumber: number;
+  mainDressUrl?: string;
+  detail1Url?: string;
+  detail2Url?: string;
+  detail3Url?: string;
+  mainDressNote?: string;
+  detail1Note?: string;
+  detail2Note?: string;
+  detail3Note?: string;
+  // Legacy fields
   kameezUrl?: string;
   chestDesignUrl?: string;
   dupattaUrl?: string;
@@ -34,56 +50,79 @@ export interface SuitEntry {
   completeSetNote?: string;
 }
 
-export const SUIT_SLOT_COLUMNS: Array<{
+export const SUIT_DETAIL_SLOTS: Array<{
   key: SuitSlotKey;
   label: string;
   buttonLabel: string;
-  description: string;
+  subtitle: string;
+  placeholderNote: string;
 }> = [
   {
-    key: "kameez",
-    label: "Kameez",
-    buttonLabel: "+ Kameez",
-    description: "Main kurta / kameez fabric length"
+    key: "detail_1",
+    label: "Detail Photo 1 (Optional)",
+    buttonLabel: "+ Add Detail 1",
+    subtitle: "Neckline, embroidery, collar or bodice close-up",
+    placeholderNote: "e.g. Intricate gold zari embroidery on neckline"
   },
   {
-    key: "chest_design",
-    label: "Chest Design",
-    buttonLabel: "+ Chest Design",
-    description: "Neckline embroidery & gala patch"
+    key: "detail_2",
+    label: "Detail Photo 2 (Optional)",
+    buttonLabel: "+ Add Detail 2",
+    subtitle: "Dupatta, scarf, sleeve or print close-up",
+    placeholderNote: "e.g. Dupatta drape, borders & print detail"
   },
   {
-    key: "dupatta",
-    label: "Dupatta",
-    buttonLabel: "+ Dupatta",
-    description: "Dupatta drape, borders & print"
-  },
-  {
-    key: "bottom",
-    label: "Bottom",
-    buttonLabel: "+ Bottom",
-    description: "Salwar, pants or churidar fabric"
-  },
-  {
-    key: "complete_set",
-    label: "Complete Set",
-    buttonLabel: "+ Complete Set",
-    description: "Catalog ensemble or flat-lay reference"
+    key: "detail_3",
+    label: "Detail Photo 3 (Optional)",
+    buttonLabel: "+ Add Detail 3",
+    subtitle: "Bottom, trouser, hemline or texture close-up",
+    placeholderNote: "e.g. Pants hemline, salwar or fabric texture"
   }
 ];
 
-export const SLOT_URL_KEYS: Record<SuitSlotKey, keyof SuitEntry> = {
-  kameez: "kameezUrl",
-  chest_design: "chestDesignUrl",
-  dupatta: "dupattaUrl",
-  bottom: "bottomUrl",
-  complete_set: "completeSetUrl"
+export const SLOT_URL_KEYS: Record<string, keyof SuitEntry> = {
+  main_dress: "mainDressUrl",
+  detail_1: "detail1Url",
+  detail_2: "detail2Url",
+  detail_3: "detail3Url",
+  // Legacy mappings
+  kameez: "mainDressUrl",
+  complete_set: "mainDressUrl",
+  chest_design: "detail1Url",
+  dupatta: "detail2Url",
+  bottom: "detail3Url"
 };
 
 export function getSuitSlotUrl(suit: SuitEntry, slotKey: SuitSlotKey): string | undefined {
-  const camelKey = SLOT_URL_KEYS[slotKey];
-  const legacyKey = `${slotKey}Url` as keyof SuitEntry;
-  return (suit[camelKey] as string | undefined) || (suit[legacyKey] as string | undefined);
+  if (slotKey === "main_dress" || slotKey === "kameez" || slotKey === "complete_set") {
+    return suit.mainDressUrl || suit.kameezUrl || suit.completeSetUrl;
+  }
+  if (slotKey === "detail_1" || slotKey === "chest_design") {
+    return suit.detail1Url || suit.chestDesignUrl;
+  }
+  if (slotKey === "detail_2" || slotKey === "dupatta") {
+    return suit.detail2Url || suit.dupattaUrl;
+  }
+  if (slotKey === "detail_3" || slotKey === "bottom") {
+    return suit.detail3Url || suit.bottomUrl;
+  }
+  return (suit as unknown as Record<string, unknown>)[`${slotKey}Url`] as string | undefined;
+}
+
+export function getSuitSlotNote(suit: SuitEntry, slotKey: SuitSlotKey): string {
+  if (slotKey === "main_dress" || slotKey === "kameez" || slotKey === "complete_set") {
+    return suit.mainDressNote || suit.kameezNote || "";
+  }
+  if (slotKey === "detail_1" || slotKey === "chest_design") {
+    return suit.detail1Note || suit.chestDesignNote || "";
+  }
+  if (slotKey === "detail_2" || slotKey === "dupatta") {
+    return suit.detail2Note || suit.dupattaNote || "";
+  }
+  if (slotKey === "detail_3" || slotKey === "bottom") {
+    return suit.detail3Note || suit.bottomNote || "";
+  }
+  return ((suit as unknown as Record<string, unknown>)[`${slotKey}Note`] as string | undefined) || "";
 }
 
 export const SUIT_SILHOUETTES = [
@@ -94,33 +133,33 @@ export const SUIT_SILHOUETTES = [
   },
   {
     id: "straight_kurta",
-    name: "Straight Cut Kameez Set",
-    desc: "Crisp tailored straight-fit kameez paired with sleek cigarette trousers"
+    name: "Straight Cut Suit Set",
+    desc: "Crisp tailored straight-fit suit paired with sleek cigarette trousers"
   },
   {
     id: "pakistani_lawn",
-    name: "Pakistani Lawn Long Kurta",
+    name: "Pakistani Lawn Long Suit",
     desc: "Long relaxed silhouette with wide embroidered hem and flowing pants"
   },
   {
     id: "anarkali_flared",
-    name: "Flared Anarkali Suit",
+    name: "Flared Anarkali Suit / Gown",
     desc: "Flared kalidar silhouette with gathered churidar and sweeping flare"
   },
   {
     id: "sharara_gharara",
     name: "Sharara / Gharara Suit",
-    desc: "Short fitted kurta with voluminous tiered flare sharara pants"
+    desc: "Fitted top with voluminous tiered flare sharara pants"
   },
   {
     id: "aline_kurta",
-    name: "A-Line Kurta with Pants",
+    name: "A-Line Suit with Pants",
     desc: "Graceful gentle flare A-line silhouette with tailored ankle trousers"
   },
   {
     id: "patiala_suit",
     name: "Classic Patiala Salwar Suit",
-    desc: "Fitted short kameez with traditional multi-pleat voluminous patiala"
+    desc: "Fitted short top with traditional multi-pleat voluminous patiala"
   }
 ];
 
@@ -161,6 +200,7 @@ export interface StructuredSuitUploaderProps {
   suits: SuitEntry[];
   onUploadSlot: (suitId: string, slotKey: SuitSlotKey, file: File) => void;
   onRemoveSlot: (suitId: string, slotKey: SuitSlotKey) => void;
+  onUpdateNote?: (suitId: string, slotKey: SuitSlotKey, note: string) => void;
   onAddSuit: () => void;
   onRemoveSuit: (suitId: string) => void;
   uploading: boolean;
@@ -180,6 +220,7 @@ export function StructuredSuitUploader({
   suits,
   onUploadSlot,
   onRemoveSlot,
+  onUpdateNote,
   onAddSuit,
   onRemoveSuit,
   uploading,
@@ -189,8 +230,8 @@ export function StructuredSuitUploader({
   dupattaDrape,
   onSelectDupattaDrape,
   stepNumber = 2,
-  sectionTitle = "Your Suits",
-  sectionSubtitle = "Upload kameez fabric photo first, then add chest design and dupatta close-ups",
+  sectionTitle = "Your Readymade Suits",
+  sectionSubtitle = "Upload full dress photo first, then add optional detail close-ups",
   renderSuitExtra,
   variant = "standard"
 }: StructuredSuitUploaderProps) {
@@ -224,21 +265,21 @@ export function StructuredSuitUploader({
         {showTips && (
           <div className="px-4 pb-4 pt-1 border-t border-line/60 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-ink-soft animate-in fade-in-50">
             <div className="p-2.5 rounded-lg bg-sand/50 border border-line/50">
-              <span className="font-bold text-ink block mb-1">1. Kameez & Chest</span>
+              <span className="font-bold text-ink block mb-1">1. Full Dress Photo</span>
               <p className="text-[11px] text-ink-faint leading-relaxed">
-                Capture the front panel flat or on a hanger in uniform daylight. Include a separate close-up of the neck embroidery.
+                Capture the full dress or suit set on a hanger, mannequin, or flat in uniform daylight. This single photo is all that is required.
               </p>
             </div>
             <div className="p-2.5 rounded-lg bg-sand/50 border border-line/50">
-              <span className="font-bold text-ink block mb-1">2. Dupatta & Bottom</span>
+              <span className="font-bold text-ink block mb-1">2. Detail Photos (Optional)</span>
               <p className="text-[11px] text-ink-faint leading-relaxed">
-                Fold or spread the dupatta to show border lace and tassels. Keep bottom fabric flat and true to its fabric shade.
+                Optionally add close-up photos of neckline embroidery, dupatta drape, or bottom finish for heightened accuracy.
               </p>
             </div>
             <div className="p-2.5 rounded-lg bg-sand/50 border border-line/50">
-              <span className="font-bold text-ink block mb-1">3. Complete Set (AI Detection)</span>
+              <span className="font-bold text-ink block mb-1">3. AI Auto-Detection</span>
               <p className="text-[11px] text-ink-faint leading-relaxed">
-                Upload a flat-lay of all pieces together. AI auto-detects whether to tailor a suit, Anarkali, sharara, or co-ord!
+                AI automatically recognizes the ensemble silhouette (straight suit, Anarkali, sharara, or co-ord) and tailors it with photorealism.
               </p>
             </div>
           </div>
@@ -246,7 +287,7 @@ export function StructuredSuitUploader({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 2. Section Header: (2) Your Suits                          1 / 20 */}
+      {/* 2. Section Header: (2) Your Readymade Suits                 1 / 20 */}
       {/* ----------------------------------------------------------------- */}
       <div className="flex items-center justify-between">
         <div className="flex items-start gap-3">
@@ -272,19 +313,25 @@ export function StructuredSuitUploader({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 3. Suit Cards                                                     */}
+      {/* 3. Readymade Suit Cards                                           */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         {suits.map((suit) => {
+          const mainUrl = getSuitSlotUrl(suit, "main_dress");
+          const mainNote = getSuitSlotNote(suit, "main_dress");
+          const isMainUploading = uploadingSlotKey === `${suit.id}_main_dress`;
+          const mainDragId = `${suit.id}_main_dress`;
+          const mainInputId = `suit-input-${suit.id}-main_dress`;
+
           return (
             <div
               key={suit.id}
               className="rounded-2xl border border-line bg-surface/90 p-4 sm:p-5 flex flex-col gap-4 shadow-sm relative"
             >
-              {/* Card Header: "Suit 1" + Remove 'x' */}
+              {/* Card Header: "Readymade Suit 1" + Remove 'x' */}
               <div className="flex items-center justify-between border-b border-line/60 pb-3">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-amber-500">
-                  Suit {suit.suitNumber}
+                  Readymade Suit {suit.suitNumber}
                 </span>
 
                 {suits.length > 1 && (
@@ -299,109 +346,275 @@ export function StructuredSuitUploader({
                 )}
               </div>
 
-              {/* Standard 5 Column Grid for All Lookbooks */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                  {SUIT_SLOT_COLUMNS.map((col) => {
-                    const currentUrl = getSuitSlotUrl(suit, col.key);
-                    const dragId = `${suit.id}_${col.key}`;
-                    const isDragOver = dragOverKey === dragId;
-                    const inputId = `suit-input-${suit.id}-${col.key}`;
-                    const isSlotUploading = uploadingSlotKey === `${suit.id}_${col.key}`;
+              {/* ----------------------------------------------------------- */}
+              {/* Main Option: Full Dress Photo (Only 1 Image Needed)         */}
+              {/* ----------------------------------------------------------- */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-ink">
+                      Full Dress Photo
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      Only 1 image needed
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-ink-faint">
+                    Full-length dress, readymade suit, mannequin or flat-lay
+                  </span>
+                </div>
+
+                <input
+                  id={mainInputId}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      onUploadSlot(suit.id, "main_dress", file);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+
+                {mainUrl ? (
+                  <div className="group relative flex flex-col sm:flex-row items-center gap-3.5 rounded-xl border border-line bg-sand/40 p-3.5 transition-colors hover:border-muted-purple">
+                    <div className="relative h-28 w-28 sm:h-32 sm:w-32 shrink-0 overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+                      <img
+                        src={mainUrl}
+                        alt="Full Dress"
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = FALLBACK_IMAGE;
+                        }}
+                      />
+                      <div className="absolute left-1.5 bottom-1.5 rounded-md px-1.5 py-0.5 bg-black/80 backdrop-blur-xs text-[10px] font-semibold text-white flex items-center gap-1 shadow-xs">
+                        <Check className="h-3 w-3 text-emerald-400" />
+                        <span>Full Dress</span>
+                      </div>
+                    </div>
+
+                    <div className="flex min-w-0 flex-1 flex-col gap-2.5 w-full">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xs font-bold text-ink flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
+                            Full Dress Photo
+                          </h3>
+                          <p className="text-[11px] text-ink-faint">
+                            Main ensemble image used to tailor the complete lookbook
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <label
+                            htmlFor={mainInputId}
+                            className="cursor-pointer rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:border-muted-purple hover:text-ink transition-colors"
+                          >
+                            Replace
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => onRemoveSlot(suit.id, "main_dress")}
+                            className="cursor-pointer rounded-lg border border-line bg-surface p-1 text-ink-faint hover:bg-brick/10 hover:text-brick hover:border-brick transition-colors"
+                            aria-label="Remove photo"
+                            title="Remove dress photo"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={mainNote}
+                        onChange={(e) => onUpdateNote?.(suit.id, "main_dress", e.target.value)}
+                        placeholder="Detail note (e.g. Navy blue printed Anarkali gown with embellished yoke)"
+                        className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint/60 focus:border-fuchsia-accent focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverKey(mainDragId);
+                    }}
+                    onDragLeave={() => setDragOverKey(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOverKey(null);
+                      if (e.dataTransfer.files?.[0]) {
+                        onUploadSlot(suit.id, "main_dress", e.dataTransfer.files[0]);
+                      }
+                    }}
+                    onClick={() => {
+                      const input = document.getElementById(mainInputId) as HTMLInputElement;
+                      input?.click();
+                    }}
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-7 text-center transition-all ${
+                      dragOverKey === mainDragId
+                        ? "border-fuchsia-accent bg-clay-soft"
+                        : "border-line bg-sand/30 hover:border-fuchsia-accent/60 hover:bg-sand/60"
+                    }`}
+                  >
+                    {isMainUploading ? (
+                      <div className="flex flex-col items-center justify-center gap-2 py-4">
+                        <div className="h-7 w-7 animate-spin rounded-full border-2 border-fuchsia-accent border-t-transparent" />
+                        <span className="text-xs font-semibold text-fuchsia-accent">Uploading Full Dress Photo...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-fuchsia-accent/10 text-fuchsia-accent shadow-xs group-hover:scale-105 transition-transform">
+                          <Upload className="h-5 w-5" />
+                        </div>
+                        <span className="text-xs sm:text-sm font-bold text-ink">
+                          + Upload Full Dress Photo
+                        </span>
+                        <span className="mt-1 max-w-sm text-[11px] text-ink-faint leading-relaxed px-2">
+                          Full-length photo of the dress or suit set on mannequin, hanger, or flat-lay. Only this single photo is needed to generate your lookbook.
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ----------------------------------------------------------- */}
+              {/* 3 Optional Detail Sections (Same like the saree section)    */}
+              {/* ----------------------------------------------------------- */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-line/60">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-ink">
+                      Optional Detail Photos
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      All 3 Optional
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-ink-faint">
+                    Only 1 full dress photo above is needed to generate
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {SUIT_DETAIL_SLOTS.map((detail) => {
+                    const detailUrl = getSuitSlotUrl(suit, detail.key);
+                    const detailNote = getSuitSlotNote(suit, detail.key);
+                    const isDrag = dragOverKey === `${suit.id}_${detail.key}`;
+                    const inputId = `suit-input-${suit.id}-${detail.key}`;
+                    const isSlotUploading = uploadingSlotKey === `${suit.id}_${detail.key}`;
 
                     return (
-                      <div key={col.key} className="flex flex-col gap-1.5">
-                        {/* Column Title */}
-                        <span className="text-xs font-bold text-ink truncate">
-                          {col.label}
-                        </span>
-
-                        {/* Upload Box */}
-                        <div
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setDragOverKey(dragId);
-                          }}
-                          onDragLeave={() => setDragOverKey(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            setDragOverKey(null);
-                            const file = e.dataTransfer.files[0];
-                            if (file) onUploadSlot(suit.id, col.key, file);
-                          }}
-                          className={`relative h-44 rounded-xl border flex flex-col items-center justify-center overflow-hidden transition-all ${
-                            isDragOver
-                              ? "border-fuchsia-accent bg-fuchsia-accent/10"
-                              : currentUrl
-                                ? "border-line bg-black/30"
-                                : "border-dashed border-line/80 bg-sand/30 hover:border-fuchsia-accent/60 hover:bg-sand/60"
-                          }`}
-                        >
-                          {isSlotUploading ? (
-                            <div className="flex flex-col items-center justify-center gap-2 p-3 text-center h-full w-full">
-                              <div className="h-6 w-6 animate-spin rounded-full border-2 border-fuchsia-accent border-t-transparent" />
-                              <span className="text-[11px] font-semibold text-fuchsia-accent">Uploading...</span>
-                            </div>
-                          ) : currentUrl ? (
-                            <>
-                              <img
-                                src={currentUrl}
-                                alt={col.label}
-                                className="h-full w-full object-cover"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLImageElement).src = FALLBACK_IMAGE;
-                                }}
-                              />
-                              {/* Remove button */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onRemoveSlot(suit.id, col.key);
-                                }}
-                                className="absolute right-2 top-2 h-6 w-6 rounded-full bg-black/75 hover:bg-brick text-white flex items-center justify-center transition-colors cursor-pointer shadow-md z-10"
-                                title={`Remove ${col.label}`}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-
-                              {/* Done Badge */}
-                              <div className="absolute left-2 bottom-2 rounded px-1.5 py-0.5 bg-black/75 backdrop-blur-xs text-[10px] font-semibold text-white flex items-center gap-1">
-                                <Check className="h-3 w-3 text-emerald-400" />
-                                <span>Uploaded</span>
-                              </div>
-                            </>
-                          ) : (
-                            <label
-                              htmlFor={inputId}
-                              className="flex flex-col items-center justify-center gap-2 p-3 text-center cursor-pointer h-full w-full group select-none"
-                            >
-                              <span className="text-xs font-semibold text-ink-soft group-hover:text-fuchsia-accent transition-colors">
-                                {col.buttonLabel}
-                              </span>
-                              <span className="text-[10px] text-ink-faint leading-tight line-clamp-2 px-1">
-                                {col.description}
-                              </span>
-                            </label>
-                          )}
-
-                          <input
-                            id={inputId}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) onUploadSlot(suit.id, col.key, file);
+                      <div
+                        key={detail.key}
+                        className={`relative flex flex-col rounded-xl border transition-all p-3 ${
+                          detailUrl
+                            ? "border-line bg-sand/40"
+                            : "border-dashed border-line bg-sand/20 hover:border-muted-purple hover:bg-sand/40"
+                        } ${isDrag ? "border-fuchsia-accent bg-clay-soft" : ""}`}
+                      >
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              onUploadSlot(suit.id, detail.key, file);
                               e.target.value = "";
+                            }
+                          }}
+                        />
+
+                        {detailUrl ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-3">
+                              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-line bg-surface">
+                                <img
+                                  src={detailUrl}
+                                  alt={detail.label}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = FALLBACK_IMAGE;
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => onRemoveSlot(suit.id, detail.key)}
+                                  className="absolute right-1 top-1 rounded-full bg-black/75 p-1 text-white hover:bg-brick transition-colors cursor-pointer"
+                                  title={`Remove ${detail.label}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+
+                              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                                <span className="text-xs font-bold text-ink truncate">
+                                  {detail.label}
+                                </span>
+                                <span className="text-[10px] text-ink-faint line-clamp-2">
+                                  {detail.subtitle}
+                                </span>
+                              </div>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={detailNote}
+                              onChange={(e) => onUpdateNote?.(suit.id, detail.key, e.target.value)}
+                              placeholder={detail.placeholderNote}
+                              className="w-full rounded-lg border border-line bg-surface px-2 py-1 text-[11px] text-ink placeholder:text-ink-faint/60 focus:border-fuchsia-accent focus:outline-none"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setDragOverKey(`${suit.id}_${detail.key}`);
                             }}
-                          />
-                        </div>
+                            onDragLeave={() => setDragOverKey(null)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setDragOverKey(null);
+                              if (e.dataTransfer.files?.[0]) {
+                                onUploadSlot(suit.id, detail.key, e.dataTransfer.files[0]);
+                              }
+                            }}
+                            onClick={() => {
+                              const input = document.getElementById(inputId) as HTMLInputElement;
+                              input?.click();
+                            }}
+                            className="flex cursor-pointer flex-col items-center justify-center gap-1.5 p-4 text-center select-none h-full min-h-[110px]"
+                          >
+                            {isSlotUploading ? (
+                              <div className="flex flex-col items-center justify-center gap-2">
+                                <div className="h-6 w-6 animate-spin rounded-full border-2 border-fuchsia-accent border-t-transparent" />
+                                <span className="text-[10px] font-semibold text-fuchsia-accent">Uploading...</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sand text-ink-soft">
+                                  <Plus className="h-4 w-4" />
+                                </div>
+                                <span className="text-xs font-semibold text-ink">
+                                  {detail.buttonLabel}
+                                </span>
+                                <span className="text-[10px] text-ink-faint leading-tight">
+                                  {detail.subtitle}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
+              </div>
 
-              {/* Extra per-suit options (e.g. Staging Template selector for Flatlay) */}
               {renderSuitExtra && renderSuitExtra(suit)}
             </div>
           );

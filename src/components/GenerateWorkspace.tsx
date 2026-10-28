@@ -78,19 +78,71 @@ const FACE_MODES: {
   { value: "random_face", label: "Diverse model", description: "A fresh Indian model for every look." }
 ];
 
+export interface StudioShot {
+  id: string;
+  shotNumber: number;
+  shoot: MasterShoot;
+  model: CatalogModel;
+  fabric: CatalogFabric;
+  faceMode: "keep_original" | "custom_face" | "random_face";
+}
+
 export function GenerateWorkspace() {
-  const [selectedShoot, setSelectedShoot] = useState<MasterShoot>(
-    () => getSavedStudioPreferences()?.selectedShoot ?? MASTER_SHOOTS[0]
-  );
-  const [selectedModel, setSelectedModel] = useState<CatalogModel>(
-    () => getSavedStudioPreferences()?.selectedModel ?? PRESET_MODELS[0]
-  );
-  const [faceMode, setFaceMode] = useState<"keep_original" | "custom_face" | "random_face">(
-    () => getSavedStudioPreferences()?.faceMode ?? "keep_original"
-  );
-  const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
-    () => getSavedFabricPreference() ?? getSavedStudioPreferences()?.selectedFabric ?? PRESET_FABRICS[0]
-  );
+  const [activeShotIndex, setActiveShotIndex] = useState<number>(0);
+  const [studioShots, setStudioShots] = useState<StudioShot[]>(() => {
+    const baseShoot = getSavedStudioPreferences()?.selectedShoot ?? MASTER_SHOOTS[0];
+    const baseModel = getSavedStudioPreferences()?.selectedModel ?? PRESET_MODELS[0];
+    const baseFabric = getSavedFabricPreference() ?? getSavedStudioPreferences()?.selectedFabric ?? PRESET_FABRICS[0];
+    const baseFace = getSavedStudioPreferences()?.faceMode ?? "keep_original";
+
+    return [
+      { id: "shot_1", shotNumber: 1, shoot: baseShoot, model: baseModel, fabric: baseFabric, faceMode: baseFace },
+      { id: "shot_2", shotNumber: 2, shoot: MASTER_SHOOTS[1] || baseShoot, model: baseModel, fabric: baseFabric, faceMode: baseFace },
+      { id: "shot_3", shotNumber: 3, shoot: MASTER_SHOOTS[2] || baseShoot, model: baseModel, fabric: baseFabric, faceMode: baseFace },
+      { id: "shot_4", shotNumber: 4, shoot: MASTER_SHOOTS[3] || baseShoot, model: baseModel, fabric: baseFabric, faceMode: baseFace },
+    ];
+  });
+
+  const currentShot = studioShots[activeShotIndex] || studioShots[0];
+  const selectedShoot = currentShot.shoot;
+  const selectedModel = currentShot.model;
+  const faceMode = currentShot.faceMode;
+  const selectedFabric = currentShot.fabric;
+
+  const setSelectedShoot = (shoot: MasterShoot) => {
+    setStudioShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, shoot } : s))
+    );
+  };
+
+  const setSelectedModel = (model: CatalogModel) => {
+    setStudioShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, model } : s))
+    );
+  };
+
+  const setFaceMode = (faceMode: "keep_original" | "custom_face" | "random_face") => {
+    setStudioShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, faceMode } : s))
+    );
+  };
+
+  const setSelectedFabric = (fabric: CatalogFabric) => {
+    setStudioShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, fabric } : s))
+    );
+    saveFabricPreference(fabric);
+  };
+
+  const handleAutoDiversifyShoots = () => {
+    setStudioShots((prev) =>
+      prev.map((s, idx) => ({
+        ...s,
+        shoot: MASTER_SHOOTS[idx % MASTER_SHOOTS.length] || s.shoot
+      }))
+    );
+    addToast("success", "Auto-diversified photoshoot themes across all shots!");
+  };
   const [structuredSlots, setStructuredSlots] = useState<StructuredGarmentSlot[]>(() => {
     const saved = getSavedGarments("studio");
     const hasRoles = saved.some((g) => Boolean(g.role));
@@ -326,9 +378,10 @@ export function GenerateWorkspace() {
       if (!session) throw new Error("Session expired, please sign in again");
 
       for (let i = 0; i < batchCount; i++) {
+        const shot = studioShots[i] || studioShots[0];
         setLoadingLabel(
           batchCount > 1
-            ? `Rendering photo ${i + 1} of ${batchCount}...`
+            ? `Rendering shot ${i + 1} of ${batchCount} (${shot.shoot.title})...`
             : "Generating..."
         );
 
@@ -348,16 +401,16 @@ export function GenerateWorkspace() {
             idempotencyKey,
             outfitType,
             aspectRatio: "4:5",
-            shootId: selectedShoot.id,
-            shootTitle: selectedShoot.title,
-            shootImageUrl: selectedShoot.imageUrl,
-            shootSetting: selectedShoot.settingTitle,
-            shootPose: selectedShoot.poseDescription,
-            faceMode,
-            customFaceUrl: faceMode === "custom_face" ? (selectedModel.imageUrl || null) : null,
-            fabric: selectedFabric.name,
-            fabricDescription: selectedFabric.description,
-            customNotes: batchCount > 1 ? `${customStylingNotes} (Angle variation ${i + 1})` : customStylingNotes,
+            shootId: shot.shoot.id,
+            shootTitle: shot.shoot.title,
+            shootImageUrl: shot.shoot.imageUrl,
+            shootSetting: shot.shoot.settingTitle,
+            shootPose: shot.shoot.poseDescription,
+            faceMode: shot.faceMode,
+            customFaceUrl: shot.faceMode === "custom_face" ? (shot.model.imageUrl || null) : null,
+            fabric: shot.fabric.name,
+            fabricDescription: shot.fabric.description,
+            customNotes: batchCount > 1 ? `${customStylingNotes} (Shot ${i + 1}: ${shot.shoot.title})` : customStylingNotes,
             garments: activeGarments.slice(0, MAX_GARMENT_REFERENCES).map((g) => ({
               url: g.url,
               note: g.note,
@@ -434,6 +487,66 @@ export function GenerateWorkspace() {
         <section className="card flex flex-col gap-6 p-4 sm:p-6 shadow-sm">
           <Step index={2} title="Photoshoot reference" hint={outfitType}>
             <div className="flex flex-col gap-3">
+              {batchCount > 1 && (
+                <div className="flex flex-col gap-2.5 pb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-ink">
+                        Photoshoot Reference per Shot:
+                      </span>
+                      <span className="text-[10px] font-semibold text-fuchsia-accent bg-fuchsia-accent/10 px-2 py-0.5 rounded-full border border-fuchsia-accent/20">
+                        Same Garment • {batchCount} Unique Shoots
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAutoDiversifyShoots}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-line bg-surface hover:border-fuchsia-accent hover:text-fuchsia-accent text-ink-soft transition-colors cursor-pointer shadow-xs"
+                      title="Automatically assign distinct photoshoot themes to each shot"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
+                      <span>Auto-Vary Shoots</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {studioShots.slice(0, batchCount).map((shot, idx) => {
+                      const isActive = activeShotIndex === idx;
+                      return (
+                        <button
+                          key={shot.id || idx}
+                          type="button"
+                          onClick={() => setActiveShotIndex(idx)}
+                          className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            isActive
+                              ? "border-fuchsia-accent bg-clay-soft ring-2 ring-fuchsia-accent/20 shadow-xs"
+                              : "border-line bg-surface hover:border-muted-purple hover:bg-sand/40"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className={`text-[11px] font-bold ${isActive ? "text-fuchsia-accent" : "text-ink"}`}>
+                              Shot {idx + 1}
+                            </span>
+                            {isActive && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-fuchsia-accent bg-fuchsia-accent/15 px-1.5 py-0.2 rounded">
+                                Editing
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink font-semibold truncate w-full mt-1">
+                            {shot.shoot.title}
+                          </span>
+                          <span className="text-[10px] text-ink-faint truncate w-full">
+                            {shot.shoot.settingTitle}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <MediaCard
                   label="Reference shoot"
@@ -533,12 +646,19 @@ export function GenerateWorkspace() {
             note={`Costs ${batchCount} credit${batchCount > 1 ? "s" : ""}, deducted only on successful render.`}
             loadingLabel={loadingLabel}
             imageCount={batchCount}
-            onImageCountChange={setBatchCount}
+            onImageCountChange={(cnt) => {
+              setBatchCount(cnt);
+              if (activeShotIndex >= cnt) setActiveShotIndex(0);
+            }}
             countOptions={[1, 2, 3, 4]}
-            batchDescription="Generate multiple unique angles & poses at a time"
+            batchDescription={
+              batchCount > 1
+                ? `Generating all ${batchCount} shots at once with different photoshoots`
+                : "Generate single lookbook or increase count to vary photoshoot styles"
+            }
             customButtonLabel={
               batchCount > 1
-                ? `Generate ${batchCount} Studio Photos (${batchCount} Credits)`
+                ? `Generate All ${batchCount} Photos (${batchCount} Credits)`
                 : "Generate Lookbook"
             }
             disabled={structuredSlots.filter((s) => Boolean(s.url)).length === 0 || isUploading}

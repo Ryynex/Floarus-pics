@@ -126,27 +126,110 @@ export function MagicModeWorkspace() {
     suits: initialSuits
   } = hydration;
 
-  const [selectedModel, setSelectedModel] = useState<CatalogModel>(
-    () => initialPrefs?.selectedModel ?? PRESET_MODELS[0]
-  );
-  const [selectedPose, setSelectedPose] = useState<CatalogPose>(
-    () => initialPrefs?.selectedPose ?? PRESET_POSES[0]
-  );
-  const [selectedBackground, setSelectedBackground] = useState<CatalogBackground>(
-    () => initialPrefs?.selectedBackground ?? PRESET_BACKGROUNDS[0]
-  );
-  const [backgroundMode, setBackgroundMode] = useState<"fixed" | "inspiration">(
-    () => (initialPrefs?.backgroundMode === "inspiration" ? "inspiration" : "fixed")
-  );
-  const [selectedHairstyle, setSelectedHairstyle] = useState<CatalogHairstyle>(
-    () => initialPrefs?.selectedHairstyle ?? PRESET_HAIRSTYLES[0]
-  );
-  const [selectedJewellery, setSelectedJewellery] = useState<CatalogJewellery>(
-    () => initialPrefs?.selectedJewellery ?? PRESET_JEWELLERY[0]
-  );
-  const [selectedFabric, setSelectedFabric] = useState<CatalogFabric>(
-    () => getSavedFabricPreference() ?? initialPrefs?.selectedFabric ?? PRESET_FABRICS[0]
-  );
+  // Creative Shots (Multi-Look per Garment)
+  const [activeShotIndex, setActiveShotIndex] = useState<number>(0);
+  const [creativeShots, setCreativeShots] = useState<Array<{
+    id: string;
+    shotNumber: number;
+    model: CatalogModel;
+    pose: CatalogPose;
+    background: CatalogBackground;
+    backgroundMode: "fixed" | "inspiration";
+    hairstyle: CatalogHairstyle;
+    jewellery: CatalogJewellery;
+    fabric: CatalogFabric;
+  }>>(() => {
+    const baseModel = initialPrefs?.selectedModel ?? PRESET_MODELS[0];
+    const basePose = initialPrefs?.selectedPose ?? PRESET_POSES[0];
+    const baseBg = initialPrefs?.selectedBackground ?? PRESET_BACKGROUNDS[0];
+    const baseMode = initialPrefs?.backgroundMode === "inspiration" ? "inspiration" : "fixed";
+    const baseHair = initialPrefs?.selectedHairstyle ?? PRESET_HAIRSTYLES[0];
+    const baseJewel = initialPrefs?.selectedJewellery ?? PRESET_JEWELLERY[0];
+    const baseFabric = getSavedFabricPreference() ?? initialPrefs?.selectedFabric ?? PRESET_FABRICS[0];
+
+    return [
+      { id: "shot_1", shotNumber: 1, model: baseModel, pose: basePose, background: baseBg, backgroundMode: baseMode, hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
+      { id: "shot_2", shotNumber: 2, model: baseModel, pose: PRESET_POSES[1] || basePose, background: PRESET_BACKGROUNDS[1] || baseBg, backgroundMode: "fixed", hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
+      { id: "shot_3", shotNumber: 3, model: baseModel, pose: PRESET_POSES[2] || basePose, background: PRESET_BACKGROUNDS[2] || baseBg, backgroundMode: "fixed", hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
+      { id: "shot_4", shotNumber: 4, model: baseModel, pose: PRESET_POSES[3] || basePose, background: PRESET_BACKGROUNDS[3] || baseBg, backgroundMode: "fixed", hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
+    ];
+  });
+
+  const currentShot = creativeShots[activeShotIndex] || creativeShots[0];
+  const selectedModel = currentShot.model;
+  const selectedPose = currentShot.pose;
+  const selectedBackground = currentShot.background;
+  const backgroundMode = currentShot.backgroundMode;
+  const selectedHairstyle = currentShot.hairstyle;
+  const selectedJewellery = currentShot.jewellery;
+  const selectedFabric = currentShot.fabric;
+
+  const setSelectedModel = (model: CatalogModel) => {
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, model } : s))
+    );
+  };
+
+  const setSelectedPose = (pose: CatalogPose) => {
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, pose } : s))
+    );
+  };
+
+  const setSelectedBackground = (background: CatalogBackground) => {
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, background } : s))
+    );
+  };
+
+  const setBackgroundMode = (backgroundMode: "fixed" | "inspiration") => {
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, backgroundMode } : s))
+    );
+  };
+
+  const setSelectedHairstyle = (hairstyle: CatalogHairstyle) => {
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, hairstyle } : s))
+    );
+  };
+
+  const setSelectedJewellery = (jewellery: CatalogJewellery) => {
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, jewellery } : s))
+    );
+  };
+
+  const setSelectedFabric = (fabric: CatalogFabric) => {
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, fabric } : s))
+    );
+    saveFabricPreference(fabric);
+  };
+
+  const handleAutoDiversifyShots = () => {
+    const curatedPoses = [
+      PRESET_POSES[0],
+      PRESET_POSES[1] || PRESET_POSES[0],
+      PRESET_POSES[2] || PRESET_POSES[0],
+      PRESET_POSES[3] || PRESET_POSES[0]
+    ];
+    const curatedBgs = [
+      PRESET_BACKGROUNDS[0],
+      PRESET_BACKGROUNDS[1] || PRESET_BACKGROUNDS[0],
+      PRESET_BACKGROUNDS[2] || PRESET_BACKGROUNDS[0],
+      PRESET_BACKGROUNDS[3] || PRESET_BACKGROUNDS[0]
+    ];
+
+    setCreativeShots((prev) =>
+      prev.map((s, idx) => ({
+        ...s,
+        pose: curatedPoses[idx % curatedPoses.length] || s.pose,
+        background: curatedBgs[idx % curatedBgs.length] || s.background
+      }))
+    );
+    addToast("success", "Auto-diversified poses & backdrops across all shots!");
+  };
 
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [isPoseModalOpen, setIsPoseModalOpen] = useState(false);
@@ -289,6 +372,68 @@ export function MagicModeWorkspace() {
     }
   };
 
+  const handleCustomPoseUpload = async (file: File): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const compressedFile = await compressImageClient(file, 640, 0.85);
+
+      if (session?.user) {
+        const folder = session.user.id;
+        const fileName = `${folder}/poses/custom-pose-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+        const { error } = await supabase.storage
+          .from("generated-lookbooks")
+          .upload(fileName, compressedFile, { contentType: compressedFile.type, upsert: true });
+
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage
+            .from("generated-lookbooks")
+            .getPublicUrl(fileName);
+          return publicUrl;
+        }
+      }
+
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(compressedFile);
+      });
+    } catch (err) {
+      console.error("Custom pose upload failed:", err);
+      return null;
+    }
+  };
+
+  const handleCustomBackgroundUpload = async (file: File): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const compressedFile = await compressImageClient(file, 640, 0.85);
+
+      if (session?.user) {
+        const folder = session.user.id;
+        const fileName = `${folder}/backgrounds/custom-bg-${Date.now()}-${compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+        const { error } = await supabase.storage
+          .from("generated-lookbooks")
+          .upload(fileName, compressedFile, { contentType: compressedFile.type, upsert: true });
+
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage
+            .from("generated-lookbooks")
+            .getPublicUrl(fileName);
+          return publicUrl;
+        }
+      }
+
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(compressedFile);
+      });
+    } catch (err) {
+      console.error("Custom background upload failed:", err);
+      return null;
+    }
+  };
+
   const syncSlotsToStorage = (updated: StructuredGarmentSlot[]) => {
     const active = updated
       .filter((s) => Boolean(s.url))
@@ -419,9 +564,24 @@ export function MagicModeWorkspace() {
         });
       }
 
-      const propKey = SLOT_URL_KEYS[slotKey];
       setSuits((prev) =>
-        prev.map((s) => (s.id === suitId ? { ...s, [propKey]: finalUrl, [`${slotKey}Url`]: finalUrl } : s))
+        prev.map((s) => {
+          if (s.id !== suitId) return s;
+          if (slotKey === "main_dress" || slotKey === "kameez" || slotKey === "complete_set") {
+            return { ...s, mainDressUrl: finalUrl, kameezUrl: finalUrl, completeSetUrl: finalUrl };
+          }
+          if (slotKey === "detail_1" || slotKey === "chest_design") {
+            return { ...s, detail1Url: finalUrl, chestDesignUrl: finalUrl };
+          }
+          if (slotKey === "detail_2" || slotKey === "dupatta") {
+            return { ...s, detail2Url: finalUrl, dupattaUrl: finalUrl };
+          }
+          if (slotKey === "detail_3" || slotKey === "bottom") {
+            return { ...s, detail3Url: finalUrl, bottomUrl: finalUrl };
+          }
+          const propKey = SLOT_URL_KEYS[slotKey] || `${slotKey}Url`;
+          return { ...s, [propKey]: finalUrl };
+        })
       );
 
       addToast("success", `Uploaded ${slotKey.replace("_", " ")} photo.`);
@@ -434,9 +594,45 @@ export function MagicModeWorkspace() {
   };
 
   const handleRemoveSuitSlot = (suitId: string, slotKey: SuitSlotKey) => {
-    const propKey = SLOT_URL_KEYS[slotKey];
     setSuits((prev) =>
-      prev.map((s) => (s.id === suitId ? { ...s, [propKey]: undefined, [`${slotKey}Url`]: undefined } : s))
+      prev.map((s) => {
+        if (s.id !== suitId) return s;
+        if (slotKey === "main_dress" || slotKey === "kameez" || slotKey === "complete_set") {
+          return { ...s, mainDressUrl: undefined, kameezUrl: undefined, completeSetUrl: undefined, mainDressNote: undefined, kameezNote: undefined };
+        }
+        if (slotKey === "detail_1" || slotKey === "chest_design") {
+          return { ...s, detail1Url: undefined, chestDesignUrl: undefined, detail1Note: undefined, chestDesignNote: undefined };
+        }
+        if (slotKey === "detail_2" || slotKey === "dupatta") {
+          return { ...s, detail2Url: undefined, dupattaUrl: undefined, detail2Note: undefined, dupattaNote: undefined };
+        }
+        if (slotKey === "detail_3" || slotKey === "bottom") {
+          return { ...s, detail3Url: undefined, bottomUrl: undefined, detail3Note: undefined, bottomNote: undefined };
+        }
+        const propKey = SLOT_URL_KEYS[slotKey] || `${slotKey}Url`;
+        return { ...s, [propKey]: undefined };
+      })
+    );
+  };
+
+  const handleUpdateSuitNote = (suitId: string, slotKey: SuitSlotKey, note: string) => {
+    setSuits((prev) =>
+      prev.map((s) => {
+        if (s.id !== suitId) return s;
+        if (slotKey === "main_dress" || slotKey === "kameez" || slotKey === "complete_set") {
+          return { ...s, mainDressNote: note, kameezNote: note };
+        }
+        if (slotKey === "detail_1" || slotKey === "chest_design") {
+          return { ...s, detail1Note: note, chestDesignNote: note };
+        }
+        if (slotKey === "detail_2" || slotKey === "dupatta") {
+          return { ...s, detail2Note: note, dupattaNote: note };
+        }
+        if (slotKey === "detail_3" || slotKey === "bottom") {
+          return { ...s, detail3Note: note, bottomNote: note };
+        }
+        return { ...s, [`${slotKey}Note`]: note };
+      })
     );
   };
 
@@ -464,7 +660,16 @@ export function MagicModeWorkspace() {
 
   // Active suits helper
   const activeSuits = suits.filter(
-    (s) => s.kameezUrl || s.completeSetUrl || s.chestDesignUrl || s.bottomUrl || s.dupattaUrl
+    (s) =>
+      s.mainDressUrl ||
+      s.detail1Url ||
+      s.detail2Url ||
+      s.detail3Url ||
+      s.kameezUrl ||
+      s.completeSetUrl ||
+      s.chestDesignUrl ||
+      s.bottomUrl ||
+      s.dupattaUrl
   );
   const isMultiSuit = category === "suits" && activeSuits.length > 1;
 
@@ -506,6 +711,7 @@ export function MagicModeWorkspace() {
       garments: Array<{ url: string; note: string; slotId: string; slotLabel: string; role?: string }>;
       label: string;
       suitNumber?: number;
+      shot?: typeof creativeShots[0];
     }
 
     let tasks: GenerationTask[] = [];
@@ -514,39 +720,52 @@ export function MagicModeWorkspace() {
       if (activeSuits.length === 0) {
         addToast(
           "error",
-          "Please upload at least 1 fabric photo (Kameez, Chest Design, Dupatta, Bottom, or Complete Set) to generate."
+          "Please upload at least 1 dress photo to generate."
         );
         return;
       }
 
       if (activeSuits.length > 1) {
         // Multi-Suit batch: Generate each configured suit!
-        tasks = activeSuits.map((s) => {
+        tasks = activeSuits.map((s, sIdx) => {
           const gList: GenerationTask["garments"] = [];
-          if (s.kameezUrl) gList.push({ url: s.kameezUrl, note: "Kameez / Kurta Top Fabric", slotId: "kameez", slotLabel: "Kameez / Top", role: "kameez" });
-          if (s.chestDesignUrl) gList.push({ url: s.chestDesignUrl, note: "Chest Design / Neckline", slotId: "chest_design", slotLabel: "Chest Design / Neckline", role: "chest_design" });
-          if (s.dupattaUrl) gList.push({ url: s.dupattaUrl, note: "Dupatta Drape", slotId: "dupatta", slotLabel: "Dupatta", role: "dupatta" });
-          if (s.bottomUrl) gList.push({ url: s.bottomUrl, note: "Bottom / Pants", slotId: "bottom", slotLabel: "Bottom Fabric", role: "bottom" });
-          if (s.completeSetUrl) gList.push({ url: s.completeSetUrl, note: "Complete Ensemble Reference", slotId: "complete_set", slotLabel: "Complete Set", role: "complete_set" });
-          return { garments: gList, label: `Suit ${s.suitNumber}`, suitNumber: s.suitNumber };
+          const mainUrl = s.mainDressUrl || s.kameezUrl || s.completeSetUrl;
+          const detail1Url = s.detail1Url || s.chestDesignUrl;
+          const detail2Url = s.detail2Url || s.dupattaUrl;
+          const detail3Url = s.detail3Url || s.bottomUrl;
+
+          if (mainUrl) gList.push({ url: mainUrl, note: s.mainDressNote || s.kameezNote || "Full Dress Photo", slotId: "main_dress", slotLabel: "Full Dress", role: "main_dress" });
+          if (detail1Url) gList.push({ url: detail1Url, note: s.detail1Note || s.chestDesignNote || "Detail 1 (Bodice / Neckline)", slotId: "detail_1", slotLabel: "Detail 1", role: "detail_1" });
+          if (detail2Url) gList.push({ url: detail2Url, note: s.detail2Note || s.dupattaNote || "Detail 2 (Dupatta / Scarf / Sleeve)", slotId: "detail_2", slotLabel: "Detail 2", role: "detail_2" });
+          if (detail3Url) gList.push({ url: detail3Url, note: s.detail3Note || s.bottomNote || "Detail 3 (Bottom / Trouser / Hemline)", slotId: "detail_3", slotLabel: "Detail 3", role: "detail_3" });
+          const shot = creativeShots[sIdx % creativeShots.length] || creativeShots[0];
+          return { garments: gList, label: `Readymade Suit ${s.suitNumber} (${shot.pose.name})`, suitNumber: s.suitNumber, shot };
         });
       } else {
-        // Single suit: Generate batchCount variations
+        // Single suit: Generate batchCount variations with DIFFERENT poses and backgrounds!
         const targetSuit = activeSuits[0] || suits[0];
         const gList: GenerationTask["garments"] = [];
-        if (targetSuit.kameezUrl) gList.push({ url: targetSuit.kameezUrl, note: "Kameez / Kurta Top Fabric", slotId: "kameez", slotLabel: "Kameez / Top", role: "kameez" });
-        if (targetSuit.chestDesignUrl) gList.push({ url: targetSuit.chestDesignUrl, note: "Chest Design / Neckline", slotId: "chest_design", slotLabel: "Chest Design / Neckline", role: "chest_design" });
-        if (targetSuit.dupattaUrl) gList.push({ url: targetSuit.dupattaUrl, note: "Dupatta Drape", slotId: "dupatta", slotLabel: "Dupatta", role: "dupatta" });
-        if (targetSuit.bottomUrl) gList.push({ url: targetSuit.bottomUrl, note: "Bottom / Pants", slotId: "bottom", slotLabel: "Bottom Fabric", role: "bottom" });
-        if (targetSuit.completeSetUrl) gList.push({ url: targetSuit.completeSetUrl, note: "Complete Ensemble Reference", slotId: "complete_set", slotLabel: "Complete Set", role: "complete_set" });
+        const mainUrl = targetSuit.mainDressUrl || targetSuit.kameezUrl || targetSuit.completeSetUrl;
+        const detail1Url = targetSuit.detail1Url || targetSuit.chestDesignUrl;
+        const detail2Url = targetSuit.detail2Url || targetSuit.dupattaUrl;
+        const detail3Url = targetSuit.detail3Url || targetSuit.bottomUrl;
 
-        tasks = Array.from({ length: batchCount }, (_, i) => ({
-          garments: gList,
-          label: batchCount > 1 ? `Suit Lookbook (${i + 1}/${batchCount})` : "Suit Lookbook"
-        }));
+        if (mainUrl) gList.push({ url: mainUrl, note: targetSuit.mainDressNote || targetSuit.kameezNote || "Full Dress Photo", slotId: "main_dress", slotLabel: "Full Dress", role: "main_dress" });
+        if (detail1Url) gList.push({ url: detail1Url, note: targetSuit.detail1Note || targetSuit.chestDesignNote || "Detail 1 (Bodice / Neckline)", slotId: "detail_1", slotLabel: "Detail 1", role: "detail_1" });
+        if (detail2Url) gList.push({ url: detail2Url, note: targetSuit.detail2Note || targetSuit.dupattaNote || "Detail 2 (Dupatta / Scarf / Sleeve)", slotId: "detail_2", slotLabel: "Detail 2", role: "detail_2" });
+        if (detail3Url) gList.push({ url: detail3Url, note: targetSuit.detail3Note || targetSuit.bottomNote || "Detail 3 (Bottom / Trouser / Hemline)", slotId: "detail_3", slotLabel: "Detail 3", role: "detail_3" });
+
+        tasks = Array.from({ length: batchCount }, (_, i) => {
+          const shot = creativeShots[i] || creativeShots[0];
+          return {
+            garments: gList,
+            label: batchCount > 1 ? `Readymade Suit (Shot ${i + 1}: ${shot.pose.name})` : "Readymade Suit",
+            shot
+          };
+        });
       }
     } else {
-      // Wholesale Saree
+      // Wholesale Saree: Generate batchCount variations with DIFFERENT poses and backgrounds!
       const sGarments: GenerationTask["garments"] = structuredSlots
         .filter((s) => Boolean(s.url))
         .map((s) => ({
@@ -562,15 +781,19 @@ export function MagicModeWorkspace() {
         return;
       }
 
-      tasks = Array.from({ length: batchCount }, (_, i) => ({
-        garments: sGarments.length > 0 ? sGarments : photos.map((p, idx) => ({
-          url: p.url,
-          note: p.note,
-          slotId: `layer-${idx + 1}`,
-          slotLabel: p.slotLabel || `Garment Photo ${idx + 1}`
-        })),
-        label: batchCount > 1 ? `Saree Lookbook (${i + 1}/${batchCount})` : "Saree Lookbook"
-      }));
+      tasks = Array.from({ length: batchCount }, (_, i) => {
+        const shot = creativeShots[i] || creativeShots[0];
+        return {
+          garments: sGarments.length > 0 ? sGarments : photos.map((p, idx) => ({
+            url: p.url,
+            note: p.note,
+            slotId: `layer-${idx + 1}`,
+            slotLabel: p.slotLabel || `Garment Photo ${idx + 1}`
+          })),
+          label: batchCount > 1 ? `Saree Lookbook (Shot ${i + 1}: ${shot.pose.name})` : "Saree Lookbook",
+          shot
+        };
+      });
     }
 
     setLoading(true);
@@ -583,6 +806,8 @@ export function MagicModeWorkspace() {
 
       for (let i = 0; i < tasks.length; i++) {
         const task = tasks[i];
+        const shot = task.shot || currentShot;
+
         setLoadingLabel(
           tasks.length > 1
             ? `Generating ${task.label} (${i + 1} of ${tasks.length})...`
@@ -612,35 +837,35 @@ export function MagicModeWorkspace() {
             category,
             suitSilhouette,
             dupattaDrape,
-            necklineCut: "Auto-detected from Chest Design photo",
+            necklineCut: "Auto-detected from dress and detail photos",
             idempotencyKey,
-            outfitType: isSuitCategory ? (suitSilhouette || "Unstitched Suit Set") : outfitType,
+            outfitType: isSuitCategory ? (suitSilhouette || "Readymade Suit Ensemble") : outfitType,
             drapingStyle,
             blouseStyle,
             aspectRatio: "4:5",
-            modelId: selectedModel.id,
-            modelName: selectedModel.name,
-            modelFaceUrl: selectedModel.imageUrl || null,
-            customFaceUrl: selectedModel.category === "custom" ? selectedModel.imageUrl : null,
-            faceMode: selectedModel.category === "custom" ? "custom_face" : "keep_original",
-            poseId: selectedPose.id,
-            poseName: selectedPose.name,
-            poseCategory: selectedPose.category,
-            poseImageUrl: selectedPose.imageUrl,
-            poseDescription: selectedPose.description,
-            backgroundId: selectedBackground.id,
-            backgroundName: selectedBackground.name,
-            backgroundUrl: selectedBackground.imageUrl,
-            backgroundDescription: selectedBackground.description,
-            backgroundMode,
-            hairstyle: selectedHairstyle.name,
-            hairstyleDescription: selectedHairstyle.description,
-            jewellery: selectedJewellery.name,
-            jewelleryDescription: selectedJewellery.description,
-            fabric: selectedFabric.name,
-            fabricDescription: selectedFabric.description,
-            fabricDrapePhysics: selectedFabric.drapePhysics,
-            customNotes: tasks.length > 1 ? `${customStylingNotes} (Variation ${i + 1})` : customStylingNotes,
+            modelId: shot.model.id,
+            modelName: shot.model.name,
+            modelFaceUrl: shot.model.imageUrl || null,
+            customFaceUrl: shot.model.category === "custom" ? shot.model.imageUrl : null,
+            faceMode: shot.model.category === "custom" ? "custom_face" : "keep_original",
+            poseId: shot.pose.id,
+            poseName: shot.pose.name,
+            poseCategory: shot.pose.category,
+            poseImageUrl: shot.pose.imageUrl,
+            poseDescription: shot.pose.description,
+            backgroundId: shot.background.id,
+            backgroundName: shot.background.name,
+            backgroundUrl: shot.background.imageUrl,
+            backgroundDescription: shot.background.description,
+            backgroundMode: shot.backgroundMode,
+            hairstyle: shot.hairstyle.name,
+            hairstyleDescription: shot.hairstyle.description,
+            jewellery: shot.jewellery.name,
+            jewelleryDescription: shot.jewellery.description,
+            fabric: shot.fabric.name,
+            fabricDescription: shot.fabric.description,
+            fabricDrapePhysics: shot.fabric.drapePhysics,
+            customNotes: tasks.length > 1 ? `${customStylingNotes} (Shot ${i + 1}: ${shot.pose.name} in ${shot.background.name})` : customStylingNotes,
             garments: task.garments.slice(0, MAX_GARMENT_REFERENCES)
           })
         });
@@ -684,11 +909,11 @@ export function MagicModeWorkspace() {
       <LookbookHeader
         icon={<Sparkles className="h-[18px] w-[18px]" />}
         title="Custom Lookbooks"
-        description="Bespoke luxury model lookbooks tailored from your unstitched suit sets and wholesale saree fabrics."
+        description="Bespoke luxury model lookbooks tailored from your readymade suit sets and wholesale saree fabrics."
         actions={<WorkflowSwitcher active="custom" />}
       />
 
-      {/* Category Tabs: Wholesale Saree vs Unstitched Suits */}
+      {/* Category Tabs: Wholesale Saree vs Readymade Suit */}
       <div className="flex items-center gap-2 border-b border-line pb-3">
         <span className="text-xs font-semibold text-ink-faint mr-2">Category:</span>
         <div className="flex items-center gap-1.5 bg-sand/60 p-1 rounded-xl border border-line">
@@ -712,7 +937,7 @@ export function MagicModeWorkspace() {
                 : "text-ink-soft hover:text-ink"
             }`}
           >
-            <span>Unstitched Suits (Build your suits)</span>
+            <span>Readymade Suit (Build your suits)</span>
             <span className="pill-neutral text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-fuchsia-accent/15 text-fuchsia-accent border border-fuchsia-accent/30">
               1 Credit
             </span>
@@ -729,6 +954,7 @@ export function MagicModeWorkspace() {
               suits={suits}
               onUploadSlot={handleUploadSuitSlot}
               onRemoveSlot={handleRemoveSuitSlot}
+              onUpdateNote={handleUpdateSuitNote}
               onAddSuit={handleAddSuit}
               onRemoveSuit={handleRemoveSuit}
               uploading={isUploading}
@@ -767,35 +993,112 @@ export function MagicModeWorkspace() {
         {/* 2. Creative Direction & Advanced Styling */}
         <section className="card flex flex-col gap-6 p-4 sm:p-6 shadow-sm">
           <Step index={2} title="Creative direction">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <MediaCard
-                label="Model"
-                name={selectedModel.name}
-                meta={selectedModel.subtitle}
-                imageUrl={selectedModel.imageUrl}
-                fallbackUrl={PRESET_MODELS[0].imageUrl}
-                alt={selectedModel.name}
-                onClick={() => setIsModelModalOpen(true)}
-              />
-              <MediaCard
-                label="Pose"
-                name={selectedPose.name}
-                meta={selectedPose.category ? `${selectedPose.category} posture` : "Editorial stance"}
-                imageUrl={selectedPose.imageUrl}
-                fallbackUrl={PRESET_POSES[0].imageUrl}
-                alt={selectedPose.name}
-                onClick={() => setIsPoseModalOpen(true)}
-              />
-              <MediaCard
-                label="Setting"
-                name={selectedBackground.name}
-                meta={selectedBackground.category ? `${selectedBackground.category} atmosphere` : "Studio"}
-                imageUrl={selectedBackground.imageUrl}
-                fallbackUrl={PRESET_BACKGROUNDS[0].imageUrl}
-                alt={selectedBackground.name}
-                onClick={() => setIsBgModalOpen(true)}
-              />
-            </div>
+            {batchCount > 1 && (
+              <div className="flex flex-col gap-2.5 pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-ink">
+                      Different Poses & Settings per Shot:
+                    </span>
+                    <span className="text-[10px] font-semibold text-fuchsia-accent bg-fuchsia-accent/10 px-2 py-0.5 rounded-full border border-fuchsia-accent/20">
+                      Same Garment • {batchCount} Unique Looks
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAutoDiversifyShots}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-line bg-surface hover:border-fuchsia-accent hover:text-fuchsia-accent text-ink-soft transition-colors cursor-pointer shadow-xs"
+                    title="Automatically assign distinct poses and backgrounds to each shot"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
+                    <span>Auto-Vary Poses & Settings</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {creativeShots.slice(0, batchCount).map((shot, idx) => {
+                    const isActive = activeShotIndex === idx;
+                    return (
+                      <button
+                        key={shot.id || idx}
+                        type="button"
+                        onClick={() => setActiveShotIndex(idx)}
+                        className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isActive
+                            ? "border-fuchsia-accent bg-clay-soft ring-2 ring-fuchsia-accent/20 shadow-xs"
+                            : "border-line bg-surface hover:border-muted-purple hover:bg-sand/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className={`text-[11px] font-bold ${isActive ? "text-fuchsia-accent" : "text-ink"}`}>
+                            Shot {idx + 1}
+                          </span>
+                          {isActive && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-fuchsia-accent bg-fuchsia-accent/15 px-1.5 py-0.2 rounded">
+                              Editing
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-ink font-semibold truncate w-full mt-1">
+                          {shot.pose.name}
+                        </span>
+                        <span className="text-[10px] text-ink-faint truncate w-full">
+                          {shot.background.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {(() => {
+              const isPosePhotoAvailable = Boolean(
+                selectedPose.imageUrl &&
+                selectedPose.imageUrl.trim() !== "" &&
+                !selectedPose.imageUrl.includes("photo-1515886657613-9f3515b0c78f")
+              );
+              const isBgPhotoAvailable = Boolean(
+                selectedBackground.imageUrl &&
+                selectedBackground.imageUrl.trim() !== "" &&
+                !selectedBackground.imageUrl.includes("photo-1582650625119-3a31f8418b7d")
+              );
+
+              return (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <MediaCard
+                    label="Model"
+                    name={selectedModel.name}
+                    meta={selectedModel.subtitle}
+                    imageUrl={selectedModel.imageUrl}
+                    fallbackUrl={PRESET_MODELS[0].imageUrl}
+                    alt={selectedModel.name}
+                    onClick={() => setIsModelModalOpen(true)}
+                  />
+                  <MediaCard
+                    label="Pose"
+                    name={selectedPose.name}
+                    meta={selectedPose.category ? `${selectedPose.category} posture` : "Editorial stance"}
+                    imageUrl={isPosePhotoAvailable ? selectedPose.imageUrl : undefined}
+                    fallbackUrl={isPosePhotoAvailable ? PRESET_POSES[0].imageUrl : undefined}
+                    alt={selectedPose.name}
+                    badge={!isPosePhotoAvailable ? "Prompt Only" : undefined}
+                    onClick={() => setIsPoseModalOpen(true)}
+                  />
+                  <MediaCard
+                    label="Setting"
+                    name={selectedBackground.name}
+                    meta={selectedBackground.category ? `${selectedBackground.category} atmosphere` : "Studio"}
+                    imageUrl={isBgPhotoAvailable ? selectedBackground.imageUrl : undefined}
+                    fallbackUrl={isBgPhotoAvailable ? PRESET_BACKGROUNDS[0].imageUrl : undefined}
+                    alt={selectedBackground.name}
+                    badge={!isBgPhotoAvailable ? "Prompt Only" : undefined}
+                    onClick={() => setIsBgModalOpen(true)}
+                  />
+                </div>
+              );
+            })()}
           </Step>
 
           <AdvancedPanel
@@ -848,14 +1151,25 @@ export function MagicModeWorkspace() {
             }
             loadingLabel={loadingLabel}
             imageCount={isMultiSuit ? activeSuits.length : batchCount}
-            onImageCountChange={isMultiSuit ? undefined : setBatchCount}
+            onImageCountChange={
+              isMultiSuit
+                ? undefined
+                : (cnt) => {
+                    setBatchCount(cnt);
+                    if (activeShotIndex >= cnt) setActiveShotIndex(0);
+                  }
+            }
             countOptions={[1, 2, 3, 4]}
             batchDescription={
               category === "suits"
                 ? isMultiSuit
                   ? `Batch multi-suit: Generating all ${activeSuits.length} configured suits`
-                  : "Generate multiple suit variations or add another suit above"
-                : "Generate multiple unique lookbook variations at a time"
+                  : batchCount > 1
+                  ? `Generating all ${batchCount} shots at once with different poses & settings`
+                  : "Generate single lookbook or increase count to vary poses & settings"
+                : batchCount > 1
+                ? `Generating all ${batchCount} shots at once with different poses & settings`
+                : "Generate single lookbook or increase count to vary poses & settings"
             }
             customButtonLabel={
               isMultiSuit
@@ -940,6 +1254,7 @@ export function MagicModeWorkspace() {
         onClose={() => setIsPoseModalOpen(false)}
         selectedPose={selectedPose}
         onSelect={(pose) => setSelectedPose(pose)}
+        onCustomUpload={handleCustomPoseUpload}
       />
 
       <BackgroundPickerModal
@@ -949,6 +1264,7 @@ export function MagicModeWorkspace() {
         backgroundMode={backgroundMode}
         onSelect={(bg) => setSelectedBackground(bg)}
         onModeChange={(mode) => setBackgroundMode(mode)}
+        onCustomUpload={handleCustomBackgroundUpload}
       />
 
       <HairstylePickerModal
