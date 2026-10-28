@@ -3,7 +3,7 @@
  * maths, and every UI toast can never drift apart.
  *
  * The server still owns the authoritative cost: the value passed to
- * `deduct_balance_for_generation` is always read from here, never from the
+ * `reserve_generation_credit` is always read from here, never from the
  * client payload.
  */
 export const CREDIT_PRICE_INR = 40;

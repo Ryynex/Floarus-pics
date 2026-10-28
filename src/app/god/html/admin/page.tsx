@@ -225,7 +225,10 @@ export default function AdminPage() {
           console.warn("admin_dashboard_stats unavailable:", statsRes.error.message);
           setStats(null);
         } else {
-          setStats(statsRes.data as DashboardStats);
+          // PostgREST returns a set-returning function as an array even for a
+          // single row; without unwrapping it every overview card renders "—".
+          const rows = statsRes.data as DashboardStats[] | DashboardStats | null;
+          setStats(Array.isArray(rows) ? rows[0] ?? null : rows);
         }
         if (gensRes.error) throw gensRes.error;
 
@@ -334,10 +337,18 @@ export default function AdminPage() {
         // re-validates the token instead of trusting the stored session copy.
         const { data: { user }, error } = await supabase.auth.getUser();
         if (user && !error) {
-          const email = user.email;
-          if (email === "admin@florus.pics") {
+          // `profiles.is_admin` is the single source of truth (the proxy and
+          // every RPC use it). Hardcoding one email here locked out any other
+          // admin the database had authorised.
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("is_admin")
+            .eq("id", user.id)
+            .single();
+
+          if (!profileError && profile?.is_admin === true) {
             setIsAdmin(true);
-            setAdminEmail(email);
+            setAdminEmail(user.email ?? null);
             // Data loading is driven by the fetch effect below
           } else {
             setIsAdmin(false);
@@ -533,6 +544,32 @@ export default function AdminPage() {
     }
   };
 
+  // Storage rows have no FK to auth.users, so a user's uploads survived the
+  // account and stayed publicly readable. Walk their folder in both buckets and
+  // remove every object first (admin policies permit list + delete).
+  const deleteUserStorage = async (userId: string): Promise<void> => {
+    const buckets = ["generated-lookbooks", "garments"] as const;
+    for (const bucket of buckets) {
+      const walk = async (prefix: string, depth: number): Promise<void> => {
+        if (depth > 4) return;
+        const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+        if (error || !data?.length) return;
+        const files = data.filter((item) => item.id !== null).map((item) => `${prefix}/${item.name}`);
+        const folders = data.filter((item) => item.id === null).map((item) => item.name);
+        if (files.length > 0) {
+          const { error: removeError } = await supabase.storage.from(bucket).remove(files);
+          if (removeError) {
+            console.warn(`Storage cleanup failed for ${bucket}:`, removeError.message);
+          }
+        }
+        for (const folder of folders) {
+          await walk(`${prefix}/${folder}`, depth + 1);
+        }
+      };
+      await walk(userId, 0);
+    }
+  };
+
   // Handle deletions
   const handleDeleteRecord = async () => {
     if (!deleteTarget) return;
@@ -543,9 +580,9 @@ export default function AdminPage() {
     try {
       let error = null;
       if (type === "user") {
-        // Deletes the auth user, profile, generations, payments and storage
-        // files in one transaction. A plain profiles delete would leave the
-        // auth user behind and get blocked by FK constraints.
+        // Deletes the auth user, profile, generations and payments (cascade),
+        // plus the storage objects, which have no foreign key to cascade from.
+        await deleteUserStorage(id);
         const { error: err } = await supabase.rpc("admin_delete_user", {
           p_user_id: id,
         });

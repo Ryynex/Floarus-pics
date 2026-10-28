@@ -625,6 +625,7 @@ export function MagicModeWorkspace() {
             faceMode: selectedModel.category === "custom" ? "custom_face" : "keep_original",
             poseId: selectedPose.id,
             poseName: selectedPose.name,
+            poseCategory: selectedPose.category,
             poseImageUrl: selectedPose.imageUrl,
             poseDescription: selectedPose.description,
             backgroundId: selectedBackground.id,

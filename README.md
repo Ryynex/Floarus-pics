@@ -23,9 +23,10 @@ Both `dev` and `build` use the webpack bundler (`next dev --webpack` /
 ## Database
 
 `supabase_schema.sql` is idempotent (safe to re-run). Apply it in the Supabase
-SQL Editor **before** deploying code that calls the admin RPCs. See
-[MIGRATION.md](MIGRATION.md) for the full migration checklist, admin bootstrap
-steps, and verification queries.
+SQL Editor together with deploying the code, because both the admin panel and the
+generation API call RPCs defined there. See [MIGRATION.md](MIGRATION.md) for the
+full migration checklist, deploy order, admin bootstrap steps, and verification
+queries.
 
 ## Environment variables
 
@@ -46,14 +47,24 @@ Never commit `.env*` files — they are git-ignored.
 ## Billing
 
 1 credit = `CREDIT_PRICE_INR` INR (`src/lib/pricing.ts`). Balance changes only
-happen through security-definer RPCs (`deduct_balance_for_generation`,
-`admin_*`). The generation API returns HTTP 503 and charges nothing when the
-image backend is unavailable.
+happen through security-definer RPCs.
+
+The generation API charges **before** any paid work:
+
+1. `reserve_generation_credit` takes the credit and opens a `processing`
+   generation row keyed by `(user_id, idempotency_key)`.
+2. If the build fails for any reason, `refund_generation` returns the credit
+   (reservations abandoned for 30+ minutes are refunded automatically).
+3. On success, `finalize_generation` marks the row completed and billed.
+
+A replayed idempotency key is rejected with HTTP 409 instead of being treated as
+already paid. One account may have at most two reservations in flight.
+`deduct_balance_for_generation` is retired and no longer executable by app users.
 
 ## Admin console
 
-`/god/html/admin` (admin email only). Money actions go through atomic admin
-RPCs; list views are paginated (50/page).
+`/god/html/admin` (any account with `profiles.is_admin = true`). Money actions go
+through atomic admin RPCs; list views are paginated (50/page).
 
 ## Scripts
 

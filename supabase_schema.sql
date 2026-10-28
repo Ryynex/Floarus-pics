@@ -208,11 +208,19 @@ insert into storage.buckets (id, name, public)
 values ('garments', 'garments', true)
 on conflict (id) do nothing;
 
--- Public read for both buckets
+-- Read access is scoped to the owner (the uid folder) or an admin.
+-- NOTE: these buckets are public, so images are still served from
+-- /storage/v1/object/public/... without RLS. The difference is that a blanket
+-- `using (bucket_id in (...))` policy also let ANYONE holding the anon key call
+-- the storage list endpoint and enumerate every customer's uploads.
 drop policy if exists "Public Access to Generated Lookbooks" on storage.objects;
-create policy "Public Access to Generated Lookbooks"
+drop policy if exists "Users can read own lookbook objects" on storage.objects;
+create policy "Users can read own lookbook objects"
   on storage.objects for select
-  using (bucket_id in ('generated-lookbooks', 'garments'));
+  using (
+    bucket_id in ('generated-lookbooks', 'garments') AND
+    (auth.uid()::text = (storage.foldername(name))[1] OR public.is_admin())
+  );
 
 -- Upload to your own folder only
 drop policy if exists "Users can upload own lookbooks" on storage.objects;
@@ -244,6 +252,15 @@ create policy "Users can delete own lookbooks"
     (auth.uid()::text = (storage.foldername(name))[1])
   );
 
+-- Admins may purge any object so deleting an account also removes its files.
+drop policy if exists "Admins can delete any lookbook object" on storage.objects;
+create policy "Admins can delete any lookbook object"
+  on storage.objects for delete
+  using (
+    bucket_id in ('generated-lookbooks', 'garments') AND
+    public.is_admin()
+  );
+
 -- --------------------------------------------------------
 -- 8. Indexes (dashboard history queries + rate limiting)
 -- --------------------------------------------------------
@@ -253,6 +270,26 @@ create index if not exists generations_created_idx
   on public.generations (created_at desc);
 create index if not exists generations_idempotency_idx
   on public.generations (idempotency_key) where idempotency_key is not null;
+
+-- The reservation RPC relies on this being UNIQUE **per user** (not globally,
+-- and not merely indexed): it is what makes a replayed key impossible to charge
+-- against, and what keeps a client key from colliding with another account's.
+do $$
+begin
+  if exists (
+    select 1
+      from public.generations
+     where idempotency_key is not null
+     group by user_id, idempotency_key
+    having count(*) > 1
+  ) then
+    raise notice 'Duplicate (user_id, idempotency_key) rows found; unique index skipped. Clean them up and re-run section 8.';
+  else
+    execute 'create unique index if not exists generations_user_idem_uniq
+               on public.generations (user_id, idempotency_key)
+               where idempotency_key is not null';
+  end if;
+end $$;
 create index if not exists payments_user_created_idx
   on public.payments (user_id, created_at desc);
 
@@ -260,6 +297,10 @@ create index if not exists payments_user_created_idx
 -- 9. Atomic RPC Operations (Transactions)
 -- --------------------------------------------------------
 
+-- DEPRECATED — superseded by reserve/finalize/refund below. It is kept only so
+-- an in-flight deploy can still be rolled back; EXECUTE is revoked from
+-- `authenticated` in section 10b, so app users cannot call it at all.
+--
 -- RPC to atomically deduct user balance and insert generation log.
 -- p_idempotency_key makes client retries safe: a repeated key returns the
 -- current balance WITHOUT charging a second time.
@@ -315,7 +356,7 @@ begin
     -- Deduct balance
     update public.profiles
     set balance_inr = balance_inr - p_cost,
-        updated_at = timezone('utc'::text, now())
+        updated_at = now()
     where id = v_user_id;
 
     -- Insert generation record
@@ -329,6 +370,241 @@ begin
   end;
 
   return v_balance - p_cost;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 9b. Reservation-based billing
+--
+-- The previous flow charged AFTER the paid inference and treated the
+-- client-supplied idempotency key as proof that the work had already been paid
+-- for. Because the key is chosen by the caller and was never bound to a user or
+-- a payload, replaying any key (or pre-seeding one through a direct RPC call)
+-- produced renders for free.
+--
+-- The three functions below invert the order: the credit is taken BEFORE any
+-- paid work, and handed back if the build fails. A key is only ever valid for
+-- the user that reserved it, and only while that reservation is `processing`.
+-- ---------------------------------------------------------------------------
+
+-- Credits older than this are considered abandoned and are refunded.
+create or replace function public.reservation_stale_interval()
+returns interval
+language sql
+immutable
+as $$ select interval '30 minutes' $$;
+
+-- Refund this user's abandoned reservations (called on every new reservation,
+-- so a crashed instance can never permanently swallow a credit).
+create or replace function public.release_stale_reservations(p_user_id uuid)
+returns numeric
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total numeric := 0;
+begin
+  if p_user_id is null or auth.uid() is null or p_user_id <> auth.uid() then
+    raise exception 'Forbidden';
+  end if;
+
+  with stale as (
+    update public.generations
+       set status = 'failed'
+     where user_id = p_user_id
+       and status = 'processing'
+       and created_at < now() - public.reservation_stale_interval()
+    returning cost_inr
+  )
+  select coalesce(sum(cost_inr), 0) into v_total from stale;
+
+  if v_total > 0 then
+    update public.profiles
+       set balance_inr = balance_inr + v_total,
+           updated_at = now()
+     where id = p_user_id;
+  end if;
+
+  return v_total;
+end;
+$$;
+
+-- Take the credit and open a `processing` generation row, atomically.
+create or replace function public.reserve_generation_credit(
+  p_cost numeric,
+  p_idempotency_key uuid,
+  p_prompt text,
+  p_garment_url text,
+  p_face_url text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_balance numeric;
+  v_existing public.generations%rowtype;
+  v_inflight integer;
+  v_generation_id uuid;
+begin
+  v_user_id := auth.uid();
+  if v_user_id is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  if p_cost is null or p_cost <= 0 or p_cost > 1000 then
+    raise exception 'Invalid cost';
+  end if;
+  if p_idempotency_key is null then
+    raise exception 'Request identifier is required';
+  end if;
+
+  -- Sweep abandoned reservations first (it takes locks generations -> profiles,
+  -- in that order, so it must run before we hold the wallet lock ourselves).
+  perform public.release_stale_reservations(v_user_id);
+
+  -- Lock the wallet: every reservation for one user serialises here, so two
+  -- parallel requests can never both pass on the same credit.
+  select balance_inr into v_balance
+    from public.profiles
+   where id = v_user_id
+   for update;
+  if v_balance is null then
+    raise exception 'User profile not found';
+  end if;
+
+  -- Same logical request already seen (in flight or finished): never charge it
+  -- a second time, and never build it a second time.
+  select * into v_existing
+    from public.generations
+   where user_id = v_user_id
+     and idempotency_key = p_idempotency_key;
+  if found then
+    return jsonb_build_object(
+      'status', 'duplicate',
+      'generation_id', v_existing.id,
+      'generation_status', v_existing.status,
+      'balance', v_balance
+    );
+  end if;
+
+  -- Bound the number of paid runs one account can have open at once.
+  select count(*) into v_inflight
+    from public.generations
+   where user_id = v_user_id
+     and status = 'processing';
+  if v_inflight >= 2 then
+    raise exception 'Another generation is already running';
+  end if;
+
+  if v_balance < p_cost then
+    raise exception 'Insufficient balance';
+  end if;
+
+  update public.profiles
+     set balance_inr = balance_inr - p_cost,
+         updated_at = now()
+   where id = v_user_id;
+
+  insert into public.generations
+    (user_id, prompt, garment_url, face_url, output_url, status, cost_inr, idempotency_key)
+  values
+    (v_user_id, p_prompt, p_garment_url, p_face_url, null, 'processing', p_cost, p_idempotency_key)
+  returning id into v_generation_id;
+
+  return jsonb_build_object(
+    'status', 'reserved',
+    'generation_id', v_generation_id,
+    'balance', v_balance - p_cost
+  );
+end;
+$$;
+
+-- Turn a reservation into a paid, completed generation. The `status =
+-- 'processing'` guard makes this idempotent: a reservation that was already
+-- refunded can never be completed (and therefore charged) afterwards.
+create or replace function public.finalize_generation(
+  p_generation_id uuid,
+  p_output_url text
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_balance numeric;
+begin
+  v_user_id := auth.uid();
+  if v_user_id is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  update public.generations
+     set output_url = p_output_url,
+         status = 'completed'
+   where id = p_generation_id
+     and user_id = v_user_id
+     and status = 'processing';
+
+  if not found then
+    raise exception 'Generation reservation is not chargeable';
+  end if;
+
+  select balance_inr into v_balance
+    from public.profiles
+   where id = v_user_id;
+  return v_balance;
+end;
+$$;
+
+-- Hand a reservation back (failed build, upstream outage, timeout...).
+-- Idempotent: a reservation that is no longer `processing` is left untouched.
+create or replace function public.refund_generation(p_generation_id uuid)
+returns numeric
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_generation public.generations%rowtype;
+  v_balance numeric;
+begin
+  v_user_id := auth.uid();
+  if v_user_id is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  select * into v_generation
+    from public.generations
+   where id = p_generation_id
+     and user_id = v_user_id
+   for update;
+  if not found then
+    raise exception 'Generation not found';
+  end if;
+
+  if v_generation.status <> 'processing' then
+    select balance_inr into v_balance from public.profiles where id = v_user_id;
+    return v_balance;
+  end if;
+
+  update public.generations
+     set status = 'failed'
+   where id = p_generation_id;
+
+  update public.profiles
+     set balance_inr = balance_inr + v_generation.cost_inr,
+         updated_at = now()
+   where id = v_user_id
+   returning balance_inr into v_balance;
+
+  return v_balance;
 end;
 $$;
 
@@ -357,6 +633,12 @@ begin
   end if;
   if p_upi_txn_id is null or length(trim(p_upi_txn_id)) < 4 then
     raise exception 'Transaction reference is required';
+  end if;
+
+  -- Bound the review queue a single account can create.
+  if (select count(*) from public.payments
+       where user_id = v_user_id and status = 'pending') >= 5 then
+    raise exception 'You already have several payments awaiting review';
   end if;
 
   -- Log payment event as 'pending'
@@ -509,7 +791,7 @@ begin
   if p_status = 'completed' then
     update public.profiles
     set balance_inr = balance_inr + p_amount,
-        updated_at = timezone('utc'::text, now())
+        updated_at = now()
     where id = p_user_id;
     if not found then
       raise exception 'User profile not found';
@@ -562,7 +844,11 @@ begin
     (select count(*) from public.profiles)::bigint,
     (select coalesce(sum(balance_inr), 0) from public.profiles)::numeric,
     (select count(*) from public.generations)::bigint,
-    (select coalesce(sum(amount), 0) from public.payments where status = 'completed')::numeric;
+    -- Manual wallet edits are written to the ledger as `MANUAL_*` rows; they
+    -- are adjustments, not income, so they must not inflate reported revenue.
+    (select coalesce(sum(amount), 0) from public.payments
+      where status = 'completed'
+        and upi_txn_id not like 'MANUAL\_%')::numeric;
 end;
 $$;
 
@@ -572,7 +858,16 @@ $$;
 -- Supabase grants EXECUTE on new functions to PUBLIC by default. None of these
 -- may be callable by anon; the money-moving ones only need the authenticated
 -- role (each function still verifies admin or the calling user itself).
-revoke execute on function public.deduct_balance_for_generation(numeric, text, text, text, text, uuid) from public, anon;
+--
+-- deduct_balance_for_generation is DEPRECATED and no longer executable by app
+-- users: the server now reserves a credit before generating. Leaving it
+-- callable let a client pre-seed an idempotency key and then replay it for a
+-- free render.
+revoke execute on function public.deduct_balance_for_generation(numeric, text, text, text, text, uuid) from public, anon, authenticated;
+revoke execute on function public.reserve_generation_credit(numeric, uuid, text, text, text) from public, anon;
+revoke execute on function public.finalize_generation(uuid, text) from public, anon;
+revoke execute on function public.refund_generation(uuid) from public, anon;
+revoke execute on function public.release_stale_reservations(uuid) from public, anon;
 revoke execute on function public.submit_upi_payment(numeric, text) from public, anon;
 revoke execute on function public.admin_set_balance(uuid, numeric) from public, anon;
 revoke execute on function public.admin_approve_payment(uuid) from public, anon;
@@ -581,7 +876,11 @@ revoke execute on function public.admin_log_payment(uuid, numeric, text, text) f
 revoke execute on function public.admin_delete_user(uuid) from public, anon;
 revoke execute on function public.admin_dashboard_stats() from public, anon;
 
-grant execute on function public.deduct_balance_for_generation(numeric, text, text, text, text, uuid) to authenticated, service_role;
+grant execute on function public.deduct_balance_for_generation(numeric, text, text, text, text, uuid) to service_role;
+grant execute on function public.reserve_generation_credit(numeric, uuid, text, text, text) to authenticated, service_role;
+grant execute on function public.finalize_generation(uuid, text) to authenticated, service_role;
+grant execute on function public.refund_generation(uuid) to authenticated, service_role;
+grant execute on function public.release_stale_reservations(uuid) to authenticated, service_role;
 grant execute on function public.submit_upi_payment(numeric, text) to authenticated, service_role;
 grant execute on function public.admin_set_balance(uuid, numeric) to authenticated, service_role;
 grant execute on function public.admin_approve_payment(uuid) to authenticated, service_role;

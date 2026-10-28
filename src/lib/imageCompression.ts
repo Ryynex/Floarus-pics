@@ -27,8 +27,15 @@ export async function compressImageClient(
   maxDimension: number = 640,
   quality: number = 0.85
 ): Promise<File> {
-  if (!file.type.startsWith("image/")) {
-    return file;
+  const isSvg = /^image\/svg\+xml$/i.test(file.type);
+  if (!file.type.startsWith("image/") || isSvg) {
+    // Every caller uploads into a public bucket, so non-image payloads (HTML,
+    // SVG with script, arbitrary binaries) must never reach it.
+    throw new ImageCompressionError(
+      isSvg
+        ? "SVG files are not supported. Please upload a JPG or PNG photo."
+        : `'${file.name}' is not an image. Please upload a JPG or PNG photo.`
+    );
   }
 
   const compressedFile = await new Promise<File>((resolve, reject) => {

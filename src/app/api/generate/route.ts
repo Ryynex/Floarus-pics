@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import dns from "dns/promises";
 import sharp from "sharp";
-import { MAX_GARMENT_REFERENCES } from "@/lib/catalogData";
+import { MAX_GARMENT_REFERENCES, PRESET_POSES } from "@/lib/catalogData";
 import { CREDIT_PRICE_INR, creditsFromBalance } from "@/lib/pricing";
 import { STAGING_TEMPLATES } from "@/lib/flatlayData";
 
@@ -58,6 +58,14 @@ const PER_USER_COOLDOWN_MS = 5_000;
 /** Global cap on simultaneous paid Fal runs (all users). */
 const MAX_CONCURRENT_FAL_RUNS = 2;
 
+/**
+ * Fal content-filter strictness: 1 is the strictest, 5 the most permissive.
+ * A B2B fashion catalog has no reason to ship the most permissive setting, so
+ * this defaults to 2 and can be relaxed per deployment if legitimate ethnic
+ * wear is being filtered.
+ */
+const FAL_SAFETY_TOLERANCE = (process.env.FAL_SAFETY_TOLERANCE || "2").trim();
+
 // ---------------------------------------------------------------------------
 // Upload cache: hashed keys (never store megabytes of base64 as a Map key),
 // TTL, and a hard entry cap so the Map cannot grow without bound.
@@ -89,6 +97,108 @@ function cacheSet(key: string, url: string): void {
   publicUrlCache.set(key, { url, at: Date.now() });
 }
 
+
+interface ShotFramingInfo {
+  isCloseUp: boolean;
+  framingType: "extreme_close_up" | "waist_up" | "macro_detail" | "close_up" | "full_length";
+  focus: string;
+}
+
+function detectShotFraming(params: {
+  poseCategory?: string;
+  poseId?: string;
+  poseName?: string;
+  poseDescription?: string;
+  customNotes?: string;
+  shootTitle?: string;
+  shootSetting?: string;
+  shootPose?: string;
+}): ShotFramingInfo {
+  const combined = [
+    params.poseCategory,
+    params.poseId,
+    params.poseName,
+    params.poseDescription,
+    params.customNotes,
+    params.shootTitle,
+    params.shootSetting,
+    params.shootPose,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  // If explicitly specified as full-length and no close-up keywords
+  const isExplicitFullLength =
+    /\b(full[\s-]?length|standing frontal stance|full silhouette|head[\s-]?to[\s-]?toe|entire body)\b/i.test(combined) &&
+    !/\b(close[\s-]?up|closeup|head\s*(?:&|and)\s*shoulders|bust shot|bust portrait|waist[\s-]?up|collarbone)\b/i.test(combined);
+
+  if (isExplicitFullLength) {
+    return { isCloseUp: false, framingType: "full_length", focus: "full-length body" };
+  }
+
+  // Extreme close-up / Head & Shoulders / Beauty Portrait / Face
+  const isExtremeCloseUp =
+    /\b(head\s*(?:&|and)\s*shoulders|beauty portrait|face portrait|facial detail|tight portrait|tight close[\s-]?up|extreme close[\s-]?up|close[\s-]?up candid portrait|mouth playfully|chin\/neck|hair bun styling|over-the-shoulder close-up|over-the-shoulder back detail)\b/i.test(
+      combined
+    );
+
+  // Bust / Waist-up / Medium Close Portrait
+  const isWaistUp =
+    /\b(waist[\s-]?up|bust shot|bust portrait|collarbone|half[\s-]?body|medium[- ]close|torso shot|upper body|neck jewelry|blouse detailing and neck)\b/i.test(
+      combined
+    );
+
+  // Specific detail crops (e.g. footwear & hemline)
+  const isDetailShot =
+    /\b(feet[\s,]+ankles|footwear & hemline|skirt pleat hemline|close-up shot of feet)\b/i.test(
+      combined
+    );
+
+  const isDetailsCategory = params.poseCategory === "details";
+
+  if (isExtremeCloseUp) {
+    return {
+      isCloseUp: true,
+      framingType: "extreme_close_up",
+      focus: "head, face, collarbone, and neckline (beauty portrait framing)",
+    };
+  }
+
+  if (isWaistUp) {
+    return {
+      isCloseUp: true,
+      framingType: "waist_up",
+      focus: "upper torso from the waist up (blouse, neckline, jewelry, and shoulders)",
+    };
+  }
+
+  if (isDetailShot) {
+    return {
+      isCloseUp: true,
+      framingType: "macro_detail",
+      focus: "focused lower detail (feet, footwear, and hemline pleats)",
+    };
+  }
+
+  if (isDetailsCategory) {
+    return {
+      isCloseUp: true,
+      framingType: "close_up",
+      focus: "intimate close-up portrait framing matching the reference pose",
+    };
+  }
+
+  if (/\b(close[\s-]?up|closeup|tight shot|tight crop|macro)\b/i.test(combined)) {
+    return {
+      isCloseUp: true,
+      framingType: "close_up",
+      focus: "close-up portrait framing",
+    };
+  }
+
+  return { isCloseUp: false, framingType: "full_length", focus: "full-length body" };
+}
 
 /**
  * Minimal shape of the Fal run payload we actually consume. Fal's schema varies
@@ -623,6 +733,28 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Credit reserved for this request. Set the moment the wallet is charged and
+  // cleared once the charge is finalised, so every failure path releases it.
+  let pendingGenerationId: string | null = null;
+
+  const refundPendingGeneration = async (reason: string): Promise<void> => {
+    if (!pendingGenerationId) return;
+    const generationId = pendingGenerationId;
+    pendingGenerationId = null;
+    try {
+      await withTimeout(
+        Promise.resolve(supabase.rpc("refund_generation", { p_generation_id: generationId })),
+        RPC_TIMEOUT_MS,
+        "billing refund"
+      );
+      console.warn(`Released reservation ${generationId} (${reason})`);
+    } catch (refundError) {
+      // The row stays `processing`; the stale-reservation sweep refunds it on
+      // this user's next attempt, so a credit can never be lost.
+      console.error(`Refund failed for generation ${generationId} (${reason}):`, refundError);
+    }
+  };
+
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
@@ -773,6 +905,8 @@ export async function POST(req: NextRequest) {
     const customFaceUrl = optionalText(rawCustomFaceUrl, 8000);
     const modelFaceUrl = optionalText(rawModelFaceUrl, 8000);
     const poseId = clampText(rawPoseId, 100, "");
+    const poseCategory = clampText((body as any).poseCategory, 50, "");
+    const shootPose = clampText((body as any).shootPose, 600, "");
     const backgroundId = clampText(rawBackgroundId, 100, "");
     const drapingStyle = clampText((body as any).drapingStyle, 200, "Default drape");
     const blouseStyle = clampText((body as any).blouseStyle, 200, "Auto-coordinate with border & zari (Default)");
@@ -844,7 +978,91 @@ export async function POST(req: NextRequest) {
       return serviceUnavailable("missing FAL_KEY environment configuration");
     }
 
-    // 3. Compress All Garment Reference Images Directly (Max MAX_GARMENT_REFERENCES, <= 640px)
+    // 3. Reserve the credit BEFORE any paid work.
+    //
+    // The old flow charged AFTER inference and treated the client-supplied
+    // idempotency key as proof that the work had already been paid for, so
+    // replaying a key (or pre-seeding one directly in the database) produced
+    // free renders. Here a key is bound to this user and consumed by the
+    // reservation, and a duplicate is rejected instead of being trusted.
+    const requestKey =
+      typeof idempotencyKey === "string" && idempotencyKey
+        ? idempotencyKey
+        : crypto.randomUUID();
+
+    const reservationPrompt =
+      mode === "magic"
+        ? `CUSTOM LOOKBOOK: ${outfitType} | Pose: ${poseName} | Setting: ${backgroundName}`
+        : mode === "flatlay"
+        ? `FLATLAY STUDIO: ${stagingTemplateName}`
+        : `STUDIO LOOKBOOK: ${shootTitle} | Face: ${faceMode} | Setting: ${shootSetting || backgroundName}`;
+
+    let reservationResult: { data: unknown; error: { message: string } | null };
+    try {
+      reservationResult = await withTimeout(
+        Promise.resolve(
+          supabase.rpc("reserve_generation_credit", {
+            p_cost: cost,
+            p_idempotency_key: requestKey,
+            p_prompt: reservationPrompt,
+            p_garment_url: activeGarments.map((g) => g.url).join(","),
+            p_face_url: customFaceUrl || modelFaceUrl || null,
+          })
+        ),
+        RPC_TIMEOUT_MS,
+        "credit reservation"
+      );
+    } catch (reservationError) {
+      console.error("Credit reservation timed out:", reservationError);
+      return NextResponse.json(
+        { error: "Could not start the generation. No credits were charged — please try again." },
+        { status: 503 }
+      );
+    }
+
+    if (reservationResult.error) {
+      const message = reservationResult.error.message || "";
+      if (message.includes("Insufficient balance")) {
+        return NextResponse.json(
+          { error: "Insufficient credits. Please add credits to your account." },
+          { status: 403 }
+        );
+      }
+      if (message.includes("already running")) {
+        return NextResponse.json(
+          { error: "Another generation is already running. Please wait for it to finish." },
+          { status: 429 }
+        );
+      }
+      console.error("Credit reservation rejected:", message);
+      return NextResponse.json(
+        { error: "Could not start the generation. No credits were charged — please try again." },
+        { status: 500 }
+      );
+    }
+
+    const reservation = reservationResult.data as
+      | { status?: string; generation_id?: string; balance?: number }
+      | null;
+
+    if (reservation?.status === "duplicate") {
+      return NextResponse.json(
+        { error: "This request was already submitted. Please start a new generation." },
+        { status: 409 }
+      );
+    }
+    if (reservation?.status !== "reserved" || !reservation.generation_id) {
+      console.error("Unexpected reservation response:", reservation);
+      return NextResponse.json(
+        { error: "Could not start the generation. No credits were charged — please try again." },
+        { status: 500 }
+      );
+    }
+
+    const generationId = reservation.generation_id;
+    pendingGenerationId = generationId;
+
+    // 3b. Compress All Garment Reference Images Directly (Max MAX_GARMENT_REFERENCES, <= 640px)
     // Per-item fault tolerance: one unreachable garment must not abort the whole
     // generation. Transient failures get retried; a permanent failure drops that
     // garment and is reported back so the client knows what was skipped.
@@ -877,6 +1095,7 @@ export async function POST(req: NextRequest) {
     ).filter((g): g is PreparedGarment => g !== null);
 
     if (preparedGarments.length === 0) {
+      await refundPendingGeneration("no usable garment references");
       return NextResponse.json(
         {
           error:
@@ -1027,10 +1246,36 @@ export async function POST(req: NextRequest) {
 
       const isSuitMode = category === "suits" || outfitType.toLowerCase().includes("suit") || outfitType.toLowerCase().includes("kurta");
 
+      const matchedPose = PRESET_POSES.find(
+        (p) =>
+          (poseId && p.id === poseId) ||
+          (poseImageUrl && p.imageUrl === poseImageUrl) ||
+          (poseName && p.name.toLowerCase() === poseName.toLowerCase())
+      );
+      const effectivePoseCategory = poseCategory || matchedPose?.category || "";
+
+      const framing = detectShotFraming({
+        poseCategory: effectivePoseCategory,
+        poseId,
+        poseName,
+        poseDescription,
+        customNotes,
+      });
+
+      const shotTypeDescriptor = framing.isCloseUp
+        ? framing.framingType === "extreme_close_up"
+          ? "intimate close-up beauty portrait photograph"
+          : framing.framingType === "waist_up"
+          ? "medium waist-up portrait photograph"
+          : framing.framingType === "macro_detail"
+          ? "macro detail catalog photograph"
+          : "close-up editorial portrait photograph"
+        : "editorial photograph";
+
       const promptParts: string[] = [
         bgRef
-          ? `High-end luxury Indian fashion catalog editorial photograph captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
-          : `High-end luxury Indian fashion catalog editorial photograph of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+          ? `High-end luxury Indian fashion catalog ${shotTypeDescriptor} captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+          : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
       ];
 
       // Identity. flux-2-pro/edit transforms its FIRST image, so this section
@@ -1059,41 +1304,85 @@ export async function POST(req: NextRequest) {
       if (poseRef && faceRef) {
         // Pose is a secondary reference (identity lives at image 1): pull the
         // body geometry only, never the scene or the person.
-        promptParts.push(
-          `Pose & Body Posture: Adopt the physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
-          `Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity of the person in it. ` +
-          `MANDATORY SCALE & FRAMING DECOUPLING: Extract ONLY the skeletal posture and hand gestures from @image${poseRef.index}. Do NOT inherit or copy the tight studio cropping, close magnification, or canvas scaling from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
-        );
+        if (framing.isCloseUp) {
+          promptParts.push(
+            `Pose & Body Posture: Adopt the physical human body posture, head tilt, facial angle, and hand gesture from @image${poseRef.index}. ` +
+            `Use @image${poseRef.index} strictly as a pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity of the person in it. ` +
+            `MANDATORY CLOSE-UP CAMERA FRAMING & SCALE: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
+            `This is an INTIMATE CLOSE-UP / PORTRAIT SHOT focusing on ${framing.focus}. ` +
+            `CRITICAL MANDATE: Under NO circumstances should you zoom out, generate a full-length body, show legs, or show feet. ` +
+            `The camera MUST be positioned intimately close to the subject, exactly mirroring the tight crop, scale, head tilt, and hand placement shown in @image${poseRef.index}.`
+          );
+        } else {
+          promptParts.push(
+            `Pose & Body Posture: Adopt the physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
+            `Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity of the person in it. ` +
+            `MANDATORY SCALE & FRAMING: Extract the skeletal posture and hand gestures from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
+          );
+        }
       } else if (poseRef) {
         // Pose photo is the edit base: keep the strong discard directive.
-        promptParts.push(
-          `Pose & Body Posture: Extract and replicate the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
-          `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output. ` +
-          `MANDATORY SCALE & FRAMING DECOUPLING: Extract ONLY the skeletal posture and hand gestures from @image${poseRef.index}. Do NOT inherit or copy the tight studio cropping, close magnification, or canvas scaling from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
-        );
+        if (framing.isCloseUp) {
+          promptParts.push(
+            `Pose & Body Posture: Extract and replicate the exact physical human body posture, head tilt, facial angle, and hand gesture from @image${poseRef.index}. ` +
+            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output. ` +
+            `MANDATORY CLOSE-UP CAMERA FRAMING & SCALE: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
+            `This is an INTIMATE CLOSE-UP / PORTRAIT SHOT focusing on ${framing.focus}. ` +
+            `CRITICAL MANDATE: Under NO circumstances should you zoom out, generate a full-length body, show legs, or show feet. ` +
+            `The camera MUST be positioned intimately close to the subject, exactly mirroring the tight crop, scale, head tilt, and hand placement shown in @image${poseRef.index}.`
+          );
+        } else {
+          promptParts.push(
+            `Pose & Body Posture: Extract and replicate the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
+            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output. ` +
+            `MANDATORY SCALE & FRAMING: Extract the skeletal posture and hand gestures from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
+          );
+        }
       } else if (poseDescription) {
-        promptParts.push(
-          `Pose & Posture: Direct the model in the custom pose: ${poseDescription}.`
-        );
+        if (framing.isCloseUp) {
+          promptParts.push(
+            `Pose & Posture: Direct the model in the custom close-up pose: ${poseDescription}. Tightly framed in an intimate portrait crop focusing on ${framing.focus}; strictly do not zoom out or show full body.`
+          );
+        } else {
+          promptParts.push(
+            `Pose & Posture: Direct the model in the custom pose: ${poseDescription}.`
+          );
+        }
       } else {
         promptParts.push(`Pose: Elegant natural standing pose with graceful hand placement.`);
       }
 
       // Background & Seamless On-Location Integration
-      if (bgRef) {
-        promptParts.push(
-          `AUTHENTIC IN-CAMERA ON-LOCATION PHOTOGRAPHY (ZERO CUTOUT / ZERO GREEN-SCREEN EFFECT): This entire image is captured as a single, authentic photograph taken entirely in-camera on location in the real-world setting of @image${bgRef.index}. The model is physically present, standing directly inside this space. Completely remove and discard any studio backdrop, floor, or walls from other reference images. ` +
-          `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, key lighting angle, and warm color temperature from @image${bgRef.index} must illuminate the model completely. The sun casts authentic directional highlights on her face, shoulders, hair, and draped outfit, with shadows falling in the exact same angle and softness as the architectural shadows in @image${bgRef.index}. The surrounding stone walls and floor plane must bounce warm ambient light onto her skin, chin, and lower fabric folds. Never light the model with mismatched studio flash. ` +
-          `PHYSICAL GROUND CONTACT & CAST SHADOWS (ELIMINATE FLOATING): The model is firmly planted on the ground or floor surface of @image${bgRef.index}. Directly beneath her feet, sandals, and hemline, there must be dark, sharp contact ambient occlusion shadows physically anchoring her to the ground, accompanied by a realistic directional cast shadow stretching across the floor matching the angle, length, and softness of the shadows in @image${bgRef.index}. She must NEVER appear floating or pasted on top of the ground. ` +
-          `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light and air of @image${bgRef.index} wrap softly around her silhouette, shoulders, and individual hair strands (subtle optical edge light wrap), completely eliminating harsh cutout outlines, halos, or sticker effects. The camera lens optics, exposure, color grading, warm atmospheric tone, and sensor grain are 100% unified across both the model and the background. ` +
-          `PROPORTIONAL HUMAN SCALE & ARCHITECTURAL GRANDEUR: The model possesses realistic, natural human stature (approx. 170 cm / 5'7") naturally proportioned within the architectural space of @image${bgRef.index}. Palace archways, carved pillars, doorways, and staircases retain their authentic grand real-world scale, towering naturally above the standing model. The model must NOT appear giant or oversized. ` +
-          `EYE-LEVEL HORIZON & NATURAL EDITORIAL COMPOSITION: Shot at natural eye-level / chest-level elevation (approx. 1.5m) from a 4 to 5 meter distance (50mm–85mm lens perspective), aligned with the horizon and vanishing point of @image${bgRef.index}. The model stands comfortably in the foreground/midground with natural headroom above and grounded floor space below, never cropped edge-to-edge.`
-        );
-      } else if (backgroundDescription) {
-        promptParts.push(
-          `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}. Sharp in-focus background with zero blur, deep f/8 aperture. ` +
-          `REALISTIC HUMAN SCALE & EDITORIAL PROPORTION: The model must have realistic, natural human stature (170 cm / 5'7") correctly proportioned to the architectural surroundings (doors, arches, and walls towering realistically above the model, avoiding any oversized giant appearance). Natural editorial framing with comfortable headroom and floor breathing room, authentic ground contact shadows, directional sun matching scene shadows, and seamless ambient lighting integration.`
-        );
+      if (framing.isCloseUp) {
+        if (bgRef) {
+          promptParts.push(
+            `AUTHENTIC IN-CAMERA ON-LOCATION CLOSE-UP INTEGRATION: Captured entirely in-camera on location against the authentic architectural backdrop of @image${bgRef.index}. ` +
+            `The architectural textures, carved stone details, archways, and ambient environment of @image${bgRef.index} appear naturally behind the model as her authentic background with natural depth and soft optical cohesion. Completely remove and discard any grey studio wall or floor from other reference images. ` +
+            `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, warm color temperature, and ambient radiosity from @image${bgRef.index} illuminate her face, skin, hair, and upper draped outfit. The sun casts authentic directional highlights on her face, shoulders, and hair matching the lighting in @image${bgRef.index}, with soft ambient light bouncing onto her skin and chin. ` +
+            `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light of @image${bgRef.index} wraps softly around her silhouette, shoulders, and hair, eliminating cutout halos. Camera optics, color grading, warm tone, and sensor grain are 100% unified across both the model and background. ` +
+            `STRICTLY NO FULL-BODY EXPANSION: This is an intimate close-up / portrait composition. Do NOT show the floor, do NOT show ground surfaces, do NOT show feet or shoes, and do NOT zoom out.`
+          );
+        } else if (backgroundDescription) {
+          promptParts.push(
+            `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}, appearing naturally behind the model in this close-up portrait with matched atmospheric lighting and soft ambient bounce. Do NOT show ground floor or feet.`
+          );
+        }
+      } else {
+        if (bgRef) {
+          promptParts.push(
+            `AUTHENTIC IN-CAMERA ON-LOCATION PHOTOGRAPHY (ZERO CUTOUT / ZERO GREEN-SCREEN EFFECT): This entire image is captured as a single, authentic photograph taken entirely in-camera on location in the real-world setting of @image${bgRef.index}. The model is physically present, standing directly inside this space. Completely remove and discard any studio backdrop, floor, or walls from other reference images. ` +
+            `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, key lighting angle, and warm color temperature from @image${bgRef.index} must illuminate the model completely. The sun casts authentic directional highlights on her face, shoulders, hair, and draped outfit, with shadows falling in the exact same angle and softness as the architectural shadows in @image${bgRef.index}. The surrounding stone walls and floor plane must bounce warm ambient light onto her skin, chin, and lower fabric folds. Never light the model with mismatched studio flash. ` +
+            `PHYSICAL GROUND CONTACT & CAST SHADOWS (ELIMINATE FLOATING): The model is firmly planted on the ground or floor surface of @image${bgRef.index}. Directly beneath her feet, sandals, and hemline, there must be dark, sharp contact ambient occlusion shadows physically anchoring her to the ground, accompanied by a realistic directional cast shadow stretching across the floor matching the angle, length, and softness of the shadows in @image${bgRef.index}. She must NEVER appear floating or pasted on top of the ground. ` +
+            `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light and air of @image${bgRef.index} wrap softly around her silhouette, shoulders, and individual hair strands (subtle optical edge light wrap), completely eliminating harsh cutout outlines, halos, or sticker effects. The camera lens optics, exposure, color grading, warm atmospheric tone, and sensor grain are 100% unified across both the model and the background. ` +
+            `PROPORTIONAL HUMAN SCALE & ARCHITECTURAL GRANDEUR: The model possesses realistic, natural human stature (approx. 170 cm / 5'7") naturally proportioned within the architectural space of @image${bgRef.index}. Palace archways, carved pillars, doorways, and staircases retain their authentic grand real-world scale, towering naturally above the standing model. The model must NOT appear giant or oversized. ` +
+            `EYE-LEVEL HORIZON & NATURAL EDITORIAL COMPOSITION: Shot at natural eye-level / chest-level elevation (approx. 1.5m), aligned with the horizon and vanishing point of @image${bgRef.index}. The model stands comfortably in the foreground/midground with natural headroom above and grounded floor space below.`
+          );
+        } else if (backgroundDescription) {
+          promptParts.push(
+            `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}. Sharp in-focus background with zero blur, deep f/8 aperture. ` +
+            `REALISTIC HUMAN SCALE & EDITORIAL PROPORTION: The model must have realistic, natural human stature (170 cm / 5'7") correctly proportioned to the architectural surroundings (doors, arches, and walls towering realistically above the model, avoiding any oversized giant appearance). Natural editorial framing with comfortable headroom and floor breathing room, authentic ground contact shadows, directional sun matching scene shadows, and seamless ambient lighting integration.`
+          );
+        }
       }
 
       // Hairstyle & Jewellery
@@ -1228,9 +1517,18 @@ export async function POST(req: NextRequest) {
       }
 
       // Quality, Skin Realism & Deep Focus Photography
-      promptParts.push(
-        `Photographic Realism, Facial Clarity & Deep Focus: Shot on medium format camera with 50mm to 85mm full-length editorial lens at f/8 aperture with edge-to-edge sharpness across the model, face, and background environment. Extreme facial clarity with visible natural human skin pores, authentic fine skin texture, soft natural skin highlights, expressive living eyes with crisp catchlights, and photorealistic five-finger hand anatomy. Balanced full-length editorial composition with realistic human stature and harmonious spatial scale relative to the architecture. No artificial background blurring, no shallow depth of field blur, crisp architectural textures. Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief, and realistic fabric gravity drape. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
-      );
+      if (framing.isCloseUp) {
+        promptParts.push(
+          `Photographic Realism, Facial Clarity & Close-Up Portraiture: Shot on medium format camera with an 85mm to 105mm prime portrait lens, tightly framed in close-up editorial portrait composition matching the framing of @image${poseRef ? poseRef.index : "the pose reference"}. ` +
+          `Macro-level facial and textile clarity with visible natural human skin pores, authentic fine skin texture, soft natural skin highlights, expressive living eyes with crisp catchlights, individual eyelashes and eyebrow hairs, and delicate lip texture. ` +
+          `Tightly cropped close-up framing highlighting ${framing.focus}. Strictly NO full body, NO legs, NO feet, NO zoomed-out wide angle. ` +
+          `Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
+        );
+      } else {
+        promptParts.push(
+          `Photographic Realism, Facial Clarity & Deep Focus: Shot on medium format camera with 50mm to 85mm editorial lens at f/8 aperture with edge-to-edge sharpness across the model, face, and background environment. Extreme facial clarity with visible natural human skin pores, authentic fine skin texture, soft natural skin highlights, expressive living eyes with crisp catchlights, and photorealistic five-finger hand anatomy. Balanced editorial composition with realistic human stature and harmonious spatial scale relative to the architecture. No artificial background blurring, crisp architectural textures. Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief, and realistic fabric gravity drape. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
+        );
+      }
 
       fluxPrompt = promptParts.filter(Boolean).join(" ");
 
@@ -1239,7 +1537,7 @@ export async function POST(req: NextRequest) {
       // FLAT-LAY STUDIO (UNSTITCHED SUITS) PIPELINE
       // Zero Hallucination Anchor: [Staging Template, ...Garments]
       // =========================================================================
-      const rawTemplateUrl = String(rawStagingTemplateUrl || "/reference_suits/dark-teak.jpg");
+      const rawTemplateUrl = stagingTemplateUrl || "/reference_suits/dark-teak.jpg";
       const compressedTemplateUrl = await getCompressedFalUrl(rawTemplateUrl, 640);
 
       imageUrls = [compressedTemplateUrl, ...compressedGarmentUrls];
@@ -1393,6 +1691,13 @@ export async function POST(req: NextRequest) {
       };
 
       const studioFaceUrl = customFaceUrl || modelFaceUrl;
+      const studioFraming = detectShotFraming({
+        shootTitle,
+        shootSetting,
+        shootPose,
+        customNotes,
+      });
+
       if (faceMode === "custom_face" && studioFaceUrl) {
         // CUSTOM FACE MODE:
         // Image 1: Brand Model Face
@@ -1405,11 +1710,19 @@ export async function POST(req: NextRequest) {
         const garmentTokens = gUrls.map((_, i) => `@image${3 + i}`).join(", ");
         const studioNotes = buildGarmentNotes(3);
 
+        const groundingDirective = studioFraming.isCloseUp
+          ? `The model must appear realistically integrated inside the architectural space with matching ambient light and color temperature from @image2 naturally illuminating her skin and outfit. Tightly framed matching the camera distance and crop of @image2; strictly do not zoom out or expand to full length.`
+          : `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The entire background setting and architecture from @image2 must remain sharp, clear, and fully in focus (deep f/8 aperture, zero background blur, zero shallow focus, zero artificial bokeh). The model must appear realistically integrated and physically grounded inside the space, casting authentic soft contact shadows onto the floor/ground, with ambient light from the surroundings naturally illuminating her skin and outfit.`;
+
+        const poseDirective = studioFraming.isCloseUp
+          ? `Preserve Pose & Close-Up Camera Framing: Preserve the exact body posture, head tilt, natural hand anatomy, and exact close-up camera framing and magnification from @image2. Do not zoom out.`
+          : `Preserve Pose & Sharp Environmental Setting: Preserve the exact body posture, natural hand anatomy, lighting direction, and background environment from @image2.`;
+
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial portrait photograph with deep depth of field.`,
           `Facial Identity Transfer: Transfer the exact facial identity, features, and expression of the model in @image1 onto the model in @image2.`,
-          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body posture, natural hand anatomy, lighting direction, and background environment from @image2.`,
-          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The entire background setting and architecture from @image2 must remain sharp, clear, and fully in focus (deep f/8 aperture, zero background blur, zero shallow focus, zero artificial bokeh). The model must appear realistically integrated and physically grounded inside the space, casting authentic soft contact shadows onto the floor/ground, with ambient light from the surroundings naturally illuminating her skin and outfit.`,
+          poseDirective,
+          groundingDirective,
           `Garment Draping: Drape the model in the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
           blouseDirective,
@@ -1430,10 +1743,18 @@ export async function POST(req: NextRequest) {
         const garmentTokens = gUrls.map((_, i) => `@image${2 + i}`).join(", ");
         const studioNotes = buildGarmentNotes(2);
 
+        const groundingDirective = studioFraming.isCloseUp
+          ? `The model must appear realistically integrated inside the scene with matching ambient light and color temperature from @image1 naturally illuminating her skin and outfit. Tightly framed matching the camera distance and crop of @image1; strictly do not zoom out or expand to full length.`
+          : `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background environment and architecture from @image1 must remain crisp, tack-sharp, and completely in focus (deep f/8 focus, zero background blur, zero shallow depth of field, zero artificial bokeh). The model must appear realistically present and physically grounded inside the scene, casting natural soft contact shadows onto the floor, with matching ambient light bounce and perspective.`;
+
+        const poseDirective = studioFraming.isCloseUp
+          ? `Preserve Pose & Close-Up Camera Framing: Preserve the exact body pose, posture, natural five-finger hand anatomy, and exact close-up camera framing and magnification from @image1. Do not zoom out.`
+          : `Preserve Pose & Sharp Environmental Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from @image1.`;
+
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial photograph of a stunning, elegant Indian woman model with natural authentic features, non-glossy matte skin, and a warm confident expression.`,
-          `Preserve Pose & Sharp Environmental Setting: Preserve the exact body pose, posture, natural five-finger hand anatomy, and background setting from @image1.`,
-          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background environment and architecture from @image1 must remain crisp, tack-sharp, and completely in focus (deep f/8 focus, zero background blur, zero shallow depth of field, zero artificial bokeh). The model must appear realistically present and physically grounded inside the scene, casting natural soft contact shadows onto the floor, with matching ambient light bounce and perspective.`,
+          poseDirective,
+          groundingDirective,
           `Garment Draping: Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
           fabricDirective,
           blouseDirective,
@@ -1454,10 +1775,18 @@ export async function POST(req: NextRequest) {
         const garmentTokens = gUrls.map((_, i) => `@image${2 + i}`).join(", ");
         const studioNotes = buildGarmentNotes(2);
 
+        const groundingDirective = studioFraming.isCloseUp
+          ? `The model must appear realistically integrated inside the scene with matching ambient light and color temperature from @image1 naturally illuminating her skin and outfit. Tightly framed matching the camera distance and crop of @image1; strictly do not zoom out or expand to full length.`
+          : `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background setting, architecture, and environment from @image1 must remain completely in focus and tack-sharp (deep f/8 aperture, zero background blur, zero blurry backdrop, zero artificial bokeh). The model must be realistically grounded and physically positioned inside the scene, with authentic contact shadows on the floor/ground and seamless environmental lighting bounce matching the space.`;
+
+        const mandateDirective = studioFraming.isCloseUp
+          ? `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and exact close-up camera framing and magnification as shown in @image1. Do not zoom out.`
+          : `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and background environment exactly as shown in @image1.`;
+
         fluxPrompt = [
           `High-end luxury Indian fashion catalog editorial photograph of the exact model from @image1 wearing the authentic ${fabricTitleDescriptor}ethnic garment from ${garmentTokens} (${outfitType}).`,
-          `Crucial Zero-Hallucination Mandate: Preserve the exact model's facial features, facial identity, warm natural smile, natural skin texture, hair, hand anatomy, posture, pose, and background environment exactly as shown in @image1.`,
-          `CRITICAL SHARP IN-FOCUS BACKGROUND & GROUNDING: The background setting, architecture, and environment from @image1 must remain completely in focus and tack-sharp (deep f/8 aperture, zero background blur, zero blurry backdrop, zero artificial bokeh). The model must be realistically grounded and physically positioned inside the scene, with authentic contact shadows on the floor/ground and seamless environmental lighting bounce matching the space.`,
+          mandateDirective,
+          groundingDirective,
           `Replace her outfit completely with the authentic ${fabricTitleDescriptor}ethnic garment shown in ${garmentTokens}.`,
           fabricDirective,
           blouseDirective,
@@ -1501,13 +1830,14 @@ export async function POST(req: NextRequest) {
             aspect_ratio: validAspectRatio,
             resolution: "2K",
             output_format: "png",
-            safety_tolerance: "4",
+            safety_tolerance: FAL_SAFETY_TOLERANCE as "1" | "2" | "3" | "4" | "5",
           },
           abortSignal: AbortSignal.timeout(FAL_RUN_TIMEOUT_MS)
         });
       }, 2, 3000);
     } catch (falErr) {
       console.warn("Outbound Fal.ai nano-banana-pro/edit call failed after retries:", falErr);
+      await refundPendingGeneration("fal inference failed");
       return serviceUnavailable("fal inference failed");
     } finally {
       releaseFalSlot();
@@ -1521,6 +1851,7 @@ export async function POST(req: NextRequest) {
 
     if (!generatedImageUrl) {
       console.warn("No direct image URL from Fal result:", falResult);
+      await refundPendingGeneration("no image returned");
       return serviceUnavailable("no image returned by Fal engine");
     }
 
@@ -1529,50 +1860,40 @@ export async function POST(req: NextRequest) {
     const actualMP = ((actualWidth * actualHeight) / 1000000).toFixed(2);
     console.log(`DEBUG: Fal.ai nano-banana-pro/edit generation successful. Resolution: ${actualWidth}x${actualHeight} (${actualMP} MP).`);
 
-    // 6. Deduct balance and log generation atomically in Supabase.
-    // p_idempotency_key makes a client retry of the same logical request safe.
-    let rpcResult: { data: unknown; error: { message: string } | null };
+    // 6. Finalise the reservation: the image exists, so the credit that was
+    // taken up front becomes a completed, billed generation.
+    let finalizeResult: { data: unknown; error: { message: string } | null };
     try {
-      rpcResult = await withTimeout(
-        Promise.resolve(supabase.rpc("deduct_balance_for_generation", {
-          p_cost: cost,
-          p_prompt: mode === "magic"
-            ? `CUSTOM LOOKBOOK: ${outfitType} | Pose: ${poseName} | Setting: ${backgroundName}`
-            : mode === "flatlay"
-            ? `FLATLAY STUDIO: ${stagingTemplateName}`
-            : `STUDIO LOOKBOOK: ${shootTitle} | Face: ${faceMode} | Setting: ${shootSetting || backgroundName}`,
-          p_garment_url: activeGarments.map(g => g.url).join(","),
-          p_face_url: customFaceUrl || modelFaceUrl || null,
+      finalizeResult = await withTimeout(
+        Promise.resolve(supabase.rpc("finalize_generation", {
+          p_generation_id: generationId,
           p_output_url: generatedImageUrl,
-          p_idempotency_key: idempotencyKey ?? null
         })),
         RPC_TIMEOUT_MS,
-        "billing transaction"
+        "billing finalization"
       );
-    } catch (rpcErr) {
-      console.error("Billing RPC timed out or failed:", rpcErr);
+    } catch (finalizeErr) {
+      console.error("Billing finalisation timed out or failed:", finalizeErr);
+      await refundPendingGeneration("finalisation failed");
       return NextResponse.json(
-        { error: "Your generation finished but could not be finalised. Please contact support — you were not charged twice." },
+        { error: "Your generation finished but could not be finalised. Please contact support — the credit was released." },
         { status: 500 }
       );
     }
 
-    if (rpcResult.error) {
+    if (finalizeResult.error) {
       // Raw DB/PostgREST text stays in the logs; the client gets a mapped message.
-      console.error("Billing RPC rejected:", rpcResult.error.message);
-      if (rpcResult.error.message.includes("Insufficient balance")) {
-        return NextResponse.json(
-          { error: "Insufficient credits. Please add credits to your account." },
-          { status: 403 }
-        );
-      }
+      console.error("Billing finalisation rejected:", finalizeResult.error.message);
+      await refundPendingGeneration("finalisation rejected");
       return NextResponse.json(
-        { error: "Your generation finished but could not be charged/recorded. Please try again." },
+        { error: "Your generation finished but could not be recorded. Please contact support — the credit was released." },
         { status: 500 }
       );
     }
 
-    const newBalNum = Number(rpcResult.data);
+    // Committed: nothing is owed back to the wallet from here on.
+    pendingGenerationId = null;
+    const newBalNum = Number(finalizeResult.data);
     const remCredits = creditsFromBalance(newBalNum);
 
     // 7. Archiving to Cloudinary runs AFTER the response via next/server's
@@ -1610,6 +1931,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
+    await refundPendingGeneration("unhandled failure");
     // Only messages explicitly marked client-safe are echoed back, with THEIR
     // status code. Anything else (filesystem paths, raw upstream errors, stack
     // text) is replaced, while the full detail stays in the server logs.

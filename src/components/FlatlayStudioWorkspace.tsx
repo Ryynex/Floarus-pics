@@ -346,6 +346,8 @@ export function FlatlayStudioWorkspace() {
         }
       }
 
+      const failedTasks: string[] = [];
+
       for (let i = 0; i < tasks.length; i++) {
         const task = tasks[i];
         const template =
@@ -406,40 +408,56 @@ export function FlatlayStudioWorkspace() {
           }
         }
 
-        const idempotencyKey = crypto.randomUUID();
+        const idempotencyKey =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${i}-4000-8000-${Math.random().toString(36).slice(2, 10)}`;
 
-        const response = await fetch("/api/generate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token || ""}`
-          },
-          body: JSON.stringify({
-            mode: "flatlay",
-            stagingTemplateUrl: template.image,
-            stagingTemplateName: template.name,
-            aspectRatio,
-            garments: garmentsPayload,
-            idempotencyKey
-          })
-        });
+        try {
+          const response = await fetch("/api/generate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token || ""}`
+            },
+            body: JSON.stringify({
+              mode: "flatlay",
+              stagingTemplateUrl: template.image,
+              stagingTemplateName: template.name,
+              aspectRatio,
+              garments: garmentsPayload,
+              idempotencyKey
+            })
+          });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Staging failed for Suit ${task.suit.suitNumber}`);
-        }
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `Staging failed for Suit ${task.suit.suitNumber}`);
+          }
 
-        const data = await response.json();
-        const finalUrl = data.outputUrl || data.output_url;
-        if (finalUrl) {
-          newResults.push(finalUrl);
-          setOutputUrl(finalUrl);
-          setRecentGenerations((prev) => [finalUrl, ...prev.filter((u) => u !== finalUrl)]);
+          const data = await response.json();
+          const finalUrl = data.outputUrl || data.output_url;
+          if (finalUrl) {
+            newResults.push(finalUrl);
+            setOutputUrl(finalUrl);
+            setRecentGenerations((prev) => [finalUrl, ...prev.filter((u) => u !== finalUrl)]);
+          }
+        } catch (taskErr) {
+          // One failed suit must not discard the images already produced.
+          console.error(`Flat-lay task ${i + 1} failed:`, taskErr);
+          failedTasks.push(taskErr instanceof Error ? taskErr.message : "Staging failed");
         }
       }
 
-      await refreshWallet();
-      addToast("success", `Successfully staged ${newResults.length} flat-lay catalog photo(s)!`);
+      if (newResults.length > 0) {
+        addToast("success", `Successfully staged ${newResults.length} flat-lay catalog photo(s)!`);
+      }
+      if (failedTasks.length > 0) {
+        addToast(
+          "error",
+          `${failedTasks.length} suit${failedTasks.length > 1 ? "s" : ""} failed: ${failedTasks[0]}`
+        );
+      }
     } catch (err) {
       console.error("Flatlay generation failed:", err);
       const errMsg = err instanceof Error ? err.message : "Flat-lay staging failed. Please try again.";
@@ -448,6 +466,11 @@ export function FlatlayStudioWorkspace() {
       stageTimers.forEach(clearTimeout);
       setIsGenerating(false);
       setGenerationStage("");
+      try {
+        await refreshWallet();
+      } catch (refreshErr) {
+        console.warn("Wallet refresh after generation failed:", refreshErr);
+      }
     }
   };
 

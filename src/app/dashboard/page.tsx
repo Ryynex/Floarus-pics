@@ -726,9 +726,15 @@ function DashboardContent() {
                             </div>
                           </td>
                           <td className="text-ink font-semibold whitespace-nowrap">
-                            <span className="text-sm font-bold text-fuchsia-accent">
-                              +{creditsFromBalance(Number(pay.amount)).toFixed(1)} Credits
-                            </span>
+                            {pay.status === "completed" ? (
+                              <span className="text-sm font-bold text-fuchsia-accent">
+                                +{creditsFromBalance(Number(pay.amount)).toFixed(1)} Credits
+                              </span>
+                            ) : (
+                              <span className="text-xs text-ink-faint">
+                                ₹{Number(pay.amount).toFixed(2)}
+                              </span>
+                            )}
                           </td>
                           <td className="text-right">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusPillClass(pay.status)}`}>
