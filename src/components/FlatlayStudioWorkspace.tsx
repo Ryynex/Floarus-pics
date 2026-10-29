@@ -355,28 +355,28 @@ export function FlatlayStudioWorkspace() {
           garmentsPayload.push({
             url: mainSuitUrl,
             role: "kameez",
-            slotLabel: "Suit Fabric Photo"
+            slotLabel: "Main Fabric Piece"
           });
         }
         if (task.suit.chestDesignUrl) {
           garmentsPayload.push({
             url: task.suit.chestDesignUrl,
             role: "chest_design",
-            slotLabel: "Chest Design / Gala Embroidery"
+            slotLabel: "Bodice Embroidery"
           });
         }
         if (task.suit.dupattaUrl) {
           garmentsPayload.push({
             url: task.suit.dupattaUrl,
             role: "dupatta",
-            slotLabel: "Dupatta Scarf"
+            slotLabel: "Draped Scarf Fabric"
           });
         }
         if (task.suit.bottomUrl) {
           garmentsPayload.push({
             url: task.suit.bottomUrl,
             role: "bottom",
-            slotLabel: "Bottom Salwar"
+            slotLabel: "Trouser Fabric"
           });
         }
         if (garmentsPayload.length === 0) {
@@ -389,7 +389,7 @@ export function FlatlayStudioWorkspace() {
             garmentsPayload.push({
               url: fallbackUrl,
               role: "kameez",
-              slotLabel: "Suit Fabric Photo"
+              slotLabel: "Main Fabric Piece"
             });
           }
         }
@@ -493,7 +493,7 @@ export function FlatlayStudioWorkspace() {
             uploadingSlotKey={isUploading}
             stepNumber={1}
             sectionTitle="Build your suits"
-            sectionSubtitle="Upload kameez fabric, chest design, dupatta, bottom, or complete set (at least 1 photo is needed to generate)"
+            sectionSubtitle="Upload full dress photo first, then add optional detail close-ups"
             renderSuitExtra={(suitEntry) => {
               const suit = suits.find((s) => s.id === suitEntry.id) || suits[0];
               const selectedTemplate =

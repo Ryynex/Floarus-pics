@@ -109,11 +109,32 @@ function detectShotFraming(params: {
   poseId?: string;
   poseName?: string;
   poseDescription?: string;
+  hasPoseRef?: boolean;
   customNotes?: string;
   shootTitle?: string;
   shootSetting?: string;
   shootPose?: string;
 }): ShotFramingInfo {
+  // If an image reference is supplied for the pose (e.g. custom uploaded photo or preset photo):
+  // Do NOT let text keywords like "close up" in custom user-typed titles or descriptions falsely force
+  // a full-length photo into an extreme close-up crop or trigger "DO NOT SHOW LEGS OR FEET" mandates.
+  // The only poses that are strictly close-up when a photo is present are preset details poses (cu-1..10 or category === 'details').
+  if (params.hasPoseRef) {
+    const isPresetDetails =
+      params.poseCategory === "details" ||
+      (params.poseId && params.poseId.startsWith("cu-"));
+    if (isPresetDetails) {
+      return {
+        isCloseUp: true,
+        framingType: "close_up",
+        focus: "intimate close-up portrait framing matching the reference pose",
+      };
+    }
+    // For all other poses with an image (custom poses or standing/seated presets),
+    // let the image reference geometry dictate framing directly without injecting conflicting "do not show legs" commands.
+    return { isCloseUp: false, framingType: "full_length", focus: "natural framing matching the reference photo" };
+  }
+
   const combined = [
     params.poseCategory,
     params.poseId,
@@ -541,7 +562,7 @@ async function getCompressedFalUrl(urlOrPath: string, maxDim = 640): Promise<str
         fit: "inside",
         withoutEnlargement: true,
       })
-      .jpeg({ quality: 80, mozjpeg: true })
+      .jpeg({ quality: maxDim >= 1024 ? 90 : 80, mozjpeg: true })
       .toBuffer();
   } catch (err) {
     console.error(`sharp failed to process ${label}:`, err);
@@ -832,6 +853,7 @@ export async function POST(req: NextRequest) {
       poseDescription: rawPoseDescription = "",
       backgroundId: rawBackgroundId = "01_pastel_palace_interior",
       backgroundName: rawBackgroundName = "Pastel Painted Palace Interior",
+      backgroundCategory: rawBackgroundCategory = "",
       backgroundUrl: rawBackgroundUrl = "",
       backgroundDescription: rawBackgroundDescription = "",
       backgroundMode = "inspiration",
@@ -892,6 +914,7 @@ export async function POST(req: NextRequest) {
     const poseDescription = clampText(rawPoseDescription, 600, "");
     const poseImageUrl = clampText(rawPoseImageUrl, 8000, "");
     const backgroundName = clampText(rawBackgroundName, 200, "");
+    const backgroundCategory = clampText((body as any).backgroundCategory || rawBackgroundCategory, 100, "");
     const backgroundDescription = clampText(rawBackgroundDescription, 600, "");
     const backgroundUrl = clampText(rawBackgroundUrl, 8000, "");
     const hairstyle = clampText(rawHairstyle, 200, "Default (as before)");
@@ -1077,7 +1100,7 @@ export async function POST(req: NextRequest) {
       await Promise.all(
         activeGarments.map(async (g, idx): Promise<PreparedGarment | null> => {
           try {
-            const url = await retryOperation(() => getCompressedFalUrl(g.url, 640), 2, 1000);
+            const url = await retryOperation(() => getCompressedFalUrl(g.url, 1024), 2, 1000);
             return {
               url,
               note: g.note || "",
@@ -1175,7 +1198,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Slot 2 (when a reference pose was chosen): skeletal posture anchor.
-      const isDummyPoseUrl = !poseImageUrl || poseImageUrl.includes("photo-1515886657613-9f3515b0c78f");
+      const isDummyPoseUrl = !poseImageUrl || poseImageUrl.includes("photo-1515886657613-9f3515b0c78f") || poseImageUrl.includes("unsplash.com");
       if (poseImageUrl && !isDummyPoseUrl) {
         refList.push({
           url: await prepareRequiredRef(poseImageUrl, "Pose"),
@@ -1185,7 +1208,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Slot 3 (when a reference background was chosen): environment anchor.
-      const isDummyBgUrl = !backgroundUrl || backgroundUrl.includes("photo-1582650625119-3a31f8418b7d");
+      const isDummyBgUrl = !backgroundUrl || backgroundUrl.includes("photo-1582650625119-3a31f8418b7d") || backgroundUrl.includes("unsplash.com");
       if (
         backgroundUrl &&
         !isDummyBgUrl &&
@@ -1260,6 +1283,7 @@ export async function POST(req: NextRequest) {
         poseId,
         poseName,
         poseDescription,
+        hasPoseRef: Boolean(poseRef),
         customNotes,
       });
 
@@ -1285,15 +1309,32 @@ export async function POST(req: NextRequest) {
       //  - no brand face       -> the pose photo carries a stranger's face, so
       //    her identity must be explicitly replaced (pose woman would otherwise
       //    dominate the output — the model cannot un-see a face in the base)
+      const isCustomHairstyle = Boolean(
+        hairstyle &&
+        hairstyle !== "Default (as before)" &&
+        !hairstyle.toLowerCase().includes("default")
+      );
+      const isCustomJewellery = Boolean(
+        jewellery &&
+        jewellery !== "Default (as before)" &&
+        !jewellery.toLowerCase().includes("default")
+      );
+
       if (faceRef) {
         promptParts.push(
-          `Identity & Facial Realism: The person in @image${faceRef.index} is the ONLY facial identity for this lookbook. Preserve her exact bone structure, facial contours, almond eye shape, nose bridge, lip fullness, skin undertone, and warm expression with zero drift. ` +
-          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism. Authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering (translucent real skin). Expressive, living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine natural creases. Absolutely ZERO plastic airbrushing, ZERO waxy AI smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness. She must look 100% like a real living human woman photographed in real life.`
+          `Identity & Facial Realism: The person in @image${faceRef.index} is the ONLY facial identity for this lookbook. Preserve her exact biological bone structure, facial contours, almond eye shape, nose bridge, lip fullness, skin undertone, and warm expression with zero drift. ` +
+          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism. Authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering (translucent real skin). Expressive, living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine natural creases. Absolutely ZERO plastic airbrushing, ZERO waxy AI smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness. She must look 100% like a real living human woman photographed in real life.` +
+          (isCustomHairstyle
+            ? ` CRITICAL STYLING SEPARATION: Preserve ONLY her facial identity and features from @image${faceRef.index}. Do NOT lock, copy, or preserve her hair length, haircut, or hair parting from @image${faceRef.index} — her hair is completely restyled per the mandatory hairstyle directive below.`
+            : ` Preserve her signature hair styling from @image${faceRef.index}.`) +
+          (isCustomJewellery
+            ? ` CRITICAL JEWELLERY SEPARATION: Do NOT copy or preserve any earrings, necklace, or ornaments from @image${faceRef.index} — her jewellery is replaced per the mandatory jewellery directive below.`
+            : ``)
         );
       } else if (poseRef) {
         promptParts.push(
-          `IDENTITY REPLACEMENT & LIFELIKE FACIAL REALISM (MANDATORY): The woman visible in @image${poseRef.index} is a body-geometry stand-in only. REPLACE her face, hairstyle, and entire physical identity with a newly synthesized ${modelName || "Indian fashion model"}. ` +
-          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render her face with photorealistic, breathtaking human realism: natural radiant skin with fine visible pores, natural epidermal texture, soft matte finish with subtle skin moisture, expressive lifelike eyes with realistic iris depth and catchlights, individual eyelashes and natural eyebrow hairs, and natural lip texture. Zero plastic airbrushing, zero waxy smoothing, zero artificial filters. RETAIN ONLY her skeletal posture, limb angles, and hand placement from @image${poseRef.index}. Do NOT retain, blend, or leak any facial features, hair, or identity from @image${poseRef.index} into the output.`
+          `IDENTITY REPLACEMENT & LIFELIKE FACIAL REALISM (MANDATORY): The woman visible in @image${poseRef.index} is a body-geometry stand-in only. REPLACE her face, hairstyle, jewellery, and entire physical identity with a newly synthesized ${modelName || "Indian fashion model"}. ` +
+          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render her face with photorealistic, breathtaking human realism: natural radiant skin with fine visible pores, natural epidermal texture, soft matte finish with subtle skin moisture, expressive lifelike eyes with realistic iris depth and catchlights, individual eyelashes and natural eyebrow hairs, and natural lip texture. Zero plastic airbrushing, zero waxy smoothing, zero artificial filters. RETAIN AND EXACTLY DUPLICATE her skeletal posture, limb angles, arm position, and hand placement from @image${poseRef.index} with zero deviation or variation. Do NOT retain, blend, or leak any facial features, hair, or identity from @image${poseRef.index} into the output.`
         );
       } else {
         promptParts.push(
@@ -1307,36 +1348,48 @@ export async function POST(req: NextRequest) {
         // body geometry only, never the scene or the person.
         if (framing.isCloseUp) {
           promptParts.push(
-            `Pose & Body Posture: Adopt the physical human body posture, head tilt, facial angle, and hand gesture from @image${poseRef.index}. ` +
-            `Use @image${poseRef.index} strictly as a pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity of the person in it. ` +
+            `EXACT 1:1 SKELETAL POSE & CLOSE-UP FRAMING REPLICATION (ZERO VARIATION / ZERO POSE DRIFT): ` +
+            `The model MUST replicate the EXACT, 1:1 IDENTICAL upper-body skeletal posture, shoulder tilt, head tilt angle, and hand gesture from @image${poseRef.index}. ` +
+            `DO NOT generate a variation, alternate pose, shifted arms, or loose interpretation. Every joint angle, hand placement, and finger gesture must be an exact copy of @image${poseRef.index}. ` +
+            `Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity, hair, or jewellery of the person in it. ` +
             `MANDATORY CLOSE-UP CAMERA FRAMING & SCALE: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
             `This is an INTIMATE CLOSE-UP / PORTRAIT SHOT focusing on ${framing.focus}. ` +
-            `CRITICAL MANDATE: Under NO circumstances should you zoom out, generate a full-length body, show legs, or show feet. ` +
             `The camera MUST be positioned intimately close to the subject, exactly mirroring the tight crop, scale, head tilt, and hand placement shown in @image${poseRef.index}.`
           );
         } else {
           promptParts.push(
-            `Pose & Body Posture: Adopt the physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
-            `Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity of the person in it. ` +
-            `MANDATORY SCALE & FRAMING: Extract the skeletal posture and hand gestures from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
+            `EXACT 1:1 SKELETAL POSE REPLICATION (ZERO VARIATION / ZERO POSE DRIFT - ABSOLUTE MANDATE): ` +
+            `The model MUST replicate the EXACT, 1:1 IDENTICAL skeletal posture, body angle, spine alignment, shoulder tilt, limb geometry, elbow angles, knee stance, foot placement, and arm positioning shown in @image${poseRef.index}. ` +
+            `DO NOT generate an alternate pose, a loose interpretation, or any creative variation of this posture. ` +
+            `Every limb, arm, hand, and joint angle must be an exact 1:1 match to the human body geometry in @image${poseRef.index}. ` +
+            `MANDATORY HANDS & GESTURE LOCK: Replicate the EXACT hand gestures, finger placement, wrist angles, and contact points relative to the body as seen in @image${poseRef.index} (e.g. if hands are resting on the hips, touching the collar/hood, holding fabric, or resting at sides, match that exact physical positioning). ` +
+            `MANDATORY HEAD TILT & CAMERA FRAMING: Replicate the exact head tilt angle, chin elevation, body rotation angle, perspective, and camera framing/crop from @image${poseRef.index}. ` +
+            `DISCARD DIRECTIVE: Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its background, wall, floor, or casual clothing, and do not adopt the identity, hair, or jewellery of the person in it. ` +
+            `NATURAL INTEGRATION: Naturally position the model standing physically grounded inside ${bgRef ? `@image${bgRef.index}` : (backgroundDescription || "the clean studio space")}.`
           );
         }
       } else if (poseRef) {
         // Pose photo is the edit base: keep the strong discard directive.
         if (framing.isCloseUp) {
           promptParts.push(
-            `Pose & Body Posture: Extract and replicate the exact physical human body posture, head tilt, facial angle, and hand gesture from @image${poseRef.index}. ` +
-            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output. ` +
+            `EXACT 1:1 SKELETAL POSE & CLOSE-UP FRAMING REPLICATION (ZERO VARIATION / ZERO POSE DRIFT): ` +
+            `The model MUST replicate the EXACT, 1:1 IDENTICAL upper-body skeletal posture, shoulder tilt, head tilt angle, and hand gesture from @image${poseRef.index}. ` +
+            `DO NOT generate a variation, alternate pose, shifted arms, or loose interpretation. Every joint angle, hand placement, and finger gesture must be an exact copy of @image${poseRef.index}. ` +
+            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND, CASUAL CLOTHES, HAIR & JEWELLERY): Extract ONLY the human posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the background, wall, floor, casual clothing, hairstyle, and jewellery from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting, casual clothes, hair, or jewellery from @image${poseRef.index} into the output. ` +
             `MANDATORY CLOSE-UP CAMERA FRAMING & SCALE: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
             `This is an INTIMATE CLOSE-UP / PORTRAIT SHOT focusing on ${framing.focus}. ` +
-            `CRITICAL MANDATE: Under NO circumstances should you zoom out, generate a full-length body, show legs, or show feet. ` +
             `The camera MUST be positioned intimately close to the subject, exactly mirroring the tight crop, scale, head tilt, and hand placement shown in @image${poseRef.index}.`
           );
         } else {
           promptParts.push(
-            `Pose & Body Posture: Extract and replicate the exact physical human body posture, limb angles, hand gesture, and stance from @image${poseRef.index}. ` +
-            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND & CASUAL CLOTHING): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the grey studio wall, studio floor, and Western clothing from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting or casual clothes from @image${poseRef.index} into the output. ` +
-            `MANDATORY SCALE & FRAMING: Extract the skeletal posture and hand gestures from @image${poseRef.index}. Naturally position the model standing physically grounded inside @image${bgRef ? bgRef.index : "the environment"}.`
+            `EXACT 1:1 SKELETAL POSE REPLICATION (ZERO VARIATION / ZERO POSE DRIFT - ABSOLUTE MANDATE): ` +
+            `The model MUST replicate the EXACT, 1:1 IDENTICAL skeletal posture, body angle, spine alignment, shoulder tilt, limb geometry, elbow angles, knee stance, foot placement, and arm positioning shown in @image${poseRef.index}. ` +
+            `DO NOT generate an alternate pose, a loose interpretation, or any creative variation of this posture. ` +
+            `Every limb, arm, hand, and joint angle must be an exact 1:1 match to the human body geometry in @image${poseRef.index}. ` +
+            `MANDATORY HANDS & GESTURE LOCK: Replicate the EXACT hand gestures, finger placement, wrist angles, and contact points relative to the body as seen in @image${poseRef.index} (e.g. if hands are resting on the hips, touching the collar/hood, holding fabric, or resting at sides, match that exact physical positioning). ` +
+            `MANDATORY HEAD TILT & CAMERA FRAMING: Replicate the exact head tilt angle, chin elevation, body rotation angle, perspective, and camera framing/crop from @image${poseRef.index}. ` +
+            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND, CASUAL CLOTHES, HAIR & JEWELLERY): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the background, wall, floor, casual clothing, hairstyle, and jewellery from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting, casual clothes, hair, or jewellery from @image${poseRef.index} into the output. ` +
+            `NATURAL INTEGRATION: Naturally position the model standing physically grounded inside ${bgRef ? `@image${bgRef.index}` : (backgroundDescription || "the clean studio space")}.`
           );
         }
       } else if (poseDescription) {
@@ -1354,65 +1407,149 @@ export async function POST(req: NextRequest) {
       }
 
       if (poseRef && poseDescription && poseDescription !== poseName) {
-        promptParts.push(`Pose & Posture Directives: ${poseDescription}.`);
+        promptParts.push(`Pose & Posture Directives: ${poseDescription}. Note: The visual skeletal posture and body geometry in @image${poseRef.index} remains the absolute 1:1 ground truth.`);
       }
 
-      // Background & Seamless On-Location Integration
-      if (framing.isCloseUp) {
-        if (bgRef) {
-          promptParts.push(
-            `AUTHENTIC IN-CAMERA ON-LOCATION CLOSE-UP INTEGRATION: Captured entirely in-camera on location against the authentic architectural backdrop of @image${bgRef.index}. ` +
-            `The architectural textures, carved stone details, archways, and ambient environment of @image${bgRef.index} appear naturally behind the model as her authentic background with natural depth and soft optical cohesion. Completely remove and discard any grey studio wall or floor from other reference images. ` +
-            `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, warm color temperature, and ambient radiosity from @image${bgRef.index} illuminate her face, skin, hair, and upper draped outfit. The sun casts authentic directional highlights on her face, shoulders, and hair matching the lighting in @image${bgRef.index}, with soft ambient light bouncing onto her skin and chin. ` +
-            `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light of @image${bgRef.index} wraps softly around her silhouette, shoulders, and hair, eliminating cutout halos. Camera optics, color grading, warm tone, and sensor grain are 100% unified across both the model and background. ` +
-            `STRICTLY NO FULL-BODY EXPANSION: This is an intimate close-up / portrait composition. Do NOT show the floor, do NOT show ground surfaces, do NOT show feet or shoes, and do NOT zoom out.`
-          );
-        } else if (backgroundDescription) {
-          promptParts.push(
-            `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}, appearing naturally behind the model in this close-up portrait with matched atmospheric lighting and soft ambient bounce. Do NOT show ground floor or feet.`
-          );
+      // Studio / Plain / High-Key Background Detection
+      const isStudioOrSimpleBg = Boolean(
+        backgroundCategory === "studio" ||
+        backgroundName.toLowerCase().includes("studio") ||
+        backgroundName.toLowerCase().includes("white") ||
+        backgroundName.toLowerCase().includes("plain") ||
+        backgroundName.toLowerCase().includes("cyclorama") ||
+        backgroundName.toLowerCase().includes("seamless") ||
+        backgroundName.toLowerCase().includes("cove") ||
+        backgroundName.toLowerCase().includes("neutral") ||
+        backgroundName.toLowerCase().includes("solid") ||
+        backgroundName.toLowerCase().includes("high-key") ||
+        backgroundDescription.toLowerCase().includes("white") ||
+        backgroundDescription.toLowerCase().includes("studio") ||
+        backgroundDescription.toLowerCase().includes("seamless") ||
+        backgroundDescription.toLowerCase().includes("cyclorama") ||
+        backgroundDescription.toLowerCase().includes("plain") ||
+        backgroundDescription.toLowerCase().includes("solid") ||
+        backgroundDescription.toLowerCase().includes("high-key") ||
+        backgroundDescription.toLowerCase().includes("simple")
+      );
+
+      // Background & Lighting Integration
+      if (isStudioOrSimpleBg) {
+        if (framing.isCloseUp) {
+          if (bgRef) {
+            promptParts.push(
+              `MANDATORY CLEAN STUDIO CLOSE-UP PORTRAIT (ZERO OUTDOORS / ZERO PALACES): Captured in-camera inside a professional fashion catalog photo studio against the clean, pristine studio backdrop of @image${bgRef.index}. ` +
+              `The exact clean background tone, smooth studio cyclorama texture, and balanced studio lighting from @image${bgRef.index} appear cleanly behind the model with soft optical depth. ` +
+              `STRICT BAN ON ARCHITECTURE & OUTDOORS: Do NOT generate palace archways, stone pillars, outdoor landscapes, skies, or trees. The background MUST be a clean, minimalist studio environment mirroring @image${bgRef.index}. ` +
+              `UNIFIED STUDIO ILLUMINATION: The model is illuminated with high-end commercial fashion studio softbox lighting matching @image${bgRef.index}, with soft, even wrap-around lighting on her face and draped outfit. ` +
+              `STRICTLY NO FULL-BODY EXPANSION: This is an intimate close-up / portrait composition. Do NOT show the floor, do NOT show feet, and do NOT zoom out.`
+            );
+          } else {
+            promptParts.push(
+              `MANDATORY CLEAN STUDIO CLOSE-UP PORTRAIT (ZERO OUTDOORS / ZERO PALACES): Photographed inside a pristine fashion catalog studio against a clean, seamless ${backgroundDescription || backgroundName || "high-key pure white studio"} backdrop. ` +
+              `STRICT BAN ON ARCHITECTURE & OUTDOORS: Strictly PROHIBIT palace arches, carved pillars, outdoor trees, skies, and ruins. The background MUST be a clean, minimalist, seamless studio background with zero clutter. Soft, even commercial catalog portrait lighting. Do NOT show floor or feet.`
+            );
+          }
+        } else {
+          if (bgRef) {
+            promptParts.push(
+              `MANDATORY CLEAN STUDIO PHOTOGRAPHY (STRICTLY ZERO OUTDOORS / ZERO PALACES): This entire image is captured inside a professional high-fashion photo studio against the clean, seamless studio backdrop of @image${bgRef.index}. The model is physically standing directly inside this studio space. ` +
+              `CLEAN STUDIO CYCLORAMA & FLOOR PLANE: The pristine studio backdrop color, seamless curved cyclorama wall, and clean studio floor from @image${bgRef.index} appear cleanly behind and beneath the model as her authentic environment. ` +
+              `STRICT BAN ON ARCHITECTURE & OUTDOORS: Absolutely DO NOT generate any palace archways, carved pillars, stone walls, courtyards, trees, skies, or outdoor environments. The background MUST be a clean, minimalist studio setting matching @image${bgRef.index}. ` +
+              `UNIFIED STUDIO SOFTBOX ILLUMINATION: The model is illuminated with large, balanced commercial fashion studio softboxes and diffusion panels matching @image${bgRef.index}. Zero harsh directional sun, zero mismatched shadows. ` +
+              `STUDIO FLOOR CONTACT & SOFT SHADOW: The model is firmly planted on the clean seamless studio floor of @image${bgRef.index}. Directly beneath her feet and hemline, there must be a soft, subtle, natural diffused studio contact shadow grounding her stance cleanly into the studio floor. She must NEVER appear floating. ` +
+              `PRISTINE COMMERCIAL E-COMMERCE AESTHETIC: High-fashion commercial catalog studio composition with edge-to-edge clean backdrop and 100% focus on the model and garment.`
+            );
+          } else {
+            promptParts.push(
+              `MANDATORY CLEAN STUDIO PHOTOGRAPHY (STRICTLY ZERO OUTDOORS / ZERO PALACES): Captured inside a pristine high-end fashion catalog studio against a clean, seamless ${backgroundDescription || backgroundName || "high-key pure white studio"} backdrop. ` +
+              `STRICT BAN ON ARCHITECTURE & OUTDOORS: Absolutely DO NOT generate any palace archways, carved pillars, stone walls, courtyards, trees, skies, or outdoor environments. The background MUST be a clean, minimalist, seamless studio environment with zero clutter. ` +
+              `STUDIO SOFTBOX LIGHTING & CLEAN FLOOR: Diffused, even commercial catalog studio softbox lighting across the model and garment. Natural soft contact shadow on the clean studio floor grounding her stance. Crisp commercial e-commerce lookbook aesthetic.`
+            );
+          }
         }
       } else {
-        if (bgRef) {
-          promptParts.push(
-            `AUTHENTIC IN-CAMERA ON-LOCATION PHOTOGRAPHY (ZERO CUTOUT / ZERO GREEN-SCREEN EFFECT): This entire image is captured as a single, authentic photograph taken entirely in-camera on location in the real-world setting of @image${bgRef.index}. The model is physically present, standing directly inside this space. Completely remove and discard any studio backdrop, floor, or walls from other reference images. ` +
-            `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, key lighting angle, and warm color temperature from @image${bgRef.index} must illuminate the model completely. The sun casts authentic directional highlights on her face, shoulders, hair, and draped outfit, with shadows falling in the exact same angle and softness as the architectural shadows in @image${bgRef.index}. The surrounding stone walls and floor plane must bounce warm ambient light onto her skin, chin, and lower fabric folds. Never light the model with mismatched studio flash. ` +
-            `PHYSICAL GROUND CONTACT & CAST SHADOWS (ELIMINATE FLOATING): The model is firmly planted on the ground or floor surface of @image${bgRef.index}. Directly beneath her feet, sandals, and hemline, there must be dark, sharp contact ambient occlusion shadows physically anchoring her to the ground, accompanied by a realistic directional cast shadow stretching across the floor matching the angle, length, and softness of the shadows in @image${bgRef.index}. She must NEVER appear floating or pasted on top of the ground. ` +
-            `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light and air of @image${bgRef.index} wrap softly around her silhouette, shoulders, and individual hair strands (subtle optical edge light wrap), completely eliminating harsh cutout outlines, halos, or sticker effects. The camera lens optics, exposure, color grading, warm atmospheric tone, and sensor grain are 100% unified across both the model and the background. ` +
-            `PROPORTIONAL HUMAN SCALE & ARCHITECTURAL GRANDEUR: The model possesses realistic, natural human stature (approx. 170 cm / 5'7") naturally proportioned within the architectural space of @image${bgRef.index}. Palace archways, carved pillars, doorways, and staircases retain their authentic grand real-world scale, towering naturally above the standing model. The model must NOT appear giant or oversized. ` +
-            `EYE-LEVEL HORIZON & NATURAL EDITORIAL COMPOSITION: Shot at natural eye-level / chest-level elevation (approx. 1.5m), aligned with the horizon and vanishing point of @image${bgRef.index}. The model stands comfortably in the foreground/midground with natural headroom above and grounded floor space below.`
-          );
-        } else if (backgroundDescription) {
-          promptParts.push(
-            `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}. Sharp in-focus background with zero blur, deep f/8 aperture. ` +
-            `REALISTIC HUMAN SCALE & EDITORIAL PROPORTION: The model must have realistic, natural human stature (170 cm / 5'7") correctly proportioned to the architectural surroundings (doors, arches, and walls towering realistically above the model, avoiding any oversized giant appearance). Natural editorial framing with comfortable headroom and floor breathing room, authentic ground contact shadows, directional sun matching scene shadows, and seamless ambient lighting integration.`
-          );
+        // Heritage, Palace & Outdoor Environments
+        if (framing.isCloseUp) {
+          if (bgRef) {
+            promptParts.push(
+              `AUTHENTIC IN-CAMERA ON-LOCATION CLOSE-UP INTEGRATION: Captured entirely in-camera on location against the authentic architectural backdrop of @image${bgRef.index}. ` +
+              `The architectural textures, carved stone details, archways, and ambient environment of @image${bgRef.index} appear naturally behind the model as her authentic background with natural depth and soft optical cohesion. ` +
+              `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, warm color temperature, and ambient radiosity from @image${bgRef.index} illuminate her face, skin, hair, and upper draped outfit. The sun casts authentic directional highlights on her face, shoulders, and hair matching the lighting in @image${bgRef.index}, with soft ambient light bouncing onto her skin and chin. ` +
+              `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light of @image${bgRef.index} wraps softly around her silhouette, shoulders, and hair, eliminating cutout halos. Camera optics, color grading, warm tone, and sensor grain are 100% unified across both the model and background. ` +
+              `STRICTLY NO FULL-BODY EXPANSION: This is an intimate close-up / portrait composition. Do NOT show the floor, do NOT show ground surfaces, do NOT show feet or shoes, and do NOT zoom out.`
+            );
+          } else if (backgroundDescription) {
+            promptParts.push(
+              `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}, appearing naturally behind the model in this close-up portrait with matched atmospheric lighting and soft ambient bounce. Do NOT show ground floor or feet.`
+            );
+          }
+        } else {
+          if (bgRef) {
+            promptParts.push(
+              `AUTHENTIC IN-CAMERA ON-LOCATION PHOTOGRAPHY (ZERO CUTOUT / ZERO GREEN-SCREEN EFFECT): This entire image is captured as a single, authentic photograph taken entirely in-camera on location in the real-world setting of @image${bgRef.index}. The model is physically present, standing directly inside this space. ` +
+              `UNIFIED ENVIRONMENTAL LIGHTING & RADIOSITY BOUNCE: The natural sunlight direction, key lighting angle, and warm color temperature from @image${bgRef.index} must illuminate the model completely. The sun casts authentic directional highlights on her face, shoulders, hair, and draped outfit, with shadows falling in the exact same angle and softness as the architectural shadows in @image${bgRef.index}. The surrounding stone walls and floor plane must bounce warm ambient light onto her skin, chin, and lower fabric folds. Never light the model with mismatched studio flash. ` +
+              `PHYSICAL GROUND CONTACT & CAST SHADOWS (ELIMINATE FLOATING): The model is firmly planted on the ground or floor surface of @image${bgRef.index}. Directly beneath her feet, sandals, and hemline, there must be dark, sharp contact ambient occlusion shadows physically anchoring her to the ground, accompanied by a realistic directional cast shadow stretching across the floor matching the angle, length, and softness of the shadows in @image${bgRef.index}. She must NEVER appear floating or pasted on top of the ground. ` +
+              `ATMOSPHERIC EDGE WRAP & OPTICAL COHESION: The natural ambient light and air of @image${bgRef.index} wrap softly around her silhouette, shoulders, and individual hair strands (subtle optical edge light wrap), completely eliminating harsh cutout outlines, halos, or sticker effects. The camera lens optics, exposure, color grading, warm atmospheric tone, and sensor grain are 100% unified across both the model and the background. ` +
+              `PROPORTIONAL HUMAN SCALE & ARCHITECTURAL GRANDEUR: The model possesses realistic, natural human stature (approx. 170 cm / 5'7") naturally proportioned within the architectural space of @image${bgRef.index}. Palace archways, carved pillars, doorways, and staircases retain their authentic grand real-world scale, towering naturally above the standing model. The model must NOT appear giant or oversized. ` +
+              `EYE-LEVEL HORIZON & NATURAL EDITORIAL COMPOSITION: Shot at natural eye-level / chest-level elevation (approx. 1.5m), aligned with the horizon and vanishing point of @image${bgRef.index}. The model stands comfortably in the foreground/midground with natural headroom above and grounded floor space below.`
+            );
+          } else if (backgroundDescription) {
+            promptParts.push(
+              `Background & Setting: High-end architectural catalog setting: ${backgroundDescription}. Sharp in-focus background with zero blur, deep f/8 aperture. ` +
+              `REALISTIC HUMAN SCALE & EDITORIAL PROPORTION: The model must have realistic, natural human stature (170 cm / 5'7") correctly proportioned to the architectural surroundings (doors, arches, and walls towering realistically above the model, avoiding any oversized giant appearance). Natural editorial framing with comfortable headroom and floor breathing room, authentic ground contact shadows, directional sun matching scene shadows, and seamless ambient lighting integration.`
+            );
+          }
         }
       }
 
-      if (bgRef && backgroundDescription && backgroundDescription !== backgroundName) {
+      if (backgroundDescription && backgroundDescription !== backgroundName) {
         promptParts.push(`Background Environmental & Lighting Directives: ${backgroundDescription}.`);
       }
 
-      // Hairstyle & Jewellery
-      if (hairstyle && hairstyle !== "Default (as before)") {
-        promptParts.push(`Hairstyle: ${hairstyle}, polished salon finish.`);
+      // Hairstyle & Hair Architecture Directives
+      if (isCustomHairstyle) {
+        promptParts.push(
+          `MANDATORY HAIRSTYLE OVERRIDE (CRITICAL OVERRIDE DIRECTIVE): Completely restyle and render the model's hair into: ${hairstyle}${hairstyleDescription ? ` (${hairstyleDescription})` : ""}. ` +
+          `STRICT OVERRIDE MANDATE: You MUST OVERRIDE, DISCARD, AND REPLACE any hair length, haircut, hair parting, or hairstyle shown on the model or pose reference images (@image1 or @image2). Do NOT copy, preserve, or leak the hair from the reference photos. Her hair must be newly styled and rendered strictly as ${hairstyle}${hairstyleDescription ? ` (${hairstyleDescription})` : ""}, with clean salon parting, distinct hair strand texture, and natural volume.`
+        );
       } else {
-        promptParts.push(`Hairstyle: Elegant signature catalog styling.`);
+        promptParts.push(
+          `HAIRSTYLE (DEFAULT): Elegant natural signature catalog hairstyle harmonized with the model's authentic look.`
+        );
       }
 
-      if (jewellery && jewellery !== "Default (as before)") {
-        promptParts.push(`Jewellery: Adorned with fine ${jewellery}, catching ambient light highlights.`);
+      // Jewellery & Adornment Directives
+      if (isCustomJewellery) {
+        if (jewellery.toLowerCase().includes("no jewellery")) {
+          promptParts.push(
+            `MANDATORY ZERO-JEWELLERY OVERRIDE: Do NOT generate or copy any necklaces, chokers, earrings, or bangles from any reference image. The model MUST have a completely bare elegant neck, bare earlobes, and bare unadorned wrists with 100% zero jewellery, focusing purely on the garment fabric and tailoring.`
+          );
+        } else {
+          promptParts.push(
+            `MANDATORY JEWELLERY OVERRIDE (CRITICAL OVERRIDE DIRECTIVE): Completely replace and override any necklace, earrings, chokers, or ornaments visible in @image1 or @image2. ` +
+            `Adorn the model exclusively with: ${jewellery}${jewelleryDescription ? ` (${jewelleryDescription})` : ""}. ` +
+            `STRICT OVERRIDE MANDATE: Do NOT copy, keep, or leak any jewellery from the face or pose reference photos. Adorn her newly and exclusively in ${jewellery}${jewelleryDescription ? ` (${jewelleryDescription})` : ""}, catching natural directional specular highlights.`
+          );
+        }
       } else {
-        promptParts.push(`Jewellery: Harmonized fine ethnic gold bangles and delicate earrings.`);
+        promptParts.push(
+          `JEWELLERY (DEFAULT): Natural harmonized fine ethnic gold ornaments and delicate matching earrings coordinated with the outfit.`
+        );
       }
 
       // Garment & Tailoring / Draping
       if (garmentIndices.length > 0) {
         const garmentTokens = garmentIndices.map(i => `@image${i}`).join(", ");
         const fabricDirective = isAutoDetectFabric
-          ? `MANDATORY FABRIC EXTRACTION: Extract and replicate the exact authentic fabric material, textile weave density, yarn thread sheen, and drape physics directly from ${garmentTokens}. Faithfully reproduce its exact tactile texture, surface luster, and true physical drape gravity and pleats as seen in ${garmentTokens}.`
-          : `SPECIFIED FABRIC OVERRIDE: Fabric weave: ${fabric}. Drapery physics: ${fabricDrapePhysics || fabric}. Mirror this weave density and surface reflection while keeping all patterns, prints, and colors true to ${garmentTokens}.`;
+          ? `HAUTE COUTURE TEXTILE REPRODUCTION: Extract and reconstruct the exact authentic fabric material, textile weave density, yarn thread sheen, and drape physics directly from ${garmentTokens}. ` +
+            `Render hyper-realistic 3D tactile needlework with tangible physical relief, authentic raised resham threadwork, distinct bullion knots, and delicate micro-shadows along embroidered contours. ` +
+            `Authentic metallic zari luster: gold and silver threads reflect directional scene light with genuine specular glints and anisotropic sheen, avoiding flat matte or yellow painted appearance. ` +
+            `Micro-textile weave definition: visible interlocking warp and weft yarn structure, authentic slub and cross-grain texture, and true physical fabric gravity with realistic cascading pleats, fluid folds, and weighted hemline drape.`
+          : `HAUTE COUTURE TEXTILE REPRODUCTION: Fabric weave: ${fabric}. Drapery physics: ${fabricDrapePhysics || fabric}. ` +
+            `Replicate this exact textile weave structure, yarn thread sheen, and authentic drape gravity while preserving 100% of all patterns, prints, and colors from ${garmentTokens}. ` +
+            `Render hyper-realistic 3D tactile needlework with tangible physical relief, authentic raised resham threadwork, distinct bullion knots, and delicate micro-shadows along embroidered contours. ` +
+            `Authentic metallic zari luster: gold and silver threads reflect directional scene light with genuine specular glints and anisotropic sheen, avoiding flat matte or yellow painted appearance. ` +
+            `Micro-textile weave definition: visible interlocking warp and weft yarn structure, authentic slub and cross-grain texture, and true physical fabric gravity with realistic cascading pleats, fluid folds, and weighted hemline drape.`;
 
         if (isSuitMode) {
           // =====================================================================
@@ -1439,33 +1576,33 @@ export async function POST(req: NextRequest) {
           const isAutoDrape = !dupattaDrape || dupattaDrape.includes("Auto-Coordinate") || dupattaDrape.includes("auto");
 
           promptParts.push(
-            `MANDATORY READYMADE SUIT / DRESS SYNTHESIS & AUTO-DETECTION (STRICTLY NO SAREE / NO CHOLI): The model is wearing a fully tailored, bespoke designer ethnic suit or dress synthesized from the garment references in ${garmentTokens}. ` +
-            `AI AUTOMATIC GARMENT & SILHOUETTE DETECTION: Analyze the reference images (${garmentTokens}) to automatically identify and reconstruct the exact garment ensemble (such as a tailored Straight Suit, Pakistani Lawn Kurta Set, Flared Anarkali Suit / Gown, Sharara/Gharara, Kurti with Trousers, or Co-ord Set). ` +
-            `Drape the readymade outfit directly onto the model with publication-grade bespoke tailoring. STRICTLY PROHIBIT 6-yard sarees, saree pleats, saree pallu drapes, and bare midriffs.`
+            `MANDATORY READYMADE SUIT & ETHNIC ENSEMBLE SYNTHESIS (STRICTLY NO SAREE / NO CHOLI): The model is wearing a fully tailored, bespoke designer ethnic suit or dress synthesized from the garment references in ${garmentTokens}. ` +
+            `AI AUTOMATIC GARMENT & SILHOUETTE DETECTION: Analyze the reference images (${garmentTokens}) to automatically identify and reconstruct the exact garment ensemble (such as a tailored Straight Suit, Pakistani Luxury Lawn Kurta Set, Flared Anarkali Suit / Gown, Sharara/Gharara, Kurti with Trousers, or Co-ord Set). ` +
+            `Drape the readymade outfit directly onto the model with master atelier bespoke tailoring: sharp symmetrical neckline cut, perfectly proportioned bust and waist darts, crisp piping, reinforced scalloped hemline borders (daman), and clean tailored seamlines. STRICTLY PROHIBIT 6-yard sarees, saree pleats, saree pallu drapes, and bare midriffs.`
           );
 
           if (fullDressRef) {
             promptParts.push(
-              `FULL DRESS & ENSEMBLE MASTER TEMPLATE: Use @image${fullDressRef.index} as the master visual guide for the complete readymade dress/suit ensemble. Transfer its exact base color, overall silhouette, cut proportions, sleeve length, woven motifs, digital prints, and hemline borders onto the model.`
+              `FULL DRESS & ENSEMBLE MASTER TEMPLATE: Use @image${fullDressRef.index} as the master visual guide for the complete readymade dress/suit ensemble. Transfer its exact base color, overall silhouette, cut proportions, sleeve length, woven motifs, digital prints, and hemline borders onto the model with publication-grade luxury finish matching Vogue India and high-end couture catalogs.`
             );
           }
 
           if (detail1Ref) {
             promptParts.push(
-              `DETAIL 1 (UPPER BODICE & EMBROIDERY): Replicate the intricate neck embroidery, threadwork, collar/bodice patch, and zari detailing visible in @image${detail1Ref.index} precisely centered on the model's upper torso and neckline with needlework realism.`
+              `Bodice & neckline needlework: Faithfully replicate the intricate neck embroidery, threadwork, collar/bodice patch, sequins, and zari detailing visible in @image${detail1Ref.index} precisely centered on the model's upper torso and neckline with tangible 3D needlework relief, raised thread depth, and authentic stitch density.`
             );
           }
 
           if (detail2Ref) {
-            const drapeStyle = isAutoDrape ? "graceful natural drape" : dupattaDrape;
+            const drapeStyle = isAutoDrape ? "graceful natural drape cascading over the shoulder and arm" : dupattaDrape;
             promptParts.push(
-              `DETAIL 2 (DUPATTA / SCARF / SLEEVES): Style the authentic dupatta or scarf from @image${detail2Ref.index} in a ${drapeStyle}, faithfully displaying its delicate borders, lace, prints, and lightweight fabric drape physics.`
+              `Scarf & sleeve styling: Style the authentic dupatta or scarf from @image${detail2Ref.index} in a ${drapeStyle}, faithfully displaying its delicate borders, lace, woven motifs, sheer/soft fabric transparency, and lightweight fluid drape physics.`
             );
           }
 
           if (detail3Ref) {
             promptParts.push(
-              `DETAIL 3 (BOTTOM / TROUSERS / FLARE): Tailor the lower trousers (cigarette pants, salwar, or palazzo flare) directly from @image${detail3Ref.index}, cleanly finished beneath the outfit.`
+              `Lower trouser tailoring: Tailor the lower trousers (cigarette pants, straight salwar, or palazzo flare) directly from @image${detail3Ref.index}, cleanly finished beneath the outfit with crisp hemline detailing and natural fabric weight.`
             );
           }
 
@@ -1476,7 +1613,8 @@ export async function POST(req: NextRequest) {
           // WHOLESALE SAREE PIPELINE (6-YARD DRAPES & BLOUSE)
           // =====================================================================
           promptParts.push(
-            `MANDATORY GARMENT & FABRIC EXTRACTION: Drape the authentic 6-yard ethnic saree from ${garmentTokens} directly onto the model. Transfer the exact intricate embroidery, zari borders, prints, motif placement, fabric colors, and pallu/pleat drape directly from ${garmentTokens} onto her outfit with 100% visual fidelity.`,
+            `MANDATORY 6-YARD ETHNIC SAREE SYNTHESIS: Drape the authentic 6-yard luxury ethnic saree from ${garmentTokens} directly onto the model with couture perfection. Transfer the exact intricate embroidery, zari borders, prints, motif placement, fabric colors, and pallu/pleat drape directly from ${garmentTokens} onto her outfit with 100% visual fidelity. ` +
+            `The saree waist pleats must be razor-sharp, neatly pressed, and knife-folded into the waistband. The flowing shoulder pallu must cascade with authentic gravitational fall and grand woven motif alignment.`,
             fabricDirective
           );
 
@@ -1494,11 +1632,11 @@ export async function POST(req: NextRequest) {
 
           if (blouseGarment) {
             promptParts.push(
-              `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a fully tailored, beautifully fitted ethnic blouse (choli) crafted directly from @image${blouseGarment.index}. Faithfully transfer its exact fabric, color, neckline, and sleeves neatly fitted beneath the saree pallu drape. The blouse must be clearly visible, crisp, and properly structured around the torso and shoulders.`
+              `MANDATORY DESIGNER BLOUSE SPECIFICATION: The model MUST wear a fully tailored, beautifully fitted designer ethnic blouse (choli) crafted directly from @image${blouseGarment.index}. Faithfully transfer its exact fabric, color, neckline, and sleeves neatly fitted beneath the saree pallu drape with clean seamlines and master tailoring. The blouse must be clearly visible, crisp, and properly structured around the torso and shoulders with tactile threadwork.`
             );
           } else {
             promptParts.push(
-              `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant ethnic saree blouse (choli) properly fitted beneath the saree pallu drape (${blouseStyle || "tailored matching ethnic blouse"}). Coordinate its fabric color, sleeve cuffs, and neckline harmoniously with the saree border and zari accents. Never generate the model without a blouse or with an ambiguous bare chest drape.`
+              `MANDATORY DESIGNER BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant ethnic saree blouse (choli) properly fitted beneath the saree pallu drape (${blouseStyle || "tailored matching ethnic blouse"}). Coordinate its fabric color, sleeve cuffs, and neckline harmoniously with the saree border and zari accents with structured seamlines and fine piping. Never generate the model without a blouse or with an ambiguous bare chest drape.`
             );
           }
 
@@ -1512,7 +1650,7 @@ export async function POST(req: NextRequest) {
           if (palluGarments.length > 0) {
             const palluTokens = palluGarments.map((p) => `@image${p.index}`).join(" and ");
             promptParts.push(
-              `MANDATORY PALLU & BORDER SPECIFICATION: Faithfully replicate the intricate zari embroidery, end-piece motifs, and decorative border detailing visible in ${palluTokens} across the flowing shoulder pallu drape and hemline.`
+              `MANDATORY PALLU & BORDER SPECIFICATION: Faithfully replicate the intricate zari embroidery, end-piece motifs, and decorative border detailing visible in ${palluTokens} across the flowing shoulder pallu drape and hemline with genuine metallic luster and 3D needlework relief.`
             );
           }
         }
@@ -1532,13 +1670,17 @@ export async function POST(req: NextRequest) {
           `Photographic Realism, Facial Clarity & Close-Up Portraiture: Shot on medium format camera with an 85mm to 105mm prime portrait lens, tightly framed in close-up editorial portrait composition matching the framing of @image${poseRef ? poseRef.index : "the pose reference"}. ` +
           `Macro-level facial and textile clarity with visible natural human skin pores, authentic fine skin texture, soft natural skin highlights, expressive living eyes with crisp catchlights, individual eyelashes and eyebrow hairs, and delicate lip texture. ` +
           `Tightly cropped close-up framing highlighting ${framing.focus}. Strictly NO full body, NO legs, NO feet, NO zoomed-out wide angle. ` +
-          `Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
+          `Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Haute couture garment clarity: visible textile yarn weave, physical 3D embroidery needlework relief, specular metallic zari thread gleam, realistic drape physics with natural fabric gravity, master tailoring seam finish. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
         );
       } else {
         promptParts.push(
-          `Photographic Realism, Facial Clarity & Deep Focus: Shot on medium format camera with 50mm to 85mm editorial lens at f/8 aperture with edge-to-edge sharpness across the model, face, and background environment. Extreme facial clarity with visible natural human skin pores, authentic fine skin texture, soft natural skin highlights, expressive living eyes with crisp catchlights, and photorealistic five-finger hand anatomy. Balanced editorial composition with realistic human stature and harmonious spatial scale relative to the architecture. No artificial background blurring, crisp architectural textures. Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Authentic textile weave with crisp warp and weft threads, natural zari embroidery relief, and realistic fabric gravity drape. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
+          `Photographic Realism, Facial Clarity & Deep Focus: Shot on medium format camera with 50mm to 85mm editorial lens at f/8 aperture with edge-to-edge sharpness across the model, face, and background environment. Extreme facial clarity with visible natural human skin pores, authentic fine skin texture, soft natural skin highlights, expressive living eyes with crisp catchlights, and photorealistic five-finger hand anatomy. Balanced editorial composition with realistic human stature and harmonious spatial scale relative to the architecture. No artificial background blurring, crisp architectural textures. Authentic raw human skin texture with natural micro-pores and fine skin grain, soft matte non-glossy finish without waxy smoothness. Haute couture garment clarity: visible textile warp and weft yarns, physical 3D embroidery needlework relief, specular metallic zari gleam, realistic fabric gravity drape with fluid pleat cascades, and master atelier tailored seams. Hasselblad editorial catalog lighting, 8k resolution, photorealistic master lookbook.`
         );
       }
+
+      promptParts.push(
+        `CRITICAL ZERO-TEXT MANDATE: Strictly DO NOT generate, paint, or render any text, words, labels, typography, letters, font, captions, annotations, watermark, or text overlays on the image. The output must be 100% clean, pure visual photography with pristine fabrics and surfaces only.`
+      );
 
       fluxPrompt = promptParts.filter(Boolean).join(" ");
 
@@ -1610,29 +1752,29 @@ export async function POST(req: NextRequest) {
       } else {
         if (kameezIndex >= 0) {
           promptParts.push(
-            `KAMEEZ / KURTA FABRIC: The central folded unstitched kurta/kameez length is crafted directly from @image${kameezIndex + 2}. Faithfully transfer its exact base fabric color, woven motifs, digital prints, and daman hemline borders into the folded arrangement.`
+            `Central folded fabric length: The main folded unstitched fabric length is crafted directly from @image${kameezIndex + 2}. Faithfully transfer its exact base fabric color, woven motifs, digital prints, and daman hemline borders into the folded arrangement.`
           );
         } else {
           promptParts.push(
-            `KAMEEZ FABRIC: Central folded ethnic kurta fabric reproducing the uploaded fabric color, weave texture, and border work.`
+            `Central folded fabric length: Central folded ethnic fabric piece reproducing the uploaded fabric color, weave texture, and border work.`
           );
         }
 
         if (chestIndex >= 0) {
           promptParts.push(
-            `CHEST EMBROIDERY & GALA DETAIL: The intricate neckline embroidery, gala patch, needlework, and zari threadwork from @image${chestIndex + 2} is prominently showcased centered on the upper portion of the folded kameez with tactile stitch relief.`
+            `Bodice and neckline embroidery: The intricate neckline embroidery, gala patch, needlework, and zari threadwork from @image${chestIndex + 2} is prominently showcased centered on the upper portion of the central folded fabric with tactile stitch relief.`
           );
         }
 
         if (dupattaIndex >= 0) {
           promptParts.push(
-            `DUPATTA SCARF DRAPING: The authentic dupatta scarf from @image${dupattaIndex + 2} is artfully folded, draped, or fanned out across the staging surface alongside the kameez, displaying its delicate borders, lace, printed motifs, and soft fabric folds.`
+            `Draped scarf fabric: The authentic lightweight draped scarf fabric from @image${dupattaIndex + 2} is artfully folded, draped, or fanned out across the staging surface alongside the central folded fabric, displaying its delicate borders, lace, printed motifs, and soft fabric folds.`
           );
         }
 
         if (bottomIndex >= 0) {
           promptParts.push(
-            `BOTTOM / SALWAR FABRIC: The coordinating bottom fabric from @image${bottomIndex + 2} is neatly folded and arranged in the set, faithfully matching its true fabric hue and texture.`
+            `Coordinating trouser fabric roll: The coordinating bottom fabric piece from @image${bottomIndex + 2} is neatly folded or rolled and arranged in the set, faithfully matching its true fabric hue and texture.`
           );
         }
 
@@ -1645,6 +1787,13 @@ export async function POST(req: NextRequest) {
 
       promptParts.push(
         `REALISTIC LIGHTING & AMBIENT CONTACT SHADOWS: Soft uniform daylight studio illumination. The folded fabric pieces must cast authentic, subtle contact ambient occlusion shadows directly onto the ${matchedTemplate.surface} surface of @image1, grounding them physically and naturally into the scene with zero cutout halo, zero floating effect, and zero green-screen artifact. Crisp tack-sharp focus edge-to-edge (f/8 aperture), visible fabric micro-texture, 8k resolution, publication-grade commercial product catalog lookbook.`
+      );
+
+      promptParts.push(
+        `CRITICAL ZERO-TEXT & ZERO-LABEL MANDATE (ABSOLUTE REQUIREMENT — NO WORDS, NO LETTERS, NO TYPOGRAPHY, NO LABELS, NO WATERMARKS): ` +
+        `Strictly and absolutely DO NOT print, render, paint, or overlay any text, words, letters, labels, titles, numbers, captions, watermarks, tags, or typography anywhere on the image. ` +
+        `Strictly FORBIDDEN words and labels: do NOT write "Kameez", "Bottom", "Dupatta", "Suit", "Kurta", "Gala", "Chest", or any other word, label, or annotation on or near the fabrics, on the surface, or in the corners. ` +
+        `The generated output must be a 100% clean, pristine commercial product catalog photograph featuring only pure fabric textiles and styled props with ZERO text, ZERO typography, and ZERO printed words anywhere in the entire image.`
       );
 
       fluxPrompt = promptParts.join(" ");
@@ -1675,14 +1824,14 @@ export async function POST(req: NextRequest) {
       const fabricTitleDescriptor = isAutoDetectFabric ? "" : `${fabric} `;
 
       const fabricDirective = isAutoDetectFabric
-        ? `AUTOMATIC FABRIC & TEXTILE DETECTION (DEFAULT MANDATE): Flux 2 Pro must closely analyze and identify the exact authentic fabric material, textile weave density, yarn thread sheen, weight, and drape physics directly from the uploaded garment reference photo(s). Accurately replicate its authentic physical material composition (e.g. pure silk, raw silk, tussar, banarasi brocade, organza, georgette, chiffon, cotton, linen, velvet, satin, or tissue) as captured in the photo. Faithfully simulate its exact tactile texture, realistic surface light reflection/luster (matte, subtle sheen, or luminous silk luster), thread slubs, zari border relief, and true physical drape gravity and pleat folding as dictated by the detected fabric.`
-        : `SPECIFIED FABRIC OVERRIDE: The user has tailored the fabric weave to ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drapery physics & tactile texture: ${fabricDrapePhysics || fabric}. Mirror this weave density, thread grain, and surface reflection authentically while keeping all patterns, prints, and colors true to the reference photos.`;
+        ? `HAUTE COUTURE TEXTILE REPRODUCTION: Nano Banana Pro must closely analyze and reconstruct the exact authentic fabric material, textile weave density, yarn thread sheen, weight, and drape physics directly from the uploaded garment reference photo(s). Replicate its authentic physical material composition with micro-textile warp and weft yarn structure, authentic slub and cross-grain texture. Render 3D tactile needlework with tangible physical relief, authentic raised resham threadwork, bullion knots, and delicate micro-shadows along embroidered contours. Authentic metallic zari luster: gold and silver threads reflect directional scene light with genuine specular glints and anisotropic sheen (avoiding flat matte or yellow painted appearance). True physical fabric gravity with realistic cascading pleats, fluid folds, and weighted hemline drape.`
+        : `HAUTE COUTURE TEXTILE REPRODUCTION: Fabric weave: ${fabric}${fabricDescription ? ` (${fabricDescription})` : ""}. Drapery physics & tactile texture: ${fabricDrapePhysics || fabric}. Mirror this weave density, thread grain, and surface reflection authentically while keeping all patterns, prints, and colors true to the reference photos. Render 3D tactile needlework with tangible physical relief, authentic raised resham threadwork, bullion knots, and delicate micro-shadows along embroidered contours. Authentic metallic zari luster: gold and silver threads reflect directional scene light with genuine specular glints and anisotropic sheen (avoiding flat matte or yellow painted appearance). True physical fabric gravity with realistic cascading pleats, fluid folds, and weighted hemline drape.`;
       const blouseGarment = preparedGarments.find(
         (g) => g.role === "blouse" || g.slotLabel?.toLowerCase().includes("blouse")
       );
       const blouseDirective = blouseGarment
-        ? `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a fully tailored, beautifully fitted ethnic saree blouse (choli) crafted directly from the uploaded blouse reference photo (${blouseGarment.slotLabel}). Faithfully transfer its exact fabric, color, neckline, and sleeves neatly fitted beneath the saree pallu drape.`
-        : `MANDATORY BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant ethnic saree blouse (choli) properly fitted beneath the saree pallu drape, harmonizing with the saree border and zari.`;
+        ? `MANDATORY DESIGNER BLOUSE SPECIFICATION: The model MUST wear a fully tailored, beautifully fitted designer ethnic saree blouse (choli) crafted directly from the uploaded blouse reference photo (${blouseGarment.slotLabel}). Faithfully transfer its exact fabric, color, neckline, and sleeves neatly fitted beneath the saree pallu drape with clean tailored seamlines and master atelier craftsmanship.`
+        : `MANDATORY DESIGNER BLOUSE SPECIFICATION: The model MUST wear a tailored, elegant designer ethnic saree blouse (choli) properly fitted beneath the saree pallu drape with structured seamlines and fine piping, harmonizing with the saree border and zari.`;
 
       const buildPalluDirective = (firstGarmentIndex: number): string => {
         const palluGarments = preparedGarments
@@ -1695,7 +1844,7 @@ export async function POST(req: NextRequest) {
           );
         if (palluGarments.length > 0) {
           const tokens = palluGarments.map(({ i }) => `@image${firstGarmentIndex + i}`).join(" and ");
-          return `PALLU & BORDER SPECIFICATION: Replicate the intricate zari embroidery, end-piece motifs, and decorative border detailing visible in ${tokens} precisely along the pallu drape and hemline borders.`;
+          return `MANDATORY PALLU & BORDER SPECIFICATION: Replicate the intricate zari embroidery, end-piece motifs, and decorative border detailing visible in ${tokens} precisely along the pallu drape and hemline borders with authentic metallic luster, raised thread relief, and natural fabric fall.`;
         }
         return "";
       };
@@ -1771,8 +1920,9 @@ export async function POST(req: NextRequest) {
           buildPalluDirective(2),
           studioNotes ? `Product specifications: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-          `Transfer the exact intricate embroidery, zari borders, fabric color, yarn weave texture, and authentic drape directly onto her outfit.`,
-          `Hyper-realistic human skin with visible fine pores and subtle natural grain (no waxy or plastic airbrushing), realistic slender hands and fingers with gold bangles, tactile textile weave with authentic physical drape physics, sharp edge-to-edge catalog lighting, 8k resolution master lookbook.`
+          `Transfer the exact intricate embroidery, zari borders, fabric color, yarn weave texture, and authentic drape directly onto her outfit with 3D tactile needlework relief and authentic metallic luster.`,
+          `Hyper-realistic human skin with visible fine pores and subtle natural grain (no waxy or plastic airbrushing), realistic slender hands and fingers, tactile textile weave with authentic physical drape physics, sharp edge-to-edge catalog lighting, 8k resolution master lookbook.`,
+          `CRITICAL ZERO-TEXT MANDATE: Strictly DO NOT generate, paint, or render any text, words, labels, typography, letters, font, captions, annotations, watermark, or text overlays on the image. Pure visual photography only.`
         ].filter(Boolean).join(" ");
 
       } else {
@@ -1803,8 +1953,9 @@ export async function POST(req: NextRequest) {
           buildPalluDirective(2),
           studioNotes ? `Product specifications & layer notes: ${studioNotes}.` : "",
           customNotes ? `Custom styling & drape instructions: ${customNotes}.` : "",
-          `Transfer the exact intricate embroidery, zari borders, fabric color, tactile thread weave texture, and pallu drape directly onto the draped outfit.`,
-          `Hyper-realistic natural skin with subtle pores and matte finish (non-glossy, non-waxy, raw photographic realism), realistic slender hands and fingers, tangible fabric thread grain with physical drape and pleat gravity, sharp studio editorial lighting with full scene depth, 8k resolution master lookbook.`
+          `Transfer the exact intricate embroidery, zari borders, fabric color, tactile thread weave texture, and pallu drape directly onto the draped outfit with 3D tactile needlework relief and genuine metallic sheen.`,
+          `Hyper-realistic natural skin with subtle pores and matte finish (non-glossy, non-waxy, raw photographic realism), realistic slender hands and fingers, tangible fabric thread grain with physical drape and pleat gravity, sharp studio editorial lighting with full scene depth, 8k resolution master lookbook.`,
+          `CRITICAL ZERO-TEXT MANDATE: Strictly DO NOT generate, paint, or render any text, words, labels, typography, letters, font, captions, annotations, watermark, or text overlays on the image. Pure visual photography only.`
         ].filter(Boolean).join(" ");
       }
     }

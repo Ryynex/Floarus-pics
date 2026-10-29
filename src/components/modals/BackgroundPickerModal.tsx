@@ -223,6 +223,14 @@ export function BackgroundPickerModal({
       b.name.toLowerCase().includes(search.toLowerCase()) ||
       b.description.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
+  }).sort((a, b) => {
+    if (activeCategory === "studio" || activeCategory === "all") {
+      if (a.id === "bg-b32") return -1;
+      if (b.id === "bg-b32") return 1;
+      if (a.id === "bg-b22") return -1;
+      if (b.id === "bg-b22") return 1;
+    }
+    return 0;
   });
 
   const visiblePresets = filteredPresets.slice(0, displayCount);
@@ -548,7 +556,7 @@ export function BackgroundPickerModal({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
                 {filteredCustomBackgrounds.map((custom) => {
                   const isSelected = selectedBackground.id === custom.id;
-                  const isUnsplashDummy = custom.imageUrl?.includes("photo-1582650625119-3a31f8418b7d");
+                  const isUnsplashDummy = custom.imageUrl?.includes("photo-1582650625119-3a31f8418b7d") || custom.imageUrl?.includes("unsplash.com");
 
                   return (
                     <div

@@ -233,7 +233,7 @@ export function getSavedCustomPoses(): CatalogPose[] {
     const list: CatalogPose[] = JSON.parse(raw);
     let mutated = false;
     const cleaned = list.map((p) => {
-      if (p.imageUrl && p.imageUrl.includes("photo-1515886657613-9f3515b0c78f")) {
+      if (p.imageUrl && (p.imageUrl.includes("photo-1515886657613-9f3515b0c78f") || p.imageUrl.includes("unsplash.com") || p.imageUrl.includes("images.unsplash.com"))) {
         mutated = true;
         return { ...p, imageUrl: "" };
       }
@@ -304,7 +304,7 @@ export function getSavedCustomBackgrounds(): CatalogBackground[] {
     const list: CatalogBackground[] = JSON.parse(raw);
     let mutated = false;
     const cleaned = list.map((b) => {
-      if (b.imageUrl && b.imageUrl.includes("photo-1582650625119-3a31f8418b7d")) {
+      if (b.imageUrl && (b.imageUrl.includes("photo-1582650625119-3a31f8418b7d") || b.imageUrl.includes("unsplash.com") || b.imageUrl.includes("images.unsplash.com"))) {
         mutated = true;
         return { ...b, imageUrl: "" };
       }
@@ -1272,10 +1272,13 @@ export function getSavedMagicPreferences(): SavedMagicPreferences | null {
         Boolean(prefs.selectedPose.isCustom);
       if (!isCustomPose) {
         const found = PRESET_POSES.find(
-          (p) => p.id === prefs.selectedPose?.id || p.imageUrl === prefs.selectedPose?.imageUrl
+          (p) =>
+            p.id === prefs.selectedPose?.id ||
+            p.imageUrl === prefs.selectedPose?.imageUrl ||
+            p.name === prefs.selectedPose?.name
         );
         prefs.selectedPose = found || PRESET_POSES[0];
-      } else if (prefs.selectedPose.imageUrl?.includes("photo-1515886657613-9f3515b0c78f")) {
+      } else if (prefs.selectedPose.imageUrl?.includes("photo-1515886657613-9f3515b0c78f") || prefs.selectedPose.imageUrl?.includes("unsplash.com")) {
         prefs.selectedPose.imageUrl = "";
       }
     } else {
@@ -1291,10 +1294,13 @@ export function getSavedMagicPreferences(): SavedMagicPreferences | null {
         Boolean(prefs.selectedBackground.isCustom);
       if (!isCustomBg) {
         const found = PRESET_BACKGROUNDS.find(
-          (b) => b.id === prefs.selectedBackground?.id || b.imageUrl === prefs.selectedBackground?.imageUrl
+          (b) =>
+            b.id === prefs.selectedBackground?.id ||
+            b.imageUrl === prefs.selectedBackground?.imageUrl ||
+            b.name === prefs.selectedBackground?.name
         );
         prefs.selectedBackground = found || PRESET_BACKGROUNDS[0];
-      } else if (prefs.selectedBackground.imageUrl?.includes("photo-1582650625119-3a31f8418b7d")) {
+      } else if (prefs.selectedBackground.imageUrl?.includes("photo-1582650625119-3a31f8418b7d") || prefs.selectedBackground.imageUrl?.includes("unsplash.com")) {
         prefs.selectedBackground.imageUrl = "";
       }
     } else {

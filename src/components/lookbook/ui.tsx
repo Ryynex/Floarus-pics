@@ -337,13 +337,23 @@ export function MediaCard({
             loading="lazy"
             decoding="async"
             onError={(e) => {
-              if (fallbackUrl) e.currentTarget.src = fallbackUrl;
+              if (fallbackUrl) {
+                e.currentTarget.src = fallbackUrl;
+              } else {
+                (e.currentTarget as HTMLElement).style.display = "none";
+              }
             }}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
-          <span className="flex h-full w-full items-center justify-center text-ink-faint">
-            <Sparkles className="h-6 w-6" />
+          <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-3 text-center bg-gradient-to-br from-fuchsia-accent/10 via-surface to-clay-soft">
+            <Sparkles className="h-6 w-6 text-fuchsia-accent/80" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">
+              Prompt Direct
+            </span>
+            <span className="text-[9px] text-ink-faint line-clamp-2">
+              Generated directly from your description
+            </span>
           </span>
         )}
         {badge ? (

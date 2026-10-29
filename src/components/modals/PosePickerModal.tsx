@@ -508,7 +508,7 @@ export function PosePickerModal({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
                 {filteredCustomPoses.map((custom) => {
                   const isSelected = selectedPose.id === custom.id;
-                  const isUnsplashDummy = custom.imageUrl?.includes("photo-1515886657613-9f3515b0c78f");
+                  const isUnsplashDummy = custom.imageUrl?.includes("photo-1515886657613-9f3515b0c78f") || custom.imageUrl?.includes("unsplash.com");
 
                   return (
                     <div

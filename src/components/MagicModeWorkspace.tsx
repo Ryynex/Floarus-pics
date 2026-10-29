@@ -149,11 +149,13 @@ export function MagicModeWorkspace() {
 
     return [
       { id: "shot_1", shotNumber: 1, model: baseModel, pose: basePose, background: baseBg, backgroundMode: baseMode, hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
-      { id: "shot_2", shotNumber: 2, model: baseModel, pose: PRESET_POSES[1] || basePose, background: PRESET_BACKGROUNDS[1] || baseBg, backgroundMode: "fixed", hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
-      { id: "shot_3", shotNumber: 3, model: baseModel, pose: PRESET_POSES[2] || basePose, background: PRESET_BACKGROUNDS[2] || baseBg, backgroundMode: "fixed", hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
-      { id: "shot_4", shotNumber: 4, model: baseModel, pose: PRESET_POSES[3] || basePose, background: PRESET_BACKGROUNDS[3] || baseBg, backgroundMode: "fixed", hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
+      { id: "shot_2", shotNumber: 2, model: baseModel, pose: basePose, background: baseBg, backgroundMode: baseMode, hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
+      { id: "shot_3", shotNumber: 3, model: baseModel, pose: basePose, background: baseBg, backgroundMode: baseMode, hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
+      { id: "shot_4", shotNumber: 4, model: baseModel, pose: basePose, background: baseBg, backgroundMode: baseMode, hairstyle: baseHair, jewellery: baseJewel, fabric: baseFabric },
     ];
   });
+
+  const [shotsCustomizedIndividually, setShotsCustomizedIndividually] = useState<boolean>(false);
 
   const currentShot = creativeShots[activeShotIndex] || creativeShots[0];
   const selectedModel = currentShot.model;
@@ -166,48 +168,49 @@ export function MagicModeWorkspace() {
 
   const setSelectedModel = (model: CatalogModel) => {
     setCreativeShots((prev) =>
-      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, model } : s))
+      prev.map((s, idx) => (!shotsCustomizedIndividually || idx === activeShotIndex ? { ...s, model } : s))
     );
   };
 
   const setSelectedPose = (pose: CatalogPose) => {
     setCreativeShots((prev) =>
-      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, pose } : s))
+      prev.map((s, idx) => (!shotsCustomizedIndividually || idx === activeShotIndex ? { ...s, pose } : s))
     );
   };
 
   const setSelectedBackground = (background: CatalogBackground) => {
     setCreativeShots((prev) =>
-      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, background } : s))
+      prev.map((s, idx) => (!shotsCustomizedIndividually || idx === activeShotIndex ? { ...s, background } : s))
     );
   };
 
   const setBackgroundMode = (backgroundMode: "fixed" | "inspiration") => {
     setCreativeShots((prev) =>
-      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, backgroundMode } : s))
+      prev.map((s, idx) => (!shotsCustomizedIndividually || idx === activeShotIndex ? { ...s, backgroundMode } : s))
     );
   };
 
   const setSelectedHairstyle = (hairstyle: CatalogHairstyle) => {
     setCreativeShots((prev) =>
-      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, hairstyle } : s))
+      prev.map((s, idx) => (!shotsCustomizedIndividually || idx === activeShotIndex ? { ...s, hairstyle } : s))
     );
   };
 
   const setSelectedJewellery = (jewellery: CatalogJewellery) => {
     setCreativeShots((prev) =>
-      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, jewellery } : s))
+      prev.map((s, idx) => (!shotsCustomizedIndividually || idx === activeShotIndex ? { ...s, jewellery } : s))
     );
   };
 
   const setSelectedFabric = (fabric: CatalogFabric) => {
     setCreativeShots((prev) =>
-      prev.map((s, idx) => (idx === activeShotIndex ? { ...s, fabric } : s))
+      prev.map((s, idx) => (!shotsCustomizedIndividually || idx === activeShotIndex ? { ...s, fabric } : s))
     );
     saveFabricPreference(fabric);
   };
 
   const handleAutoDiversifyShots = () => {
+    setShotsCustomizedIndividually(true);
     const curatedPoses = [
       PRESET_POSES[0],
       PRESET_POSES[1] || PRESET_POSES[0],
@@ -229,6 +232,24 @@ export function MagicModeWorkspace() {
       }))
     );
     addToast("success", "Auto-diversified poses & backdrops across all shots!");
+  };
+
+  const handleSyncAllShots = () => {
+    setShotsCustomizedIndividually(false);
+    const active = creativeShots[activeShotIndex] || creativeShots[0];
+    setCreativeShots((prev) =>
+      prev.map((s) => ({
+        ...s,
+        model: active.model,
+        pose: active.pose,
+        background: active.background,
+        backgroundMode: active.backgroundMode,
+        hairstyle: active.hairstyle,
+        jewellery: active.jewellery,
+        fabric: active.fabric,
+      }))
+    );
+    addToast("info", "All shots synchronized to the current pose & background!");
   };
 
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -855,6 +876,7 @@ export function MagicModeWorkspace() {
             poseDescription: shot.pose.description,
             backgroundId: shot.background.id,
             backgroundName: shot.background.name,
+            backgroundCategory: shot.background.category,
             backgroundUrl: shot.background.imageUrl,
             backgroundDescription: shot.background.description,
             backgroundMode: shot.backgroundMode,
@@ -1005,15 +1027,27 @@ export function MagicModeWorkspace() {
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleAutoDiversifyShots}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-line bg-surface hover:border-fuchsia-accent hover:text-fuchsia-accent text-ink-soft transition-colors cursor-pointer shadow-xs"
-                    title="Automatically assign distinct poses and backgrounds to each shot"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
-                    <span>Auto-Vary Poses & Settings</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {shotsCustomizedIndividually && (
+                      <button
+                        type="button"
+                        onClick={handleSyncAllShots}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-line bg-surface hover:border-ink hover:text-ink text-ink-soft transition-colors cursor-pointer shadow-xs"
+                        title="Reset and synchronize all shots to match the active shot's pose and background"
+                      >
+                        <span>Sync All to Shot {activeShotIndex + 1}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAutoDiversifyShots}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-line bg-surface hover:border-fuchsia-accent hover:text-fuchsia-accent text-ink-soft transition-colors cursor-pointer shadow-xs"
+                      title="Automatically assign distinct poses and backgrounds to each shot"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-fuchsia-accent" />
+                      <span>Auto-Vary Poses & Settings</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1023,7 +1057,10 @@ export function MagicModeWorkspace() {
                       <button
                         key={shot.id || idx}
                         type="button"
-                        onClick={() => setActiveShotIndex(idx)}
+                        onClick={() => {
+                          setActiveShotIndex(idx);
+                          if (idx > 0) setShotsCustomizedIndividually(true);
+                        }}
                         className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                           isActive
                             ? "border-fuchsia-accent bg-clay-soft ring-2 ring-fuchsia-accent/20 shadow-xs"
@@ -1057,12 +1094,14 @@ export function MagicModeWorkspace() {
               const isPosePhotoAvailable = Boolean(
                 selectedPose.imageUrl &&
                 selectedPose.imageUrl.trim() !== "" &&
-                !selectedPose.imageUrl.includes("photo-1515886657613-9f3515b0c78f")
+                !selectedPose.imageUrl.includes("photo-1515886657613-9f3515b0c78f") &&
+                !selectedPose.imageUrl.includes("unsplash.com")
               );
               const isBgPhotoAvailable = Boolean(
                 selectedBackground.imageUrl &&
                 selectedBackground.imageUrl.trim() !== "" &&
-                !selectedBackground.imageUrl.includes("photo-1582650625119-3a31f8418b7d")
+                !selectedBackground.imageUrl.includes("photo-1582650625119-3a31f8418b7d") &&
+                !selectedBackground.imageUrl.includes("unsplash.com")
               );
 
               return (
