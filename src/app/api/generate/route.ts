@@ -1185,19 +1185,21 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      // Slot 1 (optional): Brand Custom Model Face — the identity anchor.
-      // Without it the pose photo carries a stranger's face, so the prompt
-      // below switches to an explicit identity-replacement directive.
-      const rawFace = customFaceUrl || (faceMode === "custom_face" ? modelFaceUrl : null);
-      if (rawFace) {
-        refList.push({
-          url: await prepareRequiredRef(rawFace, "Face"),
-          type: "face",
-          index: refList.length + 1,
-        });
-      }
+      // =========================================================================
+      // MAGIC LOOKBOOK REFERENCE ORDER (ANCHOR-FIRST EDIT ARCHITECTURE):
+      // In Fal edit models (e.g. nano-banana-pro/edit), image_urls[0] serves as
+      // the MASTER CANVAS / ANCHOR that dictates overall scene framing, camera
+      // zoom, and body posture.
+      //
+      // 1. PRIMARY BASE ANCHOR: Pose photo (if available). This guarantees that
+      //    full-body poses remain fully zoomed out and close-up poses remain
+      //    zoomed in, preventing the AI from hallucinating a random body/distance.
+      // 2. IDENTITY OVERLAY: Model face (applied onto the head of the pose body).
+      // 3. SETTING / ENVIRONMENT: Background reference (applied around the subject).
+      // 4. GARMENT REFERENCES: Product clothing fabrics.
+      // =========================================================================
 
-      // Slot 2 (when a reference pose was chosen): skeletal posture anchor.
+      // Slot 1: Pose Reference Anchor (PRIMARY SKELETAL & CAMERA FRAMING CANVAS)
       const isDummyPoseUrl = !poseImageUrl || poseImageUrl.includes("photo-1515886657613-9f3515b0c78f") || poseImageUrl.includes("unsplash.com");
       if (poseImageUrl && !isDummyPoseUrl) {
         refList.push({
@@ -1207,7 +1209,17 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Slot 3 (when a reference background was chosen): environment anchor.
+      // Slot 2: Brand Model Face (FACIAL IDENTITY OVERLAY)
+      const rawFace = customFaceUrl || (faceMode === "custom_face" ? modelFaceUrl : null);
+      if (rawFace) {
+        refList.push({
+          url: await prepareRequiredRef(rawFace, "Face"),
+          type: "face",
+          index: refList.length + 1,
+        });
+      }
+
+      // Slot 3: Background Reference Anchor (SETTING / ENVIRONMENT)
       const isDummyBgUrl = !backgroundUrl || backgroundUrl.includes("photo-1582650625119-3a31f8418b7d") || backgroundUrl.includes("unsplash.com");
       if (
         backgroundUrl &&
@@ -1320,21 +1332,25 @@ export async function POST(req: NextRequest) {
         : "editorial photograph";
 
       const promptParts: string[] = [
-        bgRef
-          ? (isStudioOrSimpleBg
-              ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed in a professional studio against the pristine seamless studio backdrop of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
-              : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`)
-          : (isStudioOrSimpleBg
-              ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed inside a minimalist, pristine seamless white studio environment, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
-              : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`)
+        poseRef
+          ? (bgRef
+              ? (isStudioOrSimpleBg
+                  ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed in a professional studio against the pristine seamless studio backdrop of @image${bgRef.index}. Master edit of the human pose and camera framing in @image${poseRef.index}, featuring ${faceRef ? `the model from @image${faceRef.index}` : (modelName || "an Indian fashion model")} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+                  : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}. Master edit of the human pose and camera framing in @image${poseRef.index}, featuring ${faceRef ? `the model from @image${faceRef.index}` : (modelName || "an Indian fashion model")} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`)
+              : (isStudioOrSimpleBg
+                  ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed inside a minimalist, pristine seamless white studio environment. Master edit of the human pose and camera framing in @image${poseRef.index}, featuring ${faceRef ? `the model from @image${faceRef.index}` : (modelName || "an Indian fashion model")} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+                  : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} of ${faceRef ? `the model from @image${faceRef.index}` : (modelName || "an Indian fashion model")} based on the pose and camera framing in @image${poseRef.index}, showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`))
+          : (bgRef
+              ? (isStudioOrSimpleBg
+                  ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed in a professional studio against the pristine seamless studio backdrop of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+                  : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`)
+              : (isStudioOrSimpleBg
+                  ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed inside a minimalist, pristine seamless white studio environment, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+                  : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`))
       ];
 
-      // Identity. flux-2-pro/edit transforms its FIRST image, so this section
-      // must match what occupies that slot:
-      //  - brand face present  -> face is the anchor; build the body around it
-      //  - no brand face       -> the pose photo carries a stranger's face, so
-      //    her identity must be explicitly replaced (pose woman would otherwise
-      //    dominate the output — the model cannot un-see a face in the base)
+      // Identity. Slot 1 is the pose anchor (@image1) and Slot 2 is the brand face (@image2).
+      // We instruct the model to perform a seamless head/face transfer onto the pose body.
       const isCustomHairstyle = Boolean(
         hairstyle &&
         hairstyle !== "Default (as before)" &&
@@ -1347,22 +1363,40 @@ export async function POST(req: NextRequest) {
       );
 
       if (faceRef) {
-        promptParts.push(
-          `MANDATORY FACIAL GEOMETRY & IDENTITY ANCHOR (FACE ONLY — ZERO HAIRSTYLE / ZERO POSE / ZERO BACKGROUND LEAKAGE): ` +
-          `The person in @image${faceRef.index} is provided SOLELY for her biological facial features. ` +
-          `Extract ONLY her facial identity: exact facial bone structure, face shape, almond eye shape and eye color, nose bridge contour, cheekbone architecture, lip fullness and shape, facial undertone, and authentic facial proportions. ` +
-          `STRICT PROHIBITION ON COPYING POSE, HAIR, OR BACKGROUND FROM @image${faceRef.index}: ` +
-          `1. ZERO POSE LEAKAGE: Do NOT copy, adopt, or inherit ANY pose, head angle, shoulder angle, hand position, torso angle, body stance, zoom level, or framing from @image${faceRef.index}. The model's body pose, framing, zoom distance, and posture MUST COME 100% EXCLUSIVELY from the selected pose in @image${poseRef ? poseRef.index : "the pose directive"}. ` +
-          `2. ZERO BACKGROUND LEAKAGE: Do NOT copy, adopt, or inherit ANY background, wall, room, lighting environment, or backdrop from @image${faceRef.index}. The background MUST COME 100% EXCLUSIVELY from the selected setting in ${bgRef ? `@image${bgRef.index}` : (isStudioOrSimpleBg ? "the clean seamless studio space" : (backgroundDescription || "the setting directive"))}. ` +
-          `3. ZERO CLOTHING LEAKAGE: Ignore and discard any clothing or neckwear visible in @image${faceRef.index}. ` +
-          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism: authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering. Expressive living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine creases. Absolutely ZERO plastic airbrushing, ZERO waxy smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness.` +
-          (isCustomHairstyle
-            ? ` MANDATORY HAIRSTYLE OVERRIDE: Do NOT copy the hairstyle, hair length, haircut, or hair parting from @image${faceRef.index}. Her hair is completely restyled per the mandatory hairstyle directive below.`
-            : ` Preserve her signature hair styling from @image${faceRef.index}.`) +
-          (isCustomJewellery
-            ? ` MANDATORY JEWELLERY OVERRIDE: Do NOT copy or preserve any earrings, necklace, or ornaments from @image${faceRef.index} — her jewellery is replaced per the mandatory jewellery directive below.`
-            : ``)
-        );
+        if (poseRef) {
+          promptParts.push(
+            `MANDATORY HEAD & FACE SWAP ONTO BASE BODY (FACIAL IDENTITY EXCLUSIVELY FROM @image${faceRef.index}): ` +
+            `Seamlessly replace the face and head of the woman in base pose @image${poseRef.index} with the exact facial identity, bone structure, eye shape and color, nose contour, cheekbones, and lips from @image${faceRef.index}. ` +
+            `STRICT PROHIBITION ON LEAKING POSE, HAIR, OR BACKGROUND FROM @image${faceRef.index}: ` +
+            `1. ZERO POSE LEAKAGE: Extract ONLY the biological face from @image${faceRef.index}. Do NOT copy, adopt, or inherit ANY pose, head tilt, shoulder angle, hand position, torso angle, body stance, zoom level, or framing from @image${faceRef.index}. The model's body pose, framing, zoom distance, and posture MUST COME 100% EXCLUSIVELY from the selected base pose in @image${poseRef.index}. ` +
+            `2. ZERO BACKGROUND LEAKAGE: Do NOT copy, adopt, or inherit ANY background, wall, room, lighting environment, or backdrop from @image${faceRef.index}. The background MUST COME 100% EXCLUSIVELY from the selected setting in ${bgRef ? `@image${bgRef.index}` : (isStudioOrSimpleBg ? "the clean seamless studio space" : (backgroundDescription || "the setting directive"))}. ` +
+            `3. ZERO CLOTHING LEAKAGE: Ignore and discard any clothing or neckwear visible in @image${faceRef.index}. ` +
+            `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism: authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering. Expressive living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine creases. Absolutely ZERO plastic airbrushing, ZERO waxy smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness.` +
+            (isCustomHairstyle
+              ? ` MANDATORY HAIRSTYLE OVERRIDE: Do NOT copy the hairstyle, hair length, haircut, or hair parting from @image${faceRef.index}. Her hair is completely restyled per the mandatory hairstyle directive below.`
+              : ` Preserve her signature hair styling from @image${faceRef.index}.`) +
+            (isCustomJewellery
+              ? ` MANDATORY JEWELLERY OVERRIDE: Do NOT copy or preserve any earrings, necklace, or ornaments from @image${faceRef.index} — her jewellery is replaced per the mandatory jewellery directive below.`
+              : ``)
+          );
+        } else {
+          promptParts.push(
+            `MANDATORY FACIAL GEOMETRY & IDENTITY ANCHOR (FACE ONLY — ZERO HAIRSTYLE / ZERO POSE / ZERO BACKGROUND LEAKAGE): ` +
+            `The person in @image${faceRef.index} is provided SOLELY for her biological facial features. ` +
+            `Extract ONLY her facial identity: exact facial bone structure, face shape, almond eye shape and eye color, nose bridge contour, cheekbone architecture, lip fullness and shape, facial undertone, and authentic facial proportions. ` +
+            `STRICT PROHIBITION ON COPYING POSE, HAIR, OR BACKGROUND FROM @image${faceRef.index}: ` +
+            `1. ZERO POSE LEAKAGE: Do NOT copy, adopt, or inherit ANY pose, head angle, shoulder angle, hand position, torso angle, body stance, zoom level, or framing from @image${faceRef.index}. ` +
+            `2. ZERO BACKGROUND LEAKAGE: Do NOT copy, adopt, or inherit ANY background, wall, room, lighting environment, or backdrop from @image${faceRef.index}. The background MUST COME 100% EXCLUSIVELY from the selected setting in ${bgRef ? `@image${bgRef.index}` : (isStudioOrSimpleBg ? "the clean seamless studio space" : (backgroundDescription || "the setting directive"))}. ` +
+            `3. ZERO CLOTHING LEAKAGE: Ignore and discard any clothing or neckwear visible in @image${faceRef.index}. ` +
+            `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism: authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering. Expressive living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine creases. Absolutely ZERO plastic airbrushing, ZERO waxy smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness.` +
+            (isCustomHairstyle
+              ? ` MANDATORY HAIRSTYLE OVERRIDE: Do NOT copy the hairstyle, hair length, haircut, or hair parting from @image${faceRef.index}. Her hair is completely restyled per the mandatory hairstyle directive below.`
+              : ` Preserve her signature hair styling from @image${faceRef.index}.`) +
+            (isCustomJewellery
+              ? ` MANDATORY JEWELLERY OVERRIDE: Do NOT copy or preserve any earrings, necklace, or ornaments from @image${faceRef.index} — her jewellery is replaced per the mandatory jewellery directive below.`
+              : ``)
+          );
+        }
       } else if (poseRef) {
         promptParts.push(
           `IDENTITY REPLACEMENT & LIFELIKE FACIAL REALISM (MANDATORY): The woman visible in @image${poseRef.index} is a body-geometry stand-in only. REPLACE her face, hairstyle, jewellery, and entire physical identity with a newly synthesized ${modelName || "Indian fashion model"}. ` +
@@ -1694,7 +1728,7 @@ export async function POST(req: NextRequest) {
       }
 
       promptParts.push(
-        `CRITICAL ZERO-TEXT MANDATE: Strictly DO NOT generate, paint, or render any text, words, labels, typography, letters, font, captions, annotations, watermark, or text overlays on the image. The output must be 100% clean, pure visual photography with pristine fabrics and surfaces only.`
+        `CRITICAL ZERO-TEXT & ZERO-LABEL MANDATE: Strictly and absolutely DO NOT generate, paint, print, or render any text, words, labels, typography, letters, font, captions, annotations, watermarks, or text overlays anywhere on the image. Even if words or labels appear on reference fabric photos (such as "Kameez", "Bottom", "Dupatta", "Suit", or garment tags), completely ignore and omit them. The output must be 100% clean, pure visual photography with pristine fabrics and surfaces only.`
       );
 
       fluxPrompt = promptParts.filter(Boolean).join(" ");
