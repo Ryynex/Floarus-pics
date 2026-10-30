@@ -851,11 +851,11 @@ export async function POST(req: NextRequest) {
       poseName: rawPoseName = "Hand on Hip — Full Length",
       poseImageUrl: rawPoseImageUrl = "",
       poseDescription: rawPoseDescription = "",
-      backgroundId: rawBackgroundId = "01_pastel_palace_interior",
-      backgroundName: rawBackgroundName = "Pastel Painted Palace Interior",
-      backgroundCategory: rawBackgroundCategory = "",
-      backgroundUrl: rawBackgroundUrl = "",
-      backgroundDescription: rawBackgroundDescription = "",
+      backgroundId: rawBackgroundId = "bg-b32",
+      backgroundName: rawBackgroundName = "Clean High-Key White Studio — B32",
+      backgroundCategory: rawBackgroundCategory = "studio",
+      backgroundUrl: rawBackgroundUrl = "/reference_backgrounds/B32.jpg",
+      backgroundDescription: rawBackgroundDescription = "High-key pure white seamless studio environment with even wrap-around lighting and crisp floor plane.",
       backgroundMode = "inspiration",
       hairstyle: rawHairstyle = "Default (as before)",
       hairstyleDescription: rawHairstyleDescription = "",
@@ -1270,6 +1270,28 @@ export async function POST(req: NextRequest) {
 
       const isSuitMode = category === "suits" || outfitType.toLowerCase().includes("suit") || outfitType.toLowerCase().includes("kurta");
 
+      // Studio / Plain / High-Key Background Detection
+      const isStudioOrSimpleBg = Boolean(
+        backgroundCategory === "studio" ||
+        backgroundName.toLowerCase().includes("studio") ||
+        backgroundName.toLowerCase().includes("white") ||
+        backgroundName.toLowerCase().includes("plain") ||
+        backgroundName.toLowerCase().includes("cyclorama") ||
+        backgroundName.toLowerCase().includes("seamless") ||
+        backgroundName.toLowerCase().includes("cove") ||
+        backgroundName.toLowerCase().includes("neutral") ||
+        backgroundName.toLowerCase().includes("solid") ||
+        backgroundName.toLowerCase().includes("high-key") ||
+        backgroundDescription.toLowerCase().includes("white") ||
+        backgroundDescription.toLowerCase().includes("studio") ||
+        backgroundDescription.toLowerCase().includes("seamless") ||
+        backgroundDescription.toLowerCase().includes("cyclorama") ||
+        backgroundDescription.toLowerCase().includes("plain") ||
+        backgroundDescription.toLowerCase().includes("solid") ||
+        backgroundDescription.toLowerCase().includes("high-key") ||
+        backgroundDescription.toLowerCase().includes("simple")
+      );
+
       const matchedPose = PRESET_POSES.find(
         (p) =>
           (poseId && p.id === poseId) ||
@@ -1299,8 +1321,12 @@ export async function POST(req: NextRequest) {
 
       const promptParts: string[] = [
         bgRef
-          ? `High-end luxury Indian fashion catalog ${shotTypeDescriptor} captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
-          : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+          ? (isStudioOrSimpleBg
+              ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed in a professional studio against the pristine seamless studio backdrop of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+              : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} captured entirely in-camera on location inside the authentic environment of @image${bgRef.index}, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`)
+          : (isStudioOrSimpleBg
+              ? `High-end luxury commercial fashion catalog ${shotTypeDescriptor} photographed inside a minimalist, pristine seamless white studio environment, featuring a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`
+              : `High-end luxury Indian fashion catalog ${shotTypeDescriptor} of a gorgeous ${modelName || "Indian fashion model"} showcasing a bespoke ${fabricTitleDescriptor}${outfitType || (isSuitMode ? "unstitched designer suit set" : "wholesale saree")}.`)
       ];
 
       // Identity. flux-2-pro/edit transforms its FIRST image, so this section
@@ -1322,13 +1348,19 @@ export async function POST(req: NextRequest) {
 
       if (faceRef) {
         promptParts.push(
-          `Identity & Facial Realism: The person in @image${faceRef.index} is the ONLY facial identity for this lookbook. Preserve her exact biological bone structure, facial contours, almond eye shape, nose bridge, lip fullness, skin undertone, and warm expression with zero drift. ` +
-          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism. Authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering (translucent real skin). Expressive, living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine natural creases. Absolutely ZERO plastic airbrushing, ZERO waxy AI smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness. She must look 100% like a real living human woman photographed in real life.` +
+          `MANDATORY FACIAL GEOMETRY & IDENTITY ANCHOR (FACE ONLY — ZERO HAIRSTYLE / ZERO POSE / ZERO BACKGROUND LEAKAGE): ` +
+          `The person in @image${faceRef.index} is provided SOLELY for her biological facial features. ` +
+          `Extract ONLY her facial identity: exact facial bone structure, face shape, almond eye shape and eye color, nose bridge contour, cheekbone architecture, lip fullness and shape, facial undertone, and authentic facial proportions. ` +
+          `STRICT PROHIBITION ON COPYING POSE, HAIR, OR BACKGROUND FROM @image${faceRef.index}: ` +
+          `1. ZERO POSE LEAKAGE: Do NOT copy, adopt, or inherit ANY pose, head angle, shoulder angle, hand position, torso angle, body stance, zoom level, or framing from @image${faceRef.index}. The model's body pose, framing, zoom distance, and posture MUST COME 100% EXCLUSIVELY from the selected pose in @image${poseRef ? poseRef.index : "the pose directive"}. ` +
+          `2. ZERO BACKGROUND LEAKAGE: Do NOT copy, adopt, or inherit ANY background, wall, room, lighting environment, or backdrop from @image${faceRef.index}. The background MUST COME 100% EXCLUSIVELY from the selected setting in ${bgRef ? `@image${bgRef.index}` : (isStudioOrSimpleBg ? "the clean seamless studio space" : (backgroundDescription || "the setting directive"))}. ` +
+          `3. ZERO CLOTHING LEAKAGE: Ignore and discard any clothing or neckwear visible in @image${faceRef.index}. ` +
+          `LIFELIKE FACIAL DETAILING & RAW HUMAN SKIN: Render the face with ultra-high-definition lifelike human realism: authentic skin micro-texture showing real skin pores, fine natural epidermal grain, delicate subtle laugh lines, and soft natural subsurface scattering. Expressive living eyes with clear corneal light reflection (catchlights), detailed iris texture, individual upper and lower eyelashes, and natural eyebrow hair definition. Natural lip texture with subtle moisture and fine creases. Absolutely ZERO plastic airbrushing, ZERO waxy smoothing, ZERO blurred skin filters, and ZERO doll-like artificial smoothness.` +
           (isCustomHairstyle
-            ? ` CRITICAL STYLING SEPARATION: Preserve ONLY her facial identity and features from @image${faceRef.index}. Do NOT lock, copy, or preserve her hair length, haircut, or hair parting from @image${faceRef.index} — her hair is completely restyled per the mandatory hairstyle directive below.`
+            ? ` MANDATORY HAIRSTYLE OVERRIDE: Do NOT copy the hairstyle, hair length, haircut, or hair parting from @image${faceRef.index}. Her hair is completely restyled per the mandatory hairstyle directive below.`
             : ` Preserve her signature hair styling from @image${faceRef.index}.`) +
           (isCustomJewellery
-            ? ` CRITICAL JEWELLERY SEPARATION: Do NOT copy or preserve any earrings, necklace, or ornaments from @image${faceRef.index} — her jewellery is replaced per the mandatory jewellery directive below.`
+            ? ` MANDATORY JEWELLERY OVERRIDE: Do NOT copy or preserve any earrings, necklace, or ornaments from @image${faceRef.index} — her jewellery is replaced per the mandatory jewellery directive below.`
             : ``)
         );
       } else if (poseRef) {
@@ -1348,48 +1380,53 @@ export async function POST(req: NextRequest) {
         // body geometry only, never the scene or the person.
         if (framing.isCloseUp) {
           promptParts.push(
-            `EXACT 1:1 SKELETAL POSE & CLOSE-UP FRAMING REPLICATION (ZERO VARIATION / ZERO POSE DRIFT): ` +
-            `The model MUST replicate the EXACT, 1:1 IDENTICAL upper-body skeletal posture, shoulder tilt, head tilt angle, and hand gesture from @image${poseRef.index}. ` +
-            `DO NOT generate a variation, alternate pose, shifted arms, or loose interpretation. Every joint angle, hand placement, and finger gesture must be an exact copy of @image${poseRef.index}. ` +
-            `Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its studio setting, its grey background, or its casual clothing, and do not adopt the identity, hair, or jewellery of the person in it. ` +
-            `MANDATORY CLOSE-UP CAMERA FRAMING & SCALE: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
-            `This is an INTIMATE CLOSE-UP / PORTRAIT SHOT focusing on ${framing.focus}. ` +
-            `The camera MUST be positioned intimately close to the subject, exactly mirroring the tight crop, scale, head tilt, and hand placement shown in @image${poseRef.index}.`
+            `EXACT 1:1 POSE & CAMERA ZOOM REPLICATION (ABSOLUTE MANDATE — ZERO VARIATION / ZERO POSE DRIFT): ` +
+            `The physical human body posture, limb angles, arm positioning, hand gestures, and EXACT CAMERA FRAMING/ZOOM MUST COME 100% STRICTLY from @image${poseRef.index}. ` +
+            `DO NOT let the facial photo @image${faceRef.index} influence the camera distance, zoom level, or body posture in any way. ` +
+            `MANDATORY CLOSE-UP ZOOM & MAGNIFICATION: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
+            `If @image${poseRef.index} is zoomed in (close-up portrait/bust), the output MUST BE ZOOMED IN to the exact same crop distance and magnification. Under NO circumstances zoom out, generate a full body, or show legs/feet. ` +
+            `Every joint angle, shoulder tilt, head tilt angle, and hand/finger placement must be an exact 1:1 copy of @image${poseRef.index}. ` +
+            `DISCARD DIRECTIVE: Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its background, wall, floor, or casual clothing, and do not adopt the identity, hair, or jewellery of the person in it.`
           );
         } else {
           promptParts.push(
-            `EXACT 1:1 SKELETAL POSE REPLICATION (ZERO VARIATION / ZERO POSE DRIFT - ABSOLUTE MANDATE): ` +
+            `EXACT 1:1 POSE & CAMERA ZOOM REPLICATION (ABSOLUTE MANDATE — ZERO VARIATION / ZERO POSE DRIFT): ` +
+            `The physical human body posture, limb angles, arm positioning, hand gestures, and EXACT CAMERA FRAMING/ZOOM MUST COME 100% STRICTLY from @image${poseRef.index}. ` +
+            `DO NOT let the facial photo @image${faceRef.index} influence the camera distance, zoom level, or body posture in any way. ` +
+            `MANDATORY FULL-LENGTH ZOOM-OUT & FIELD OF VIEW: Accurately replicate the EXACT full-length framing, camera distance, zoom level, and perspective from @image${poseRef.index}. ` +
+            `If @image${poseRef.index} is zoomed out (full length head-to-toe standing), the output MUST BE FULLY ZOOMED OUT showing the entire model from head to toe, legs, and feet. Under NO circumstances crop into a close-up or bust shot. ` +
             `The model MUST replicate the EXACT, 1:1 IDENTICAL skeletal posture, body angle, spine alignment, shoulder tilt, limb geometry, elbow angles, knee stance, foot placement, and arm positioning shown in @image${poseRef.index}. ` +
-            `DO NOT generate an alternate pose, a loose interpretation, or any creative variation of this posture. ` +
-            `Every limb, arm, hand, and joint angle must be an exact 1:1 match to the human body geometry in @image${poseRef.index}. ` +
             `MANDATORY HANDS & GESTURE LOCK: Replicate the EXACT hand gestures, finger placement, wrist angles, and contact points relative to the body as seen in @image${poseRef.index} (e.g. if hands are resting on the hips, touching the collar/hood, holding fabric, or resting at sides, match that exact physical positioning). ` +
             `MANDATORY HEAD TILT & CAMERA FRAMING: Replicate the exact head tilt angle, chin elevation, body rotation angle, perspective, and camera framing/crop from @image${poseRef.index}. ` +
             `DISCARD DIRECTIVE: Use @image${poseRef.index} strictly as a skeletal pose and hand-anatomy reference: do not reproduce its background, wall, floor, or casual clothing, and do not adopt the identity, hair, or jewellery of the person in it. ` +
-            `NATURAL INTEGRATION: Naturally position the model standing physically grounded inside ${bgRef ? `@image${bgRef.index}` : (backgroundDescription || "the clean studio space")}.`
+            `NATURAL INTEGRATION: Naturally position the model standing physically grounded inside ${bgRef ? `@image${bgRef.index}` : (isStudioOrSimpleBg ? "the clean seamless studio space" : (backgroundDescription || "the architectural location space"))}.`
           );
         }
       } else if (poseRef) {
         // Pose photo is the edit base: keep the strong discard directive.
         if (framing.isCloseUp) {
           promptParts.push(
-            `EXACT 1:1 SKELETAL POSE & CLOSE-UP FRAMING REPLICATION (ZERO VARIATION / ZERO POSE DRIFT): ` +
+            `EXACT 1:1 POSE & CAMERA ZOOM REPLICATION (ABSOLUTE MANDATE — ZERO VARIATION / ZERO POSE DRIFT): ` +
+            `The physical human body posture, limb angles, arm positioning, hand gestures, and EXACT CAMERA FRAMING/ZOOM MUST COME 100% STRICTLY from @image${poseRef.index}. ` +
+            `MANDATORY CLOSE-UP ZOOM & MAGNIFICATION: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
+            `If @image${poseRef.index} is zoomed in (close-up portrait/bust), the output MUST BE ZOOMED IN to the exact same crop distance and magnification. Under NO circumstances zoom out, generate a full body, or show legs/feet. ` +
             `The model MUST replicate the EXACT, 1:1 IDENTICAL upper-body skeletal posture, shoulder tilt, head tilt angle, and hand gesture from @image${poseRef.index}. ` +
             `DO NOT generate a variation, alternate pose, shifted arms, or loose interpretation. Every joint angle, hand placement, and finger gesture must be an exact copy of @image${poseRef.index}. ` +
-            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND, CASUAL CLOTHES, HAIR & JEWELLERY): Extract ONLY the human posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the background, wall, floor, casual clothing, hairstyle, and jewellery from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting, casual clothes, hair, or jewellery from @image${poseRef.index} into the output. ` +
-            `MANDATORY CLOSE-UP CAMERA FRAMING & SCALE: Accurately replicate the EXACT tight camera framing, close-up crop, distance, magnification, and composition from @image${poseRef.index}. ` +
-            `This is an INTIMATE CLOSE-UP / PORTRAIT SHOT focusing on ${framing.focus}. ` +
-            `The camera MUST be positioned intimately close to the subject, exactly mirroring the tight crop, scale, head tilt, and hand placement shown in @image${poseRef.index}.`
+            `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND, CASUAL CLOTHES, HAIR & JEWELLERY): Extract ONLY the human posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the background, wall, floor, casual clothing, hairstyle, and jewellery from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting, casual clothes, hair, or jewellery from @image${poseRef.index} into the output.`
           );
         } else {
           promptParts.push(
-            `EXACT 1:1 SKELETAL POSE REPLICATION (ZERO VARIATION / ZERO POSE DRIFT - ABSOLUTE MANDATE): ` +
+            `EXACT 1:1 POSE & CAMERA ZOOM REPLICATION (ABSOLUTE MANDATE — ZERO VARIATION / ZERO POSE DRIFT): ` +
+            `The physical human body posture, limb angles, arm positioning, hand gestures, and EXACT CAMERA FRAMING/ZOOM MUST COME 100% STRICTLY from @image${poseRef.index}. ` +
+            `MANDATORY FULL-LENGTH ZOOM-OUT & FIELD OF VIEW: Accurately replicate the EXACT full-length framing, camera distance, zoom level, and perspective from @image${poseRef.index}. ` +
+            `If @image${poseRef.index} is zoomed out (full length head-to-toe standing), the output MUST BE FULLY ZOOMED OUT showing the entire model from head to toe, legs, and feet. Under NO circumstances crop into a close-up or bust shot. ` +
             `The model MUST replicate the EXACT, 1:1 IDENTICAL skeletal posture, body angle, spine alignment, shoulder tilt, limb geometry, elbow angles, knee stance, foot placement, and arm positioning shown in @image${poseRef.index}. ` +
             `DO NOT generate an alternate pose, a loose interpretation, or any creative variation of this posture. ` +
             `Every limb, arm, hand, and joint angle must be an exact 1:1 match to the human body geometry in @image${poseRef.index}. ` +
             `MANDATORY HANDS & GESTURE LOCK: Replicate the EXACT hand gestures, finger placement, wrist angles, and contact points relative to the body as seen in @image${poseRef.index} (e.g. if hands are resting on the hips, touching the collar/hood, holding fabric, or resting at sides, match that exact physical positioning). ` +
             `MANDATORY HEAD TILT & CAMERA FRAMING: Replicate the exact head tilt angle, chin elevation, body rotation angle, perspective, and camera framing/crop from @image${poseRef.index}. ` +
             `MANDATORY POSE EXTRACTION DIRECTIVE (DISCARD POSE BACKGROUND, CASUAL CLOTHES, HAIR & JEWELLERY): Extract ONLY the human skeletal posture and body positioning from @image${poseRef.index}. COMPLETELY IGNORE, DISCARD, AND STRIP AWAY the background, wall, floor, casual clothing, hairstyle, and jewellery from @image${poseRef.index}. Do NOT reproduce, leak, or blend any aspect of the studio setting, casual clothes, hair, or jewellery from @image${poseRef.index} into the output. ` +
-            `NATURAL INTEGRATION: Naturally position the model standing physically grounded inside ${bgRef ? `@image${bgRef.index}` : (backgroundDescription || "the clean studio space")}.`
+            `NATURAL INTEGRATION: Naturally position the model standing physically grounded inside ${bgRef ? `@image${bgRef.index}` : (isStudioOrSimpleBg ? "the clean seamless studio space" : (backgroundDescription || "the architectural location space"))}.`
           );
         }
       } else if (poseDescription) {
@@ -1409,28 +1446,6 @@ export async function POST(req: NextRequest) {
       if (poseRef && poseDescription && poseDescription !== poseName) {
         promptParts.push(`Pose & Posture Directives: ${poseDescription}. Note: The visual skeletal posture and body geometry in @image${poseRef.index} remains the absolute 1:1 ground truth.`);
       }
-
-      // Studio / Plain / High-Key Background Detection
-      const isStudioOrSimpleBg = Boolean(
-        backgroundCategory === "studio" ||
-        backgroundName.toLowerCase().includes("studio") ||
-        backgroundName.toLowerCase().includes("white") ||
-        backgroundName.toLowerCase().includes("plain") ||
-        backgroundName.toLowerCase().includes("cyclorama") ||
-        backgroundName.toLowerCase().includes("seamless") ||
-        backgroundName.toLowerCase().includes("cove") ||
-        backgroundName.toLowerCase().includes("neutral") ||
-        backgroundName.toLowerCase().includes("solid") ||
-        backgroundName.toLowerCase().includes("high-key") ||
-        backgroundDescription.toLowerCase().includes("white") ||
-        backgroundDescription.toLowerCase().includes("studio") ||
-        backgroundDescription.toLowerCase().includes("seamless") ||
-        backgroundDescription.toLowerCase().includes("cyclorama") ||
-        backgroundDescription.toLowerCase().includes("plain") ||
-        backgroundDescription.toLowerCase().includes("solid") ||
-        backgroundDescription.toLowerCase().includes("high-key") ||
-        backgroundDescription.toLowerCase().includes("simple")
-      );
 
       // Background & Lighting Integration
       if (isStudioOrSimpleBg) {

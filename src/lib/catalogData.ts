@@ -106,6 +106,14 @@ export const WORKFLOW_MODES: WorkflowMode[] = [
 // -------------------------------------------------------------
 export const PRESET_MODELS: CatalogModel[] = [
   {
+    id: "model_1",
+    name: "Model 1",
+    category: "demographic",
+    imageUrl: "/reference_models/model_1.jpg",
+    subtitle: "Signature Catalog Face",
+    description: "Elegant signature Indian fashion model face with radiant warm skin tone, refined bone structure, and expressive natural eyes."
+  },
+  {
     id: "indian_female_standard",
     name: "Indian Female Model",
     category: "demographic",
@@ -828,6 +836,13 @@ export const PRESET_POSES: CatalogPose[] = [
 // -------------------------------------------------------------
 export const PRESET_BACKGROUNDS: CatalogBackground[] = [
   {
+    "id": "bg-b32",
+    "name": "Clean High-Key White Studio — B32",
+    "category": "studio",
+    "imageUrl": "/reference_backgrounds/B32.jpg",
+    "description": "High-key pure white seamless studio environment with even wrap-around lighting and crisp floor plane."
+  },
+  {
     "id": "bg-b1",
     "name": "Seaside Promenade Stone Terrace — B1",
     "category": "gardens",
@@ -1043,13 +1058,6 @@ export const PRESET_BACKGROUNDS: CatalogBackground[] = [
     "category": "heritage",
     "imageUrl": "/reference_backgrounds/B31.jpg",
     "description": "Authentic royal balcony featuring pierced marble jali lattice screens and panoramic fortress views."
-  },
-  {
-    "id": "bg-b32",
-    "name": "Clean High-Key White Studio — B32",
-    "category": "studio",
-    "imageUrl": "/reference_backgrounds/B32.jpg",
-    "description": "High-key pure white seamless studio environment with even wrap-around lighting and crisp floor plane."
   },
   {
     "id": "bg-b33",

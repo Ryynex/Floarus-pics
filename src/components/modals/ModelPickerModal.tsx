@@ -408,9 +408,19 @@ export function ModelPickerModal({
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="h-9 w-9 rounded-lg bg-sand border border-line flex items-center justify-center text-fuchsia-accent shrink-0 group-hover:scale-105 transition-transform">
-                        <User className="h-4.5 w-4.5" />
-                      </div>
+                      {demo.imageUrl ? (
+                        <div className="h-12 w-12 rounded-xl overflow-hidden border border-line shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+                          <img
+                            src={demo.imageUrl}
+                            alt={demo.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-9 w-9 rounded-lg bg-sand border border-line flex items-center justify-center text-fuchsia-accent shrink-0 group-hover:scale-105 transition-transform">
+                          <User className="h-4.5 w-4.5" />
+                        </div>
+                      )}
                       {isSelected && (
                         <div className="h-5 w-5 rounded-full bg-fuchsia-accent text-[#05130A] flex items-center justify-center shadow-md shrink-0">
                           <Check className="h-3 w-3" />
